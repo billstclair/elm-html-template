@@ -23,23 +23,42 @@ import Dict exposing ( Dict
 import Json.Decode as JD exposing ( Decoder
                                   )
 
-type alias Atom =
-    { string : Maybe String
-    , int : Maybe Int
-    , float : Maybe Float
-    }
+type Atom
+    = StringAtom String
+    | IntAtom Int
+    | FloatAtom Float
+    | ListAtom (List Atom)
+    | StringListAtom (List String)
 
-stringAtom : String -> Atom
-stringAtom string =
-    Atom (Just string) Nothing Nothing
+getStringAtom : Atom -> Maybe String
+getStringAtom atom =
+    case atom of
+        StringAtom res -> Just res
+        _ -> Nothing
 
-intAtom : Int -> Atom
-intAtom int =
-    Atom Nothing (Just int) Nothing
+getIntAtom : Atom -> Maybe Int
+getIntAtom atom =
+    case atom of
+        IntAtom res -> Just res
+        _ -> Nothing
 
-floatAtom : Float -> Atom
-floatAtom float =
-    Atom Nothing Nothing (Just float)
+getFloatAtom : Atom -> Maybe Float
+getFloatAtom atom =
+    case atom of
+        FloatAtom res -> Just res
+        _ -> Nothing
+
+getListAtom : Atom -> Maybe (List Atom)
+getListAtom atom =
+    case atom of
+        ListAtom res -> Just res
+        _ -> Nothing
+
+getStringListAtom : Atom -> Maybe (List String)
+getStringListAtom atom =
+    case atom of
+        StringListAtom res -> Just res
+        _ -> Nothing
 
 type alias TemplateDicts msg =
     { atoms : Dict String Atom
@@ -47,6 +66,6 @@ type alias TemplateDicts msg =
     , templates : Dict String String
     }
 
-decodeHtmlTemplate : String -> TemplateDicts msg -> Html msg
-decodeHtmlTemplate json vars =
-    text json
+decodeHtmlTemplate : String -> TemplateDicts msg -> String -> Html msg
+decodeHtmlTemplate templateJson dicts templateName =
+    text templateJson
