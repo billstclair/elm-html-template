@@ -62,10 +62,43 @@ getStringListAtom atom =
 
 type alias TemplateDicts msg =
     { atoms : Dict String Atom
-    , messages : Dict String (List Atom -> msg)
+    , messages : Dict String (Atom -> msg)
     , templates : Dict String String
+    , functions : Dict String (Atom -> Html msg)
     }
 
+-- This is the main function of the module
+-- TBD
 decodeHtmlTemplate : String -> TemplateDicts msg -> String -> Html msg
 decodeHtmlTemplate templateJson dicts templateName =
     text templateJson
+
+---
+--- The target of the JSON decoder
+---
+
+-- JSON: [ tag
+--        , "?<templateName>" | [["<name>", "<value>"], ...]
+--        , [<HtmlTemplate JSON>, ...]
+--       ]
+-- If <value> begins with a "$", it's a variable lookup.
+type alias HtmlTemplateRecord =
+    { tag : String
+    , attributes : AttributeTemplates
+    , body : List HtmlTemplate
+    }
+
+-- JSON: "?<templateName>" | <HtmlTemplateRecord JSON>
+type HtmlTemplate
+    = HtmlJson String
+    | HtmlRecord HtmlTemplateRecord
+
+-- JSON: [["<name>", "<value>"] ...]
+-- If <value> begins with "$", it's a variable lookup.
+type alias AttributeTemplateRecord =
+    List ( String, Atom )
+
+-- JSON: "?<templateName>" | <AttributeTemplateRecord JSON>
+type AttributeTemplates
+    = AttributesJson String
+    | AttributeRecords (List AttributeTemplateRecord)
