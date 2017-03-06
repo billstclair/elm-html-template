@@ -301,7 +301,7 @@ atomDecoder =
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
         , JD.map StringListAtom stringListDecoder
-        , JD.lazy (\_ -> JD.map ListAtom listDecoder)
+        , JD.lazy (\_ -> JD.map ListAtom atomListDecoder)
         , JD.lazy (\_ -> JD.map TemplateAtom htmlTemplateDecoder)
         ]
 
@@ -309,8 +309,13 @@ stringListDecoder : Decoder (List String)
 stringListDecoder =
     JD.list JD.string
 
-listDecoder : Decoder (List Atom)
-listDecoder =
+-- Have to handle lists with different types of atoms somehow for
+-- the "loop" and "if" functions.
+-- Maybe let them all pass here (no verifyListAtom call),
+-- and figure it out at render time.
+-- Or maybe a NonUniformListAtom case for the Atom type.
+atomListDecoder : Decoder (List Atom)
+atomListDecoder =
     JD.andThen verifyListAtom <| JD.list atomDecoder
 
 verifyListAtom : List Atom -> Decoder (List Atom)
