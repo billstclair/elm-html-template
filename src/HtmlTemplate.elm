@@ -13,15 +13,22 @@ module HtmlTemplate exposing ( Atom, TemplateDicts
                              , decodeHtmlTemplate
                              )
 
-import Html exposing ( Html
+import Html exposing ( Html, Attribute
                      , text
                      )
+
+import Html.Attributes as Attributes
 
 import Dict exposing ( Dict
                      )
 
 import Json.Decode as JD exposing ( Decoder
+
                                   )
+
+import List.Extra as LE
+
+log = Debug.log
 
 type Atom
     = StringAtom String
@@ -178,10 +185,69 @@ htmlRecordDecoder =
 -- TODO
 htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
 htmlTemplateRecordDecoder =
-    JD.succeed { tag = "p"
-               , attributes = AttributeRecords []
-               , body = [ HtmlString "foo" ]
-               }
+    JD.map3 HtmlTemplateRecord
+        (JD.andThen ensureTag JD.string)
+        (JD.oneOf
+             [ JD.map AttributesLookup (JD.andThen ensureLookupString JD.string)
+             , JD.map AttributeRecords (JD.list attributeTemplateRecordDecoder)
+             ]
+        )
+        (JD.lazy (\_ -> JD.list htmlTemplateDecoder))
+
+-- Not yet complete
+tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
+tagTable =
+    Dict.fromList
+        [ ("p", Html.p)
+        , ("a", Html.a)
+        , ("div", Html.div)
+        , ("em", Html.em)
+        , ("strong", Html.strong)
+        , ("i", Html.i)
+        , ("b", Html.b)
+        , ("u", Html.u)
+        ]
+
+ensureTag : String -> Decoder String
+ensureTag string =
+    case Dict.get string tagTable of
+        Nothing ->
+            JD.fail <| "Unknown tag: " ++ string
+        _ ->
+            JD.succeed string    
+
+attributeTemplateRecordDecoder : Decoder AttributeTemplateRecord
+attributeTemplateRecordDecoder =
+    JD.andThen ensureAttributes <| JD.keyValuePairs atomDecoder
+
+ensureAttributes : List (String, Atom) -> Decoder (List (String, Atom))
+ensureAttributes keyValuePairs =
+    case LE.find (\pair ->
+                      let (key, _) = pair
+                      in
+                          not <| isAttribute key
+                 )
+                 keyValuePairs
+    of
+        Nothing ->
+            JD.succeed keyValuePairs
+        Just badPair ->
+            let (key, _) = badPair
+            in
+                JD.fail <| "Unknown attribute: " ++ key
+
+-- TODO
+attributeTable : Dict String (Atom -> Attribute msg)
+attributeTable =
+    Dict.fromList
+        [ ("title", titleAttribute)
+        ]
+
+isAttribute : String -> Bool
+isAttribute string =
+    case Dict.get string attributeTable of
+        Nothing -> False
+        _ -> True
 
 ---
 --- Decode Atoms
@@ -190,3 +256,18 @@ htmlTemplateRecordDecoder =
 atomDecoder : Decoder Atom
 atomDecoder =
     JD.succeed <| StringAtom "TODO"
+
+---
+--- Convert attribute Atom to Html.Attribute
+--- These are the values in attributeTable.
+---
+
+titleAttribute : Atom -> Attribute msg
+titleAttribute atom =
+    Attributes.title
+        <| case getStringAtom atom of
+               Nothing ->
+                   log "Non-string title: " <| toString atom
+               Just t ->
+                   t
+            
