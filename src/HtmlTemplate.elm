@@ -27,6 +27,7 @@ type Atom
     = StringAtom String
     | IntAtom Int
     | FloatAtom Float
+    | TemplateAtom HtmlTemplate
     | ListAtom (List Atom)
     | StringListAtom (List String)
 
@@ -74,23 +75,37 @@ decodeHtmlTemplate templateJson dicts templateName =
     text templateJson
 
 ---
---- The target of the JSON decoder
+--- Template Types
 ---
 
--- JSON: [ tag
+-- JSON: [ "<tag>"
 --        , "?<templateName>" | [["<name>", "<value>"], ...]
 --        , [<HtmlTemplate JSON>, ...]
 --       ]
 -- If <value> begins with a "$", it's a variable lookup.
+-- Maybe later: <value> can also be [ "/<function>" args... ]
 type alias HtmlTemplateRecord =
     { tag : String
     , attributes : AttributeTemplates
     , body : List HtmlTemplate
     }
 
--- JSON: "?<templateName>" | <HtmlTemplateRecord JSON>
+-- JSON: [ "/<function name>
+--         , args
+--         , ...
+--       ]
+type alias HtmlTemplateFuncall =
+    { function : String
+    , args : List Atom
+    }
+
+-- JSON: "?<templateName>"
+--     | <HtmlTemplateRecord JSON>
+--     | <HtmlTemplateFuncall JSON>
 type HtmlTemplate
-    = HtmlJson String
+    = HtmlTemplateLookup String
+    | HtmlFuncall HtmlTemplateFuncall
+    | HtmlString String
     | HtmlRecord HtmlTemplateRecord
 
 -- JSON: [["<name>", "<value>"] ...]
@@ -100,5 +115,78 @@ type alias AttributeTemplateRecord =
 
 -- JSON: "?<templateName>" | <AttributeTemplateRecord JSON>
 type AttributeTemplates
-    = AttributesJson String
+    = AttributesLookup String
     | AttributeRecords (List AttributeTemplateRecord)
+
+---
+--- Template Decoders
+---
+
+htmlTemplateDecoder : Decoder HtmlTemplate
+htmlTemplateDecoder =
+    JD.oneOf
+        [ htmlTemplateLookupDecoder
+        , htmlFuncallDecoder
+        , htmlStringDecoder
+        , htmlRecordDecoder
+        ]
+
+htmlTemplateLookupDecoder : Decoder HtmlTemplate
+htmlTemplateLookupDecoder =
+    JD.map HtmlTemplateLookup htmlLookupStringDecoder
+
+htmlLookupStringDecoder : Decoder String
+htmlLookupStringDecoder =
+    JD.andThen ensureLookupString JD.string
+
+ensureLookupString : String -> Decoder String
+ensureLookupString string =
+    if String.startsWith "?" string then
+        JD.succeed <| String.dropLeft 1 string
+    else
+        JD.fail <| "Does not begin with a question mark: " ++ string
+
+htmlFuncallDecoder : Decoder HtmlTemplate
+htmlFuncallDecoder =
+    JD.map HtmlFuncall htmlTemplateFuncallDecoder
+
+htmlTemplateFuncallDecoder : Decoder HtmlTemplateFuncall
+htmlTemplateFuncallDecoder =
+    JD.map2 HtmlTemplateFuncall
+        (JD.index 0 htmlFuncallStringDecoder)
+        (JD.index 1 <| JD.list atomDecoder)
+
+htmlFuncallStringDecoder : Decoder String
+htmlFuncallStringDecoder =
+    JD.andThen ensureFuncallString JD.string
+
+ensureFuncallString : String -> Decoder String
+ensureFuncallString string =
+    if String.startsWith "/" string then
+        JD.succeed <| String.dropLeft 1 string
+    else
+        JD.fail <| "Does not begin with a slash: " ++ string
+    
+htmlStringDecoder : Decoder HtmlTemplate
+htmlStringDecoder =
+    JD.map HtmlString JD.string
+
+htmlRecordDecoder : Decoder HtmlTemplate
+htmlRecordDecoder =
+    JD.map HtmlRecord htmlTemplateRecordDecoder
+
+-- TODO
+htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
+htmlTemplateRecordDecoder =
+    JD.succeed { tag = "p"
+               , attributes = AttributeRecords []
+               , body = [ HtmlString "foo" ]
+               }
+
+---
+--- Decode Atoms
+---
+
+atomDecoder : Decoder Atom
+atomDecoder =
+    JD.succeed <| StringAtom "TODO"
