@@ -34,9 +34,25 @@ type Atom
     = StringAtom String
     | IntAtom Int
     | FloatAtom Float
-    | TemplateAtom HtmlTemplate
-    | ListAtom (List Atom)
     | StringListAtom (List String)
+    | ListAtom (List Atom)
+    | TemplateAtom HtmlTemplate
+
+atomType : Atom -> String
+atomType atom =
+    case atom of
+        StringAtom _ -> "String"
+        IntAtom _ -> "Int"
+        FloatAtom _ -> "Float"
+        StringListAtom _ -> "StringList"
+        ListAtom _ -> "List"
+        TemplateAtom _ -> "Template"
+
+isStringAtom : Atom -> Bool
+isStringAtom atom =
+    case atom of
+        StringAtom _ -> True
+        _ -> False
 
 getStringAtom : Atom -> Maybe String
 getStringAtom atom =
@@ -44,11 +60,23 @@ getStringAtom atom =
         StringAtom res -> Just res
         _ -> Nothing
 
+isIntAtom : Atom -> Bool
+isIntAtom atom =
+    case atom of
+        IntAtom _ -> True
+        _ -> False
+
 getIntAtom : Atom -> Maybe Int
 getIntAtom atom =
     case atom of
         IntAtom res -> Just res
         _ -> Nothing
+
+isFloatAtom : Atom -> Bool
+isFloatAtom atom =
+    case atom of
+        FloatAtom _ -> True
+        _ -> False
 
 getFloatAtom : Atom -> Maybe Float
 getFloatAtom atom =
@@ -56,11 +84,23 @@ getFloatAtom atom =
         FloatAtom res -> Just res
         _ -> Nothing
 
+isListAtom : Atom -> Bool
+isListAtom atom =
+    case atom of
+        ListAtom _ -> True
+        _ -> False
+
 getListAtom : Atom -> Maybe (List Atom)
 getListAtom atom =
     case atom of
         ListAtom res -> Just res
         _ -> Nothing
+
+isStringListAtom : Atom -> Bool
+isStringListAtom atom =
+    case atom of
+        StringListAtom _ -> True
+        _ -> False
 
 getStringListAtom : Atom -> Maybe (List String)
 getStringListAtom atom =
@@ -223,9 +263,9 @@ attributeTemplateRecordDecoder =
 ensureAttributes : List (String, Atom) -> Decoder (List (String, Atom))
 ensureAttributes keyValuePairs =
     case LE.find (\pair ->
-                      let (key, _) = pair
+                      let (key, value) = pair
                       in
-                          not <| isAttribute key
+                          not <| isAttribute key value
                  )
                  keyValuePairs
     of
@@ -236,18 +276,19 @@ ensureAttributes keyValuePairs =
             in
                 JD.fail <| "Unknown attribute: " ++ key
 
--- TODO
-attributeTable : Dict String (Atom -> Attribute msg)
+-- TODO: Many more attributes.
+attributeTable : Dict String (Atom -> Attribute msg, Atom -> Bool)
 attributeTable =
     Dict.fromList
-        [ ("title", titleAttribute)
+        [ ("title", (titleAttribute, isStringAtom))
         ]
 
-isAttribute : String -> Bool
-isAttribute string =
+isAttribute : String -> Atom -> Bool
+isAttribute string atom =
     case Dict.get string attributeTable of
         Nothing -> False
-        _ -> True
+        Just (_, validator) ->
+            validator atom
 
 ---
 --- Decode Atoms
@@ -255,7 +296,36 @@ isAttribute string =
 
 atomDecoder : Decoder Atom
 atomDecoder =
-    JD.succeed <| StringAtom "TODO"
+    JD.oneOf
+        [ JD.map StringAtom JD.string
+        , JD.map IntAtom JD.int
+        , JD.map FloatAtom JD.float
+        , JD.map StringListAtom stringListDecoder
+        , JD.lazy (\_ -> JD.map ListAtom listDecoder)
+        , JD.lazy (\_ -> JD.map TemplateAtom htmlTemplateDecoder)
+        ]
+
+stringListDecoder : Decoder (List String)
+stringListDecoder =
+    JD.list JD.string
+
+listDecoder : Decoder (List Atom)
+listDecoder =
+    JD.andThen verifyListAtom <| JD.list atomDecoder
+
+verifyListAtom : List Atom -> Decoder (List Atom)
+verifyListAtom atoms =
+    case atoms of
+        [] -> JD.succeed atoms
+        head :: tail ->
+            let theType = atomType head
+            in
+                case LE.find (\x -> theType /= (atomType x)) tail of
+                    Nothing ->
+                        JD.succeed atoms
+                    Just _ ->
+                        JD.fail
+                            <| "Non-uniform atom types in: " ++ (toString atoms)
 
 ---
 --- Convert attribute Atom to Html.Attribute
@@ -265,9 +335,9 @@ atomDecoder =
 titleAttribute : Atom -> Attribute msg
 titleAttribute atom =
     Attributes.title
-        <| case getStringAtom atom of
-               Nothing ->
-                   log "Non-string title: " <| toString atom
-               Just t ->
+        <| case atom of
+               StringAtom t ->
                    t
+               _ ->
+                   log "Non-string title: " <| toString atom
             
