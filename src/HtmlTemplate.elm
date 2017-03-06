@@ -9,8 +9,11 @@
 --
 ----------------------------------------------------------------------
 
-module HtmlTemplate exposing ( Atom, TemplateDicts
-                             , decodeHtmlTemplate
+module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
+                             , TemplateDicts
+                             , HtmlTemplateFuncall, HtmlTemplateRecord
+                             , renderHtmlTemplate
+                             , decodeHtmlTemplate, decodeAtom
                              )
 
 import Html exposing ( Html, Attribute
@@ -117,9 +120,17 @@ type alias TemplateDicts msg =
 
 -- This is the main function of the module
 -- TBD
-decodeHtmlTemplate : String -> TemplateDicts msg -> String -> Html msg
-decodeHtmlTemplate templateJson dicts templateName =
+renderHtmlTemplate : String -> TemplateDicts msg -> String -> Html msg
+renderHtmlTemplate templateJson dicts templateName =
     text templateJson
+
+decodeHtmlTemplate : String -> Result String HtmlTemplate
+decodeHtmlTemplate json =
+    JD.decodeString htmlTemplateDecoder json
+
+decodeAtom : String -> Result String Atom
+decodeAtom json =
+    JD.decodeString atomDecoder json
 
 ---
 --- Template Types
@@ -133,7 +144,7 @@ decodeHtmlTemplate templateJson dicts templateName =
 -- Maybe later: <value> can also be [ "/<function>" args... ]
 type alias HtmlTemplateRecord =
     { tag : String
-    , attributes : AttributeTemplates
+    , attributes : List (String, Atom)
     , body : List HtmlTemplate
     }
 
@@ -143,27 +154,18 @@ type alias HtmlTemplateRecord =
 --       ]
 type alias HtmlTemplateFuncall =
     { function : String
-    , args : List Atom
+    , args : Atom
     }
 
 -- JSON: "?<templateName>"
---     | <HtmlTemplateRecord JSON>
 --     | <HtmlTemplateFuncall JSON>
+--     | "foo"
+--     | <HtmlTemplateRecord JSON>
 type HtmlTemplate
     = HtmlTemplateLookup String
     | HtmlFuncall HtmlTemplateFuncall
     | HtmlString String
     | HtmlRecord HtmlTemplateRecord
-
--- JSON: [["<name>", "<value>"] ...]
--- If <value> begins with "$", it's a variable lookup.
-type alias AttributeTemplateRecord =
-    List ( String, Atom )
-
--- JSON: "?<templateName>" | <AttributeTemplateRecord JSON>
-type AttributeTemplates
-    = AttributesLookup String
-    | AttributeRecords (List AttributeTemplateRecord)
 
 ---
 --- Template Decoders
@@ -201,7 +203,7 @@ htmlTemplateFuncallDecoder : Decoder HtmlTemplateFuncall
 htmlTemplateFuncallDecoder =
     JD.map2 HtmlTemplateFuncall
         (JD.index 0 htmlFuncallStringDecoder)
-        (JD.index 1 <| JD.list atomDecoder)
+        (JD.index 1 <| atomDecoder)
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
@@ -226,13 +228,9 @@ htmlRecordDecoder =
 htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
 htmlTemplateRecordDecoder =
     JD.map3 HtmlTemplateRecord
-        (JD.andThen ensureTag JD.string)
-        (JD.oneOf
-             [ JD.map AttributesLookup (JD.andThen ensureLookupString JD.string)
-             , JD.map AttributeRecords (JD.list attributeTemplateRecordDecoder)
-             ]
-        )
-        (JD.lazy (\_ -> JD.list htmlTemplateDecoder))
+        (JD.andThen ensureTag (JD.index 0 JD.string))
+        (JD.index 1 attributesDecoder)
+        (JD.index 2 <| JD.list <| JD.lazy (\_ -> htmlTemplateDecoder))
 
 -- Not yet complete
 tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
@@ -256,8 +254,8 @@ ensureTag string =
         _ ->
             JD.succeed string    
 
-attributeTemplateRecordDecoder : Decoder AttributeTemplateRecord
-attributeTemplateRecordDecoder =
+attributesDecoder : Decoder (List (String, Atom))
+attributesDecoder =
     JD.andThen ensureAttributes <| JD.keyValuePairs atomDecoder
 
 ensureAttributes : List (String, Atom) -> Decoder (List (String, Atom))
@@ -301,8 +299,12 @@ atomDecoder =
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
         , JD.map StringListAtom stringListDecoder
-        , JD.lazy (\_ -> JD.map ListAtom atomListDecoder)
-        , JD.lazy (\_ -> JD.map TemplateAtom htmlTemplateDecoder)
+        , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
+        -- This tickles an Elm bug:
+        --   Unhandled exception while running the tests:
+        --      [TypeError: Cannot read property 'tag' of undefined]
+        -- See https://github.com/elm-lang/elm-compiler/issues/1562
+        --, JD.map TemplateAtom <| JD.lazy (\_ -> htmlTemplateDecoder)
         ]
 
 stringListDecoder : Decoder (List String)
