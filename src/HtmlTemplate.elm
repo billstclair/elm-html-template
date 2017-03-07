@@ -230,7 +230,7 @@ htmlTemplateRecordDecoder =
     JD.map3 HtmlTemplateRecord
         (JD.andThen ensureTag (JD.index 0 JD.string))
         (JD.index 1 attributesDecoder)
-        (JD.index 2 <| JD.list <| JD.lazy (\_ -> htmlTemplateDecoder))
+        (JD.index 2 <| JD.list <| JD.map HtmlString JD.string) -- (JD.lazy (\_ -> htmlTemplateDecoder)))
 
 -- Not yet complete
 tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)

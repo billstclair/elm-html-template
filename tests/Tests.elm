@@ -29,8 +29,8 @@ expectResult sb was =
                     Expect.false "Expected an error but didn't get one." True
         Ok sbv ->
             case was of
-                Err _ ->
-                    Expect.false "Got an error when not expecting it." True
+                Err msg ->
+                    Expect.false msg True
                 Ok wasv ->
                     Expect.equal sbv wasv
 
@@ -87,5 +87,5 @@ templateData =
                 , body = [ HtmlString "bar" ]
                 }
       )
-     -}
+     --}
     ]
