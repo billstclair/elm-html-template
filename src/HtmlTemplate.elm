@@ -38,6 +38,8 @@ type Atom
     | IntAtom Int
     | FloatAtom Float
     | StringListAtom (List String)
+    | IntListAtom (List Int)
+    | FloatListAtom (List Float)
     | ListAtom (List Atom)
     | TemplateAtom HtmlTemplate
 
@@ -48,6 +50,8 @@ atomType atom =
         IntAtom _ -> "Int"
         FloatAtom _ -> "Float"
         StringListAtom _ -> "StringList"
+        IntListAtom _ -> "IntList"
+        FloatListAtom _ -> "FloatList"
         ListAtom _ -> "List"
         TemplateAtom _ -> "Template"
 
@@ -57,23 +61,11 @@ isStringAtom atom =
         StringAtom _ -> True
         _ -> False
 
-getStringAtom : Atom -> Maybe String
-getStringAtom atom =
-    case atom of
-        StringAtom res -> Just res
-        _ -> Nothing
-
 isIntAtom : Atom -> Bool
 isIntAtom atom =
     case atom of
         IntAtom _ -> True
         _ -> False
-
-getIntAtom : Atom -> Maybe Int
-getIntAtom atom =
-    case atom of
-        IntAtom res -> Just res
-        _ -> Nothing
 
 isFloatAtom : Atom -> Bool
 isFloatAtom atom =
@@ -81,35 +73,17 @@ isFloatAtom atom =
         FloatAtom _ -> True
         _ -> False
 
-getFloatAtom : Atom -> Maybe Float
-getFloatAtom atom =
-    case atom of
-        FloatAtom res -> Just res
-        _ -> Nothing
-
 isListAtom : Atom -> Bool
 isListAtom atom =
     case atom of
         ListAtom _ -> True
         _ -> False
 
-getListAtom : Atom -> Maybe (List Atom)
-getListAtom atom =
-    case atom of
-        ListAtom res -> Just res
-        _ -> Nothing
-
 isStringListAtom : Atom -> Bool
 isStringListAtom atom =
     case atom of
         StringListAtom _ -> True
         _ -> False
-
-getStringListAtom : Atom -> Maybe (List String)
-getStringListAtom atom =
-    case atom of
-        StringListAtom res -> Just res
-        _ -> Nothing
 
 type alias TemplateDicts msg =
     { atoms : Dict String Atom
@@ -300,6 +274,8 @@ atomDecoder =
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
         , JD.map StringListAtom stringListDecoder
+        , JD.map IntListAtom intListDecoder
+        , JD.map FloatListAtom floatListDecoder
         , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
         -- This tickles an Elm bug:
         --   Unhandled exception while running the tests:
@@ -312,28 +288,17 @@ stringListDecoder : Decoder (List String)
 stringListDecoder =
     JD.list JD.string
 
--- Have to handle lists with different types of atoms somehow for
--- the "loop" and "if" functions.
--- Maybe let them all pass here (no verifyListAtom call),
--- and figure it out at render time.
--- Or maybe a NonUniformListAtom case for the Atom type.
+intListDecoder : Decoder (List Int)
+intListDecoder =
+    JD.list JD.int
+
+floatListDecoder : Decoder (List Float)
+floatListDecoder =
+    JD.list JD.float
+
 atomListDecoder : Decoder (List Atom)
 atomListDecoder =
-    JD.andThen verifyListAtom <| JD.list <| JD.lazy (\_ -> atomDecoder)
-
-verifyListAtom : List Atom -> Decoder (List Atom)
-verifyListAtom atoms =
-    case atoms of
-        [] -> JD.succeed atoms
-        head :: tail ->
-            let theType = atomType head
-            in
-                case LE.find (\x -> theType /= (atomType x)) tail of
-                    Nothing ->
-                        JD.succeed atoms
-                    Just _ ->
-                        JD.fail
-                            <| "Non-uniform atom types in: " ++ (toString atoms)
+    JD.list <| JD.lazy (\_ -> atomDecoder)
 
 ---
 --- Convert attribute Atom to Html.Attribute
