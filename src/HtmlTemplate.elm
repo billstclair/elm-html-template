@@ -92,12 +92,6 @@ type alias TemplateDicts msg =
     , functions : Dict String (Atom -> Html msg)
     }
 
--- This is the main function of the module
--- TBD
-renderHtmlTemplate : String -> TemplateDicts msg -> String -> Html msg
-renderHtmlTemplate templateJson dicts templateName =
-    text templateJson
-
 decodeHtmlTemplate : String -> Result String HtmlTemplate
 decodeHtmlTemplate json =
     JD.decodeString htmlTemplateDecoder json
@@ -314,3 +308,20 @@ titleAttribute atom =
                _ ->
                    log "Non-string title: " <| toString atom
             
+---
+--- Rendering
+---
+
+-- This is the main function of the module
+-- TBD
+renderHtmlJson : String -> TemplateDicts msg -> Result String (Html msg)
+renderHtmlJson templateJson dicts =
+    case decodeHtmlTemplate templateJson of
+        Err msg ->
+          Err msg
+        Ok template ->
+          renderHtmlTemplate template dicts
+
+renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Result String (Html msg)
+renderHtmlTemplate template dicts =
+  Err "Not implemented."
