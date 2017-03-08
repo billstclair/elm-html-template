@@ -171,15 +171,6 @@ type HtmlTemplate
 --- Template Decoders
 ---
 
-htmlTemplateDecoder : Decoder HtmlTemplate
-htmlTemplateDecoder =
-    JD.oneOf
-        [ htmlTemplateLookupDecoder
-        , htmlFuncallDecoder
-        , htmlStringDecoder
-        , htmlRecordDecoder
-        ]
-
 htmlTemplateLookupDecoder : Decoder HtmlTemplate
 htmlTemplateLookupDecoder =
     JD.map HtmlTemplateLookup htmlLookupStringDecoder
@@ -203,7 +194,7 @@ htmlTemplateFuncallDecoder : Decoder HtmlTemplateFuncall
 htmlTemplateFuncallDecoder =
     JD.map2 HtmlTemplateFuncall
         (JD.index 0 htmlFuncallStringDecoder)
-        (JD.index 1 <| atomDecoder)
+        (JD.index 1 <| JD.lazy (\_ -> atomDecoder))
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
@@ -222,15 +213,24 @@ htmlStringDecoder =
 
 htmlRecordDecoder : Decoder HtmlTemplate
 htmlRecordDecoder =
-    JD.map HtmlRecord htmlTemplateRecordDecoder
+    JD.map HtmlRecord
+      <| JD.lazy (\_ -> htmlTemplateRecordDecoder)
 
--- TODO
+htmlTemplateDecoder : Decoder HtmlTemplate
+htmlTemplateDecoder =
+  JD.oneOf
+    [ htmlTemplateLookupDecoder
+    , htmlFuncallDecoder
+    , htmlStringDecoder
+    , JD.lazy (\_ -> htmlRecordDecoder)
+    ]
+
 htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
 htmlTemplateRecordDecoder =
     JD.map3 HtmlTemplateRecord
         (JD.andThen ensureTag (JD.index 0 JD.string))
         (JD.index 1 attributesDecoder)
-        (JD.index 2 <| JD.list <| JD.map HtmlString JD.string) -- (JD.lazy (\_ -> htmlTemplateDecoder)))
+        (JD.index 2 <| JD.list <| JD.lazy (\_ -> htmlTemplateDecoder))
 
 -- Not yet complete
 tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
@@ -256,7 +256,8 @@ ensureTag string =
 
 attributesDecoder : Decoder (List (String, Atom))
 attributesDecoder =
-    JD.andThen ensureAttributes <| JD.keyValuePairs atomDecoder
+    JD.andThen ensureAttributes
+      <| JD.keyValuePairs <| JD.lazy (\_ -> atomDecoder)
 
 ensureAttributes : List (String, Atom) -> Decoder (List (String, Atom))
 ensureAttributes keyValuePairs =
@@ -318,7 +319,7 @@ stringListDecoder =
 -- Or maybe a NonUniformListAtom case for the Atom type.
 atomListDecoder : Decoder (List Atom)
 atomListDecoder =
-    JD.andThen verifyListAtom <| JD.list atomDecoder
+    JD.andThen verifyListAtom <| JD.list <| JD.lazy (\_ -> atomDecoder)
 
 verifyListAtom : List Atom -> Decoder (List Atom)
 verifyListAtom atoms =

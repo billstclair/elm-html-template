@@ -38,7 +38,7 @@ atomTest : ( String, Result String Atom ) -> Test
 atomTest ( json, expected ) =
     test ("atomTest \"" ++ json ++ "\"")
         (\_ ->
-             expectResult expected <| decodeAtom json
+             expectResult expected <| decodeAtom (log "atomJson" json)
         )
 
 atomData : List ( String, Result String Atom )
@@ -64,7 +64,7 @@ templateTest : ( String, Result String HtmlTemplate ) -> Test
 templateTest ( json, expected ) =
     test ("templateTest \"" ++ json ++ "\"")
         (\_ ->
-             expectResult expected <| decodeHtmlTemplate json
+             expectResult expected <| decodeHtmlTemplate (log "htmlJson" json)
         )
 
 templateData : List ( String, Result String HtmlTemplate )
@@ -78,14 +78,24 @@ templateData =
     , ( "[\"/func\", 1]"
       , Ok <| HtmlFuncall <| HtmlTemplateFuncall "func" <| IntAtom 1
       )
-    {-
-     -- This tickles a compiler bug
-    , ( "[\"a\",[[\"title\",\"foo\"]],[\"bar\"]]"
+    , ( "[\"a\",{\"title\": \"foo\"},[\"bar\"]]"
       , Ok <| HtmlRecord
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
                 , body = [ HtmlString "bar" ]
                 }
       )
-     --}
+    , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" frob\"]]"
+      , Ok <| HtmlRecord
+                { tag = "a"
+                , attributes = [ ("title", StringAtom "foo") ]
+                , body = [ HtmlRecord
+                             { tag = "i"
+                             , attributes = []
+                             , body = [ HtmlString "bar" ]
+                             }
+                         , HtmlString " frob"
+                         ]
+                }
+      )
     ]
