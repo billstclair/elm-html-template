@@ -17,7 +17,6 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              )
 
 import Html exposing ( Html, Attribute
-                     , text
                      )
 
 import Html.Attributes as Attributes
@@ -88,7 +87,7 @@ isStringListAtom atom =
 type alias TemplateDicts msg =
     { atoms : Dict String Atom
     , messages : Dict String (Atom -> msg)
-    , templates : Dict String String
+    , templates : Dict String HtmlTemplate
     , functions : Dict String (Atom -> Html msg)
     }
 
@@ -314,14 +313,27 @@ titleAttribute atom =
 
 -- This is the main function of the module
 -- TBD
-renderHtmlJson : String -> TemplateDicts msg -> Result String (Html msg)
+renderHtmlJson : String -> TemplateDicts msg -> Html msg
 renderHtmlJson templateJson dicts =
     case decodeHtmlTemplate templateJson of
         Err msg ->
-          Err msg
+          Html.text <| "Decoding error: " ++ msg ++ ", JSON: " ++ templateJson
         Ok template ->
           renderHtmlTemplate template dicts
 
-renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Result String (Html msg)
+renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
-  Err "Not implemented."
+    case template of
+        HtmlString text ->
+            Html.text text
+        HtmlTemplateLookup name ->
+            case Dict.get name dicts.templates of
+                Nothing ->
+                    Html.text <| "There is no template named: " ++ name
+                Just templ ->
+                    renderHtmlTemplate templ dicts
+        HtmlFuncall { function, args } ->
+            Html.text <| "(funcall " ++ function ++ " " ++ (toString args)
+        HtmlRecord { tag, attributes, body } ->
+            Html.text <| "<" ++ tag ++ " "
+                ++ (toString attributes) ++ " " ++ (toString body)
