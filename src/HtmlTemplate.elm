@@ -12,6 +12,7 @@
 module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , TemplateDicts
                              , HtmlTemplateFuncall, HtmlTemplateRecord
+                             , emptyTemplateDicts, templateReferences
                              , renderHtmlTemplate
                              , decodeHtmlTemplate, decodeAtom
                              )
@@ -101,6 +102,10 @@ type alias TemplateDicts msg =
     , functions : Dict String (Atom -> Html msg)
     }
 
+emptyTemplateDicts : TemplateDicts msg
+emptyTemplateDicts =
+    TemplateDicts Dict.empty Dict.empty Dict.empty Dict.empty
+
 decodeHtmlTemplate : String -> Result String HtmlTemplate
 decodeHtmlTemplate json =
     JD.decodeString htmlTemplateDecoder json
@@ -143,6 +148,23 @@ type HtmlTemplate
     | HtmlFuncall HtmlTemplateFuncall
     | HtmlString String
     | HtmlRecord HtmlTemplateRecord
+
+templateReferences : HtmlTemplate -> List String
+templateReferences template =
+    templateReferencesLoop template []
+
+templateReferencesLoop : HtmlTemplate -> List String -> List String
+templateReferencesLoop template res =
+    case template of
+        HtmlTemplateLookup name ->
+            if List.member name res then
+                res
+            else
+                name :: res
+        HtmlRecord record ->
+            List.foldl templateReferencesLoop res record.body
+        _ ->
+            res
 
 ---
 --- Template Decoders
