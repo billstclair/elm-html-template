@@ -36,9 +36,11 @@ type Atom
     = StringAtom String
     | IntAtom Int
     | FloatAtom Float
+    | BoolAtom Bool
     | StringListAtom (List String)
     | IntListAtom (List Int)
     | FloatListAtom (List Float)
+    | BoolListAtom (List Bool)
     | ListAtom (List Atom)
     | TemplateAtom HtmlTemplate
 
@@ -48,9 +50,11 @@ atomType atom =
         StringAtom _ -> "String"
         IntAtom _ -> "Int"
         FloatAtom _ -> "Float"
+        BoolAtom _ -> "Bool"
         StringListAtom _ -> "StringList"
         IntListAtom _ -> "IntList"
         FloatListAtom _ -> "FloatList"
+        BoolListAtom _ -> "BoolList"
         ListAtom _ -> "List"
         TemplateAtom _ -> "Template"
 
@@ -70,6 +74,12 @@ isFloatAtom : Atom -> Bool
 isFloatAtom atom =
     case atom of
         FloatAtom _ -> True
+        _ -> False
+
+isBoolAtom : Atom -> Bool
+isBoolAtom atom =
+    case atom of
+        BoolAtom _ -> True
         _ -> False
 
 isListAtom : Atom -> Bool
@@ -243,17 +253,18 @@ ensureAttributes keyValuePairs =
                 JD.fail <| "Unknown attribute: " ++ key
 
 -- TODO: Many more attributes.
-attributeTable : Dict String (Atom -> Attribute msg, Atom -> Bool)
+attributeTable : Dict String (Atom -> Bool)
 attributeTable =
     Dict.fromList
-        [ ("title", (titleAttribute, isStringAtom))
+        [ ("title", isStringAtom)
+        , ("href", isStringAtom)
         ]
 
 isAttribute : String -> Atom -> Bool
 isAttribute string atom =
     case Dict.get string attributeTable of
         Nothing -> False
-        Just (_, validator) ->
+        Just validator ->
             validator atom
 
 ---
@@ -266,9 +277,11 @@ atomDecoder =
         [ JD.map StringAtom JD.string
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
+        , JD.map BoolAtom JD.bool
         , JD.map StringListAtom stringListDecoder
         , JD.map IntListAtom intListDecoder
         , JD.map FloatListAtom floatListDecoder
+        , JD.map BoolListAtom boolListDecoder
         , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
         -- This tickles an Elm bug:
         --   Unhandled exception while running the tests:
@@ -289,30 +302,116 @@ floatListDecoder : Decoder (List Float)
 floatListDecoder =
     JD.list JD.float
 
+boolListDecoder : Decoder (List Bool)
+boolListDecoder =
+    JD.list JD.bool
+
 atomListDecoder : Decoder (List Atom)
 atomListDecoder =
     JD.list <| JD.lazy (\_ -> atomDecoder)
 
 ---
---- Convert attribute Atom to Html.Attribute
---- These are the values in attributeTable.
+--- Attribute rendering
 ---
 
-titleAttribute : Atom -> Attribute msg
-titleAttribute atom =
-    Attributes.title
-        <| case atom of
-               StringAtom t ->
-                   t
-               _ ->
-                   log "Non-string title: " <| toString atom
-            
+type FunctionType
+    = StringFunction
+    | IntFunction
+    | FloatFunction
+    | BoolFunction
+    | StringsFunction Int
+    | IntsFunction Int
+    | FloatsFunction Int
+    | BoolsFunction Int
+    | ListFunction Int (List FunctionType)
+    | NoFunction
+
+atomFunctionType : Atom -> FunctionType
+atomFunctionType atom =
+    case atom of
+        StringAtom _ -> StringFunction
+        IntAtom _ -> IntFunction
+        FloatAtom _ -> FloatFunction
+        BoolAtom _ -> BoolFunction
+        StringListAtom strings ->
+            StringsFunction <| List.length strings
+        IntListAtom ints ->
+            IntsFunction <| List.length ints
+        FloatListAtom floats ->
+            FloatsFunction <| List.length floats
+        BoolListAtom bools ->
+            BoolsFunction <| List.length bools
+        ListAtom atoms ->
+            ListFunction (List.length atoms) <| List.map atomFunctionType atoms
+        TemplateAtom _ ->
+            NoFunction
+
+type AttributeFunction msg
+    = StringAttributeFunction (String -> Attribute msg)
+    | IntAttributeFunction (Int -> Attribute msg)
+    | FloatAttributeFunction (Float -> Attribute msg)
+    | BoolAttributeFunction (Bool -> Attribute msg)
+    | StringsAttributeFunction (List String -> Attribute msg)
+    | IntsAttributeFunction (List Int -> Attribute msg)
+    | FloatsAttributeFunction (List Float -> Attribute msg)
+    | BoolsAttributeFunction (List Bool -> Attribute msg)
+    | AtomsAttributeFunction (List Atom -> Attribute msg)
+
+typedAttributeTable : Dict String (AttributeFunction msg)
+typedAttributeTable =
+    Dict.fromList
+        [ ( "title", StringAttributeFunction Attributes.title )
+        , ( "href", StringAttributeFunction Attributes.href )
+        ]
+
+renderAttributeAtom : (String, Atom) -> TemplateDicts msg -> Attribute msg
+renderAttributeAtom (name, atom) dicts =
+    case Dict.get name typedAttributeTable of
+        Nothing ->
+            Attributes.title <| "Unknown attribute: " ++ name
+        Just function ->
+            case function of
+                StringAttributeFunction f ->
+                    case atom of
+                        StringAtom string -> f string
+                        _ -> badTypeTitle name atom
+                IntAttributeFunction f ->
+                    case atom of
+                        IntAtom int -> f int
+                        _ -> badTypeTitle name atom
+                FloatAttributeFunction f ->
+                    case atom of
+                        FloatAtom float -> f float
+                        _ -> badTypeTitle name atom
+                BoolAttributeFunction f ->
+                    case atom of
+                        BoolAtom bool -> f bool
+                        _ -> badTypeTitle name atom
+                StringsAttributeFunction f ->
+                    case atom of
+                        StringListAtom strings -> f strings
+                        _ -> badTypeTitle name atom
+                IntsAttributeFunction f ->
+                    case atom of
+                        IntListAtom ints -> f ints
+                        _ -> badTypeTitle name atom
+                FloatsAttributeFunction f ->
+                    case atom of
+                        FloatListAtom floats -> f floats
+                        _ -> badTypeTitle name atom
+                BoolsAttributeFunction f ->
+                    case atom of
+                        BoolListAtom bools -> f bools
+                        _ -> badTypeTitle name atom
+                AtomsAttributeFunction f ->
+                    case atom of
+                        ListAtom atoms -> f atoms
+                        _ -> badTypeTitle name atom
+
 ---
---- Rendering
+--- Html Rendering
 ---
 
--- This is the main function of the module
--- TBD
 renderHtmlJson : String -> TemplateDicts msg -> Html msg
 renderHtmlJson templateJson dicts =
     case decodeHtmlTemplate templateJson of
@@ -329,11 +428,30 @@ renderHtmlTemplate template dicts =
         HtmlTemplateLookup name ->
             case Dict.get name dicts.templates of
                 Nothing ->
-                    Html.text <| "There is no template named: " ++ name
+                    Html.text <| "Unknown HTML template: " ++ name
                 Just templ ->
                     renderHtmlTemplate templ dicts
         HtmlFuncall { function, args } ->
-            Html.text <| "(funcall " ++ function ++ " " ++ (toString args)
+            case Dict.get function dicts.functions of
+                Nothing ->
+                    Html.text <| "Unknown HTML function: " ++ function
+                Just f ->
+                    f args
         HtmlRecord { tag, attributes, body } ->
-            Html.text <| "<" ++ tag ++ " "
-                ++ (toString attributes) ++ " " ++ (toString body)
+            case Dict.get tag tagTable of
+                Nothing ->
+                    Html.text <| "Unknown HTML tag: " ++ tag
+                Just f ->
+                    let attrs = renderHtmlAttributes attributes dicts
+                        b = List.map (\t -> renderHtmlTemplate t dicts) body
+                    in
+                        f attrs b
+
+renderHtmlAttributes : List (String, Atom) -> TemplateDicts msg -> List (Attribute msg)
+renderHtmlAttributes attributes dicts =
+    List.map (\pair -> renderAttributeAtom pair dicts) attributes
+
+badTypeTitle : String -> Atom -> Attribute msg
+badTypeTitle name atom =
+    Attributes.title
+        <| "Bad arg for attribute: " ++ name ++ ": " ++ (toString atom)
