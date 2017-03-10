@@ -1,12 +1,20 @@
 Example for HtmlTemplate module.
 
-To run:
+To run in Elm Reactor:
 
     cd .../elm-html-template/example
     elm reactor
     
 Then aim your browser at [localhost:8000/template.elm](http://localhost:8000/template.elm).
+
+It will load and decode the templates reachable from `site/template/default/index.json`, then render the `site/page/index.json` template.
+
+To test compile `<file>.elm` file in this directory:
+
+    cd .../elm-html-template/example
+    bin/m <file>
     
+To generate `site/index.html`:
 
-It will load and decode the templates in `templates/default/`, then render the "`page.json`" template.
-
+    cd .../elm-html-template/example
+    bin/build
