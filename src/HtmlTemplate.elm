@@ -185,14 +185,14 @@ htmlTemplateLookupDecoder =
 
 htmlLookupStringDecoder : Decoder String
 htmlLookupStringDecoder =
-    JD.andThen (ensureLookupString "?" "question mark") JD.string
+    JD.andThen (ensureLookupString "?" "a question mark") JD.string
 
 ensureLookupString : String -> String -> String -> Decoder String
 ensureLookupString prefix name string =
     if String.startsWith prefix string then
         JD.succeed <| String.dropLeft 1 string
     else
-        JD.fail <| "Does not begin with a " ++ name ++ ": " ++ string
+        JD.fail <| "Does not begin with " ++ name ++ ": " ++ string
 
 htmlAtomLookupDecoder : Decoder HtmlTemplate
 htmlAtomLookupDecoder =
@@ -200,7 +200,7 @@ htmlAtomLookupDecoder =
 
 htmlAtomLookupStringDecoder : Decoder String
 htmlAtomLookupStringDecoder =
-    JD.andThen (ensureLookupString "@" "atsign")  JD.string
+    JD.andThen (ensureLookupString "@" "an atsign")  JD.string
 
 htmlFuncallDecoder : Decoder HtmlTemplate
 htmlFuncallDecoder =
@@ -214,7 +214,7 @@ htmlTemplateFuncallDecoder =
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
-    JD.andThen (ensureLookupString "/" "slash") JD.string
+    JD.andThen (ensureLookupString "/" "a slash") JD.string
     
 htmlStringDecoder : Decoder HtmlTemplate
 htmlStringDecoder =
@@ -467,6 +467,22 @@ atomToString atom =
         BoolAtom bool -> toString bool
         _ -> toString atom
 
+plistRefParts : String -> Maybe (String, String)
+plistRefParts string =
+    let parts = String.split "." string
+    in
+        case parts of
+            [ one, two ] ->
+                Just ( one, two )
+            _ ->
+                Nothing
+
+getprop : String -> List (String, Atom) -> Maybe Atom
+getprop prop plist =
+    case LE.find (\pair -> prop == Tuple.first pair) plist of
+        Just (_, res) -> Just res
+        Nothing -> Nothing
+
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
@@ -481,7 +497,26 @@ renderHtmlTemplate template dicts =
         HtmlAtomLookup name ->
             case Dict.get name dicts.atoms of
                 Nothing ->
-                    Html.text <| "Unknown atom: " ++ name
+                    case plistRefParts name of
+                        Nothing ->
+                            Html.text <| "Unknown atom: " ++ name
+                        Just (nam, prop) ->
+                            case Dict.get nam dicts.atoms of
+                                Nothing ->
+                                    Html.text
+                                        <| "Unknown atom: " ++ nam ++ " for " ++ name
+                                Just atom ->
+                                    case atom of
+                                        PListAtom plist ->
+                                            case getprop prop plist of
+                                                Nothing ->
+                                                    Html.text
+                                                        <| "Unknown property: " ++ name ++ " of " ++ (toString plist)
+                                                Just a ->
+                                                    Html.text <| atomToString a
+                                        _ ->
+                                            Html.text
+                                                <| name ++ " does not reference a plist: " ++ (toString atom)
                 Just atom ->
                     Html.text <| atomToString atom
         HtmlFuncall { function, args } ->
