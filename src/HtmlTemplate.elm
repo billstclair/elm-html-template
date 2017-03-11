@@ -153,6 +153,7 @@ type alias HtmlTemplateFuncall =
 --     | <HtmlTemplateRecord JSON>
 type HtmlTemplate
     = HtmlTemplateLookup String
+    | HtmlAtomLookup String
     | HtmlFuncall HtmlTemplateFuncall
     | HtmlString String
     | HtmlRecord HtmlTemplateRecord
@@ -184,14 +185,22 @@ htmlTemplateLookupDecoder =
 
 htmlLookupStringDecoder : Decoder String
 htmlLookupStringDecoder =
-    JD.andThen ensureLookupString JD.string
+    JD.andThen (ensureLookupString "?" "question mark") JD.string
 
-ensureLookupString : String -> Decoder String
-ensureLookupString string =
-    if String.startsWith "?" string then
+ensureLookupString : String -> String -> String -> Decoder String
+ensureLookupString prefix name string =
+    if String.startsWith prefix string then
         JD.succeed <| String.dropLeft 1 string
     else
-        JD.fail <| "Does not begin with a question mark: " ++ string
+        JD.fail <| "Does not begin with a " ++ name ++ ": " ++ string
+
+htmlAtomLookupDecoder : Decoder HtmlTemplate
+htmlAtomLookupDecoder =
+    JD.map HtmlAtomLookup htmlAtomLookupStringDecoder
+
+htmlAtomLookupStringDecoder : Decoder String
+htmlAtomLookupStringDecoder =
+    JD.andThen (ensureLookupString "@" "atsign")  JD.string
 
 htmlFuncallDecoder : Decoder HtmlTemplate
 htmlFuncallDecoder =
@@ -205,14 +214,7 @@ htmlTemplateFuncallDecoder =
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
-    JD.andThen ensureFuncallString JD.string
-
-ensureFuncallString : String -> Decoder String
-ensureFuncallString string =
-    if String.startsWith "/" string then
-        JD.succeed <| String.dropLeft 1 string
-    else
-        JD.fail <| "Does not begin with a slash: " ++ string
+    JD.andThen (ensureLookupString "/" "slash") JD.string
     
 htmlStringDecoder : Decoder HtmlTemplate
 htmlStringDecoder =
@@ -227,6 +229,7 @@ htmlTemplateDecoder : Decoder HtmlTemplate
 htmlTemplateDecoder =
   JD.oneOf
     [ htmlTemplateLookupDecoder
+    , htmlAtomLookupDecoder
     , JD.lazy (\_ -> htmlFuncallDecoder)
     , htmlStringDecoder
     , JD.lazy (\_ -> htmlRecordDecoder)
@@ -455,6 +458,15 @@ renderHtmlJson templateJson dicts =
         Ok template ->
           renderHtmlTemplate template dicts
 
+atomToString : Atom -> String
+atomToString atom =
+    case atom of
+        StringAtom string -> string
+        IntAtom int -> toString int
+        FloatAtom float -> toString float
+        BoolAtom bool -> toString bool
+        _ -> toString atom
+
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
@@ -466,6 +478,12 @@ renderHtmlTemplate template dicts =
                     Html.text <| "Unknown HTML template: " ++ name
                 Just templ ->
                     renderHtmlTemplate templ dicts
+        HtmlAtomLookup name ->
+            case Dict.get name dicts.atoms of
+                Nothing ->
+                    Html.text <| "Unknown atom: " ++ name
+                Just atom ->
+                    Html.text <| atomToString atom
         HtmlFuncall { function, args } ->
             case Dict.get function dicts.functions of
                 Nothing ->

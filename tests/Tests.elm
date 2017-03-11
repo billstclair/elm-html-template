@@ -115,6 +115,9 @@ templateData =
     , ( "\"?that\""
       , Ok <| HtmlTemplateLookup "that"
       )
+    , ( "\"@atom\""
+      , Ok <| HtmlAtomLookup "atom"
+      )
     , ( "[\"/func\", 1]"
       , Ok <| HtmlFuncall <| HtmlTemplateFuncall "func" <| IntAtom 1
       )
