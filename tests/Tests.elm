@@ -64,6 +64,12 @@ atomData =
     , ( "1.23"
       , Ok <| FloatAtom 1.23
       )
+    , ( "true"
+      , Ok <| BoolAtom True
+      )
+    , ( "\"@foo\""
+      , Ok <| LookupAtom "foo"
+      )
     , ( "[\"foo\",\"bar\"]"
       , Ok <| StringListAtom ["foo", "bar"]
       )
@@ -72,6 +78,9 @@ atomData =
       )
     , ( "[1.2,2.3,3.4,4.5]"
       , Ok <| FloatListAtom [1.2, 2.3, 3.4, 4.5]
+      )
+    , ( "[true,false,false,true]"
+      , Ok <| BoolListAtom [True, False, False, True]
       )
     , ( "[1, 2.3, \"foo\"]"
       , Ok <| ListAtom [IntAtom 1, FloatAtom 2.3, StringAtom "foo"]

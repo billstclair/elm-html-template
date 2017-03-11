@@ -38,6 +38,7 @@ type Atom
     | IntAtom Int
     | FloatAtom Float
     | BoolAtom Bool
+    | LookupAtom String
     | StringListAtom (List String)
     | IntListAtom (List Int)
     | FloatListAtom (List Float)
@@ -53,6 +54,7 @@ atomType atom =
         IntAtom _ -> "Int"
         FloatAtom _ -> "Float"
         BoolAtom _ -> "Bool"
+        LookupAtom _ -> "Lookup"
         StringListAtom _ -> "StringList"
         IntListAtom _ -> "IntList"
         FloatListAtom _ -> "FloatList"
@@ -83,6 +85,12 @@ isBoolAtom : Atom -> Bool
 isBoolAtom atom =
     case atom of
         BoolAtom _ -> True
+        _ -> False
+
+isLookupAtom : Atom -> Bool
+isLookupAtom atom =
+    case atom of
+        LookupAtom _ -> True
         _ -> False
 
 isListAtom : Atom -> Bool
@@ -307,7 +315,8 @@ isAttribute string atom =
 atomDecoder : Decoder Atom
 atomDecoder =
     JD.oneOf
-        [ JD.map StringAtom JD.string
+        [ JD.map LookupAtom htmlAtomLookupStringDecoder
+        , JD.map StringAtom JD.string
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
         , JD.map BoolAtom JD.bool
@@ -353,6 +362,7 @@ type FunctionType
     | IntFunction
     | FloatFunction
     | BoolFunction
+    | LookupFunction
     | StringsFunction Int
     | IntsFunction Int
     | FloatsFunction Int
@@ -368,6 +378,7 @@ atomFunctionType atom =
         IntAtom _ -> IntFunction
         FloatAtom _ -> FloatFunction
         BoolAtom _ -> BoolFunction
+        LookupAtom _ -> LookupFunction
         StringListAtom strings ->
             StringsFunction <| List.length strings
         IntListAtom ints ->
@@ -403,48 +414,56 @@ typedAttributeTable =
         ]
 
 renderAttributeAtom : (String, Atom) -> TemplateDicts msg -> Attribute msg
-renderAttributeAtom (name, atom) dicts =
+renderAttributeAtom (name, atomOrLookup) dicts =
     case Dict.get name typedAttributeTable of
         Nothing ->
             Attributes.title <| "Unknown attribute: " ++ name
         Just function ->
-            case function of
-                StringAttributeFunction f ->
-                    case atom of
-                        StringAtom string -> f string
-                        _ -> badTypeTitle name atom
-                IntAttributeFunction f ->
-                    case atom of
-                        IntAtom int -> f int
-                        _ -> badTypeTitle name atom
-                FloatAttributeFunction f ->
-                    case atom of
-                        FloatAtom float -> f float
-                        _ -> badTypeTitle name atom
-                BoolAttributeFunction f ->
-                    case atom of
-                        BoolAtom bool -> f bool
-                        _ -> badTypeTitle name atom
-                StringsAttributeFunction f ->
-                    case atom of
-                        StringListAtom strings -> f strings
-                        _ -> badTypeTitle name atom
-                IntsAttributeFunction f ->
-                    case atom of
-                        IntListAtom ints -> f ints
-                        _ -> badTypeTitle name atom
-                FloatsAttributeFunction f ->
-                    case atom of
-                        FloatListAtom floats -> f floats
-                        _ -> badTypeTitle name atom
-                BoolsAttributeFunction f ->
-                    case atom of
-                        BoolListAtom bools -> f bools
-                        _ -> badTypeTitle name atom
-                AtomsAttributeFunction f ->
-                    case atom of
-                        ListAtom atoms -> f atoms
-                        _ -> badTypeTitle name atom
+            let atom = case atomOrLookup of
+                           LookupAtom n ->
+                               case lookupAtom n dicts of
+                                   Just a -> a
+                                   Nothing -> atomOrLookup
+                           _ ->
+                               atomOrLookup
+            in
+                case function of
+                    StringAttributeFunction f ->
+                        case atom of
+                            StringAtom string -> f string
+                            _ -> badTypeTitle name atom
+                    IntAttributeFunction f ->
+                        case atom of
+                            IntAtom int -> f int
+                            _ -> badTypeTitle name atom
+                    FloatAttributeFunction f ->
+                        case atom of
+                            FloatAtom float -> f float
+                            _ -> badTypeTitle name atom
+                    BoolAttributeFunction f ->
+                        case atom of
+                            BoolAtom bool -> f bool
+                            _ -> badTypeTitle name atom
+                    StringsAttributeFunction f ->
+                        case atom of
+                            StringListAtom strings -> f strings
+                            _ -> badTypeTitle name atom
+                    IntsAttributeFunction f ->
+                        case atom of
+                            IntListAtom ints -> f ints
+                            _ -> badTypeTitle name atom
+                    FloatsAttributeFunction f ->
+                        case atom of
+                            FloatListAtom floats -> f floats
+                            _ -> badTypeTitle name atom
+                    BoolsAttributeFunction f ->
+                        case atom of
+                            BoolListAtom bools -> f bools
+                            _ -> badTypeTitle name atom
+                    AtomsAttributeFunction f ->
+                        case atom of
+                            ListAtom atoms -> f atoms
+                            _ -> badTypeTitle name atom
 
 ---
 --- Html Rendering
@@ -483,6 +502,27 @@ getprop prop plist =
         Just (_, res) -> Just res
         Nothing -> Nothing
 
+lookupAtom : String -> TemplateDicts msg -> Maybe Atom
+lookupAtom name dicts =
+    case Dict.get name dicts.atoms of
+        Just atom ->
+            Just atom
+        Nothing ->
+            case plistRefParts name of
+                Nothing -> Nothing
+                Just (nam, prop) ->
+                    case Dict.get nam dicts.atoms of
+                        Nothing -> Nothing
+                        Just atom ->
+                            case atom of
+                                PListAtom plist ->
+                                    case getprop prop plist of
+                                        Nothing -> Nothing
+                                        Just a ->
+                                            Just a
+                                _ ->
+                                    Nothing
+
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
@@ -495,30 +535,11 @@ renderHtmlTemplate template dicts =
                 Just templ ->
                     renderHtmlTemplate templ dicts
         HtmlAtomLookup name ->
-            case Dict.get name dicts.atoms of
-                Nothing ->
-                    case plistRefParts name of
-                        Nothing ->
-                            Html.text <| "Unknown atom: " ++ name
-                        Just (nam, prop) ->
-                            case Dict.get nam dicts.atoms of
-                                Nothing ->
-                                    Html.text
-                                        <| "Unknown atom: " ++ nam ++ " for " ++ name
-                                Just atom ->
-                                    case atom of
-                                        PListAtom plist ->
-                                            case getprop prop plist of
-                                                Nothing ->
-                                                    Html.text
-                                                        <| "Unknown property: " ++ name ++ " of " ++ (toString plist)
-                                                Just a ->
-                                                    Html.text <| atomToString a
-                                        _ ->
-                                            Html.text
-                                                <| name ++ " does not reference a plist: " ++ (toString atom)
+            case lookupAtom name dicts of
                 Just atom ->
                     Html.text <| atomToString atom
+                Nothing ->
+                    Html.text <| "Unknown atom: " ++ name
         HtmlFuncall { function, args } ->
             case Dict.get function dicts.functions of
                 Nothing ->
