@@ -12,14 +12,17 @@
 module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , TemplateDicts
                              , HtmlTemplateFuncall, HtmlTemplateRecord
-                             , emptyTemplateDicts
+                             , emptyTemplateDicts, defaultTemplateDicts
                              , templateReferences
                              , atomReferences, atomAtomReferences
                              , renderHtmlTemplate
                              , decodeHtmlTemplate, decodeAtom
+                             , loopFunction, psFunction
+                             , defaultDictsFunctions
                              )
 
 import Html exposing ( Html, Attribute
+                     , p, text
                      )
 
 import Html.Attributes as Attributes
@@ -131,14 +134,22 @@ isStringListAtom atom =
 
 type alias TemplateDicts msg =
     { atoms : Dict String Atom
-    , messages : Dict String (Atom -> msg)
+    , messages : Dict String (Atom -> Dicts msg -> msg)
     , templates : Dict String HtmlTemplate
-    , functions : Dict String (Atom -> Html msg)
+    , functions : Dict String (Atom -> Dicts msg -> Html msg)
     }
+
+-- Have to tag this for recursive use
+type Dicts msg
+    = TheDicts (TemplateDicts msg)
 
 emptyTemplateDicts : TemplateDicts msg
 emptyTemplateDicts =
     TemplateDicts Dict.empty Dict.empty Dict.empty Dict.empty
+
+defaultTemplateDicts : TemplateDicts msg
+defaultTemplateDicts =
+    TemplateDicts Dict.empty Dict.empty Dict.empty defaultDictsFunctions
 
 decodeHtmlTemplate : String -> Result String HtmlTemplate
 decodeHtmlTemplate json =
@@ -592,6 +603,97 @@ lookupAtom name dicts =
                                 _ ->
                                     Nothing
 
+br : Html msg
+br =
+    Html.br [] []
+
+loopFunction : Atom -> Dicts msg -> Html msg
+loopFunction args theDicts =
+    case theDicts of
+        TheDicts dicts ->
+            case args of
+                ListAtom atoms ->
+                    case atoms of
+                        [ var, values, template ] ->
+                            -- TODO
+                            p []
+                                [ text <| "Loop for " ++ (toString var)
+                                , br
+                                , text <| " in " ++ (toString values)
+                                , br
+                                , text <| " do: " ++ (toString template)
+                                ]
+                        _ ->
+                            p [] [ text <| "Malformed args: " ++ (toString args) ]
+                _ ->
+                    p [] [ text <| "Args not a ListAtom: " ++ (toString args) ]
+
+tagWrap : String -> List (String, Atom) -> List HtmlTemplate -> HtmlTemplate
+tagWrap tag attributes body =
+    HtmlRecord
+    <| HtmlTemplateRecord tag attributes body
+
+atomToHtmlTemplate : Atom -> HtmlTemplate
+atomToHtmlTemplate atom =
+    case atom of
+        StringAtom string ->
+            HtmlString string
+        IntAtom int ->
+            HtmlString (toString int)
+        FloatAtom float ->
+            HtmlString (toString float)
+        BoolAtom bool ->
+            HtmlString (toString bool)
+        LookupAtom string ->
+            HtmlAtomLookup string
+        LookupTemplateAtom string ->
+            HtmlTemplateLookup string
+        StringListAtom strings ->
+            HtmlString <| String.concat strings
+        IntListAtom ints ->
+            HtmlString <| String.concat <| List.map toString ints
+        FloatListAtom floats ->
+            HtmlString <| String.concat <| List.map toString floats
+        BoolListAtom bools ->
+            HtmlString <| String.concat <| List.map toString bools
+        ListAtom atoms ->
+            tagWrap "span" [] <| List.map atomToHtmlTemplate atoms
+        TemplateAtom template ->
+            template
+        _ ->
+            HtmlString
+            <| "Can't convert atom to body: " ++ (toString atom)
+
+atomToBody : Atom -> (List HtmlTemplate -> HtmlTemplate) -> List HtmlTemplate
+atomToBody atom wrapper =
+    case atom of
+        StringListAtom strings ->
+            List.map (\s -> wrapper <| [ HtmlString s ]) strings
+        IntListAtom ints ->
+            List.map (\i -> wrapper <| [ HtmlString (toString i) ]) ints
+        FloatListAtom floats ->
+            List.map (\f -> wrapper <| [ HtmlString (toString f) ]) floats
+        BoolListAtom bools ->
+            List.map (\b -> wrapper <| [ HtmlString (toString b) ]) bools
+        ListAtom atoms ->
+            List.map (\a -> wrapper <| [ atomToHtmlTemplate a ]) atoms
+        _ ->
+            [ wrapper [ atomToHtmlTemplate atom ] ]
+
+psFunction : Atom -> Dicts msg -> Html msg
+psFunction atom theDicts =
+    case theDicts of
+        TheDicts dicts ->
+            let body = atomToBody atom (tagWrap "p" [])
+            in
+                renderHtmlTemplate (tagWrap "div" [] body) dicts
+
+defaultDictsFunctions : Dict String (Atom -> Dicts msg -> Html msg)
+defaultDictsFunctions =
+    Dict.fromList [ ( "loop", loopFunction)
+                  , ( "ps", psFunction )
+                  ]
+
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
@@ -614,7 +716,7 @@ renderHtmlTemplate template dicts =
                 Nothing ->
                     Html.text <| "Unknown HTML function: " ++ function
                 Just f ->
-                    f args
+                    f args <| TheDicts dicts
         HtmlRecord { tag, attributes, body } ->
             case Dict.get tag tagTable of
                 Nothing ->
