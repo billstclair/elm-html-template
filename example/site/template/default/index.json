@@ -1,11 +1,10 @@
-[ "div", [],
-  [ "h2", [], [ "@title" ] ],
-  [ "/loop",
-    [ "@node", "@nodes",
-      [ "div", [],
-        [ "h3", [], [ "@node.title" ] ],
-        [ "/ps", [ "@node.ps" ] ]
-      ]
-    ]   
+[ "div", {},
+  [ [ "h2", {}, [ "@title" ] ],
+    [ "/loop",
+      [ "@node",
+        "@nodes",
+        "?node"
+      ]   
+    ]
   ]
 ]

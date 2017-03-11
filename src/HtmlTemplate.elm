@@ -39,6 +39,7 @@ type Atom
     | FloatAtom Float
     | BoolAtom Bool
     | LookupAtom String
+    | LookupTemplateAtom String
     | StringListAtom (List String)
     | IntListAtom (List Int)
     | FloatListAtom (List Float)
@@ -55,6 +56,7 @@ atomType atom =
         FloatAtom _ -> "Float"
         BoolAtom _ -> "Bool"
         LookupAtom _ -> "Lookup"
+        LookupTemplateAtom _ -> "LookupTemplate"
         StringListAtom _ -> "StringList"
         IntListAtom _ -> "IntList"
         FloatListAtom _ -> "FloatList"
@@ -91,6 +93,12 @@ isLookupAtom : Atom -> Bool
 isLookupAtom atom =
     case atom of
         LookupAtom _ -> True
+        _ -> False
+
+isLookupTemplateAtom : Atom -> Bool
+isLookupTemplateAtom atom =
+    case atom of
+        LookupTemplateAtom _ -> True
         _ -> False
 
 isListAtom : Atom -> Bool
@@ -178,8 +186,20 @@ templateReferencesLoop template res =
                 res
             else
                 name :: res
-        HtmlRecord record ->
-            List.foldl templateReferencesLoop res record.body
+        HtmlRecord { body } ->
+            List.foldl templateReferencesLoop res body
+        HtmlFuncall { args } ->
+            atomReferencesLoop args []
+        _ ->
+            res
+
+atomReferencesLoop : Atom -> List String -> List String
+atomReferencesLoop atom res =
+    case atom of
+        LookupTemplateAtom name ->
+            name :: res
+        ListAtom atoms ->
+            List.foldl atomReferencesLoop res atoms
         _ ->
             res
 
@@ -257,6 +277,9 @@ tagTable =
         [ ("p", Html.p)
         , ("a", Html.a)
         , ("div", Html.div)
+        , ("h1", Html.h1)
+        , ("h2", Html.h2)
+        , ("h3", Html.h3)
         , ("em", Html.em)
         , ("strong", Html.strong)
         , ("i", Html.i)
@@ -316,6 +339,7 @@ atomDecoder : Decoder Atom
 atomDecoder =
     JD.oneOf
         [ JD.map LookupAtom htmlAtomLookupStringDecoder
+        , JD.map LookupTemplateAtom htmlLookupStringDecoder
         , JD.map StringAtom JD.string
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
@@ -331,7 +355,14 @@ atomDecoder =
 
 stringListDecoder : Decoder (List String)
 stringListDecoder =
-    JD.list JD.string
+    JD.list <| JD.andThen ensureNotAtomLookup JD.string
+
+ensureNotAtomLookup : String -> Decoder String
+ensureNotAtomLookup string =
+    if (String.startsWith "@" string) || (String.startsWith "?" string) then
+        JD.fail <| "Lookup string not allowed: " ++ string
+    else
+        JD.succeed string
 
 intListDecoder : Decoder (List Int)
 intListDecoder =
@@ -363,6 +394,7 @@ type FunctionType
     | FloatFunction
     | BoolFunction
     | LookupFunction
+    | LookupTemplateFunction
     | StringsFunction Int
     | IntsFunction Int
     | FloatsFunction Int
@@ -379,6 +411,7 @@ atomFunctionType atom =
         FloatAtom _ -> FloatFunction
         BoolAtom _ -> BoolFunction
         LookupAtom _ -> LookupFunction
+        LookupTemplateAtom _ -> LookupTemplateFunction
         StringListAtom strings ->
             StringsFunction <| List.length strings
         IntListAtom ints ->
@@ -423,6 +456,10 @@ renderAttributeAtom (name, atomOrLookup) dicts =
                            LookupAtom n ->
                                case lookupAtom n dicts of
                                    Just a -> a
+                                   Nothing -> atomOrLookup
+                           LookupTemplateAtom n ->
+                               case Dict.get n dicts.templates of
+                                   Just t -> TemplateAtom t
                                    Nothing -> atomOrLookup
                            _ ->
                                atomOrLookup

@@ -7,6 +7,7 @@ import HtmlTemplate exposing ( TemplateDicts, HtmlTemplate(..), Atom(..)
 import Html exposing ( Html, Attribute )
 import Html.Attributes as Attributes
 import Dict exposing ( Dict )
+import Http
 
 main =
     Html.program
@@ -27,9 +28,9 @@ templateDirs : List String
 templateDirs =
     [ "default", "black", "red" ]
 
-mainTemplate : String
-mainTemplate =
-    "main"
+indexTemplate : String
+indexTemplate =
+    "index"
 
 templateFileType : String
 templateFileType =
@@ -48,24 +49,67 @@ init =
                 }
     in
         ( model
-        , fetchTemplate mainTemplate model
+        , fetchTemplate indexTemplate model
         )
 
 type Msg
-    = FetchDone String
+    = FetchDone String (Result Http.Error String)
 
 fetchTemplate : String -> Model -> Cmd Msg
 fetchTemplate name model =
     let filename = templateFilename name
-        url = model.templateDir ++ "/" ++ filename
+        url = "template/" ++ model.templateDir ++ "/" ++ filename
     in
-        Cmd.none
+        Http.send (FetchDone name) <| Http.getString url
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchDone json ->
-            ( model, Cmd.none )
+        FetchDone name result ->
+            fetchDone name result model
+
+fetchDone : String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
+fetchDone name result model =
+    case result of
+        Err err ->
+            ( { model | error = Just (toString err) }
+            , Cmd.none
+            )
+        Ok json ->
+            case HtmlTemplate.decodeHtmlTemplate json of
+                Err msg ->
+                    ( { model | error = Just msg }
+                    , Cmd.none
+                    )
+                Ok template ->
+                    let dicts = model.dicts
+                        templates = Dict.insert name template dicts.templates
+                        names = HtmlTemplate.templateReferences template
+                        unloaded = List.foldl
+                                   (\name names ->
+                                        if List.member name names then
+                                            names
+                                        else
+                                            name :: names
+                                   )
+                                   model.unloadedTemplates
+                                   names
+                        m = { model
+                                | dicts = { dicts | templates = templates }
+                                , unloadedTemplates = unloaded
+                            }
+                    in
+                        case unloaded of
+                            [] ->
+                                ( { m | error = Nothing }
+                                , Cmd.none )
+                            head :: tail ->
+                                ( { m
+                                      | unloadedTemplates = tail
+                                      , error = Just <| "Fetching template: " ++ head
+                                  }
+                                , fetchTemplate head m
+                                )
 
 view : Model -> Html Msg
 view model =

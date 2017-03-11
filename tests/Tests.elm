@@ -70,6 +70,9 @@ atomData =
     , ( "\"@foo\""
       , Ok <| LookupAtom "foo"
       )
+    , ( "\"?foo\""
+      , Ok <| LookupTemplateAtom "foo"
+      )
     , ( "[\"foo\",\"bar\"]"
       , Ok <| StringListAtom ["foo", "bar"]
       )
@@ -127,8 +130,21 @@ templateData =
     , ( "\"@atom\""
       , Ok <| HtmlAtomLookup "atom"
       )
-    , ( "[\"/func\", 1]"
-      , Ok <| HtmlFuncall <| HtmlTemplateFuncall "func" <| IntAtom 1
+    , ( "[\"/loop\",[\"@p\",\"@ps\",[\"p\",{},[\"@p\"]]]]"
+      , Ok
+            <| HtmlFuncall
+                <| HtmlTemplateFuncall
+                    "loop"
+                    <| ListAtom
+                        [ LookupAtom "p"
+                        , LookupAtom "ps"
+                        , TemplateAtom
+                            <| HtmlRecord
+                                { tag = "p"
+                                , attributes = []
+                                , body = [ HtmlAtomLookup "p" ]
+                                }
+                        ]
       )
     , ( "[\"a\",{\"title\": \"foo\"},[\"bar\"]]"
       , Ok <| HtmlRecord
@@ -137,7 +153,7 @@ templateData =
                 , body = [ HtmlString "bar" ]
                 }
       )
-    , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" frob\"]]"
+    , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" \", \"@frob\"]]"
       , Ok <| HtmlRecord
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
@@ -146,7 +162,8 @@ templateData =
                              , attributes = []
                              , body = [ HtmlString "bar" ]
                              }
-                         , HtmlString " frob"
+                         , HtmlString " "
+                         , HtmlAtomLookup "frob"
                          ]
                 }
       )
