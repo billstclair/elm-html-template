@@ -312,9 +312,9 @@ atomDecoder =
         , JD.map IntListAtom intListDecoder
         , JD.map FloatListAtom floatListDecoder
         , JD.map BoolListAtom boolListDecoder
+        , JD.map TemplateAtom <| JD.lazy (\_ -> htmlTemplateDecoder)
         , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
         , JD.map PListAtom <| JD.lazy (\_ -> atomPListDecoder)
-        , JD.map TemplateAtom <| JD.lazy (\_ -> htmlTemplateDecoder)
         ]
 
 stringListDecoder : Decoder (List String)

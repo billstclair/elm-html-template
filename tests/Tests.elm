@@ -88,6 +88,15 @@ atomData =
                         , ("string", StringAtom "bar")
                         ]
       )
+    , ( "[\"a\",{\"href\":\"http://example.com/\"},[\"example.com\"]]"
+      , Ok
+            <| TemplateAtom
+            <| HtmlRecord
+              { tag = "a"
+              , attributes = [("href", StringAtom "http://example.com/")]
+              , body = [ HtmlString "example.com" ]
+              }
+      )
     ]
 
 templateTest : ( String, Result String HtmlTemplate ) -> Test
