@@ -43,6 +43,7 @@ type Atom
     | FloatListAtom (List Float)
     | BoolListAtom (List Bool)
     | ListAtom (List Atom)
+    | PListAtom (List (String, Atom))
     | TemplateAtom HtmlTemplate
 
 atomType : Atom -> String
@@ -57,6 +58,7 @@ atomType atom =
         FloatListAtom _ -> "FloatList"
         BoolListAtom _ -> "BoolList"
         ListAtom _ -> "List"
+        PListAtom _ -> "PList"
         TemplateAtom _ -> "Template"
 
 isStringAtom : Atom -> Bool
@@ -87,6 +89,12 @@ isListAtom : Atom -> Bool
 isListAtom atom =
     case atom of
         ListAtom _ -> True
+        _ -> False
+
+isPListAtom : Atom -> Bool
+isPListAtom atom =
+    case atom of
+        PListAtom _ -> True
         _ -> False
 
 isStringListAtom : Atom -> Bool
@@ -187,7 +195,7 @@ ensureLookupString string =
 
 htmlFuncallDecoder : Decoder HtmlTemplate
 htmlFuncallDecoder =
-    JD.map HtmlFuncall htmlTemplateFuncallDecoder
+    JD.map HtmlFuncall <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
 
 htmlTemplateFuncallDecoder : Decoder HtmlTemplateFuncall
 htmlTemplateFuncallDecoder =
@@ -219,7 +227,7 @@ htmlTemplateDecoder : Decoder HtmlTemplate
 htmlTemplateDecoder =
   JD.oneOf
     [ htmlTemplateLookupDecoder
-    , htmlFuncallDecoder
+    , JD.lazy (\_ -> htmlFuncallDecoder)
     , htmlStringDecoder
     , JD.lazy (\_ -> htmlRecordDecoder)
     ]
@@ -228,7 +236,7 @@ htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
 htmlTemplateRecordDecoder =
     JD.map3 HtmlTemplateRecord
         (JD.andThen ensureTag (JD.index 0 JD.string))
-        (JD.index 1 attributesDecoder)
+        (JD.index 1 <| JD.lazy (\_ -> attributesDecoder))
         (JD.index 2 <| JD.list <| JD.lazy (\_ -> htmlTemplateDecoder))
 
 -- Not yet complete
@@ -305,11 +313,8 @@ atomDecoder =
         , JD.map FloatListAtom floatListDecoder
         , JD.map BoolListAtom boolListDecoder
         , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
-        -- This tickles an Elm bug:
-        --   Unhandled exception while running the tests:
-        --      [TypeError: Cannot read property 'tag' of undefined]
-        -- See https://github.com/elm-lang/elm-compiler/issues/1562
-        --, JD.map TemplateAtom <| JD.lazy (\_ -> htmlTemplateDecoder)
+        , JD.map PListAtom <| JD.lazy (\_ -> atomPListDecoder)
+        , JD.map TemplateAtom <| JD.lazy (\_ -> htmlTemplateDecoder)
         ]
 
 stringListDecoder : Decoder (List String)
@@ -332,6 +337,10 @@ atomListDecoder : Decoder (List Atom)
 atomListDecoder =
     JD.list <| JD.lazy (\_ -> atomDecoder)
 
+atomPListDecoder : Decoder (List (String, Atom))
+atomPListDecoder =
+    JD.keyValuePairs <| JD.lazy (\_ -> atomDecoder)
+
 ---
 --- Attribute rendering
 ---
@@ -346,6 +355,7 @@ type FunctionType
     | FloatsFunction Int
     | BoolsFunction Int
     | ListFunction Int (List FunctionType)
+    | PListFunction Int (List FunctionType)
     | NoFunction
 
 atomFunctionType : Atom -> FunctionType
@@ -365,6 +375,9 @@ atomFunctionType atom =
             BoolsFunction <| List.length bools
         ListAtom atoms ->
             ListFunction (List.length atoms) <| List.map atomFunctionType atoms
+        PListAtom plist ->
+            PListFunction (List.length plist)
+                <| List.map (\pair -> atomFunctionType <| Tuple.second pair) plist
         TemplateAtom _ ->
             NoFunction
 

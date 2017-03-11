@@ -82,6 +82,12 @@ atomData =
     , ( "[1,2,3"
       , Err "Malformed JSON."
       )
+    , ( "{\"string\":\"bar\",\"int\":1,\"float\":2.3}"
+      , Ok <| PListAtom [ ("float", FloatAtom 2.3)
+                        , ("int", IntAtom 1)
+                        , ("string", StringAtom "bar")
+                        ]
+      )
     ]
 
 templateTest : ( String, Result String HtmlTemplate ) -> Test
