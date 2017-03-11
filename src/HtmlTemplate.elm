@@ -12,7 +12,9 @@
 module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , TemplateDicts
                              , HtmlTemplateFuncall, HtmlTemplateRecord
-                             , emptyTemplateDicts, templateReferences
+                             , emptyTemplateDicts
+                             , templateReferences
+                             , atomReferences, atomAtomReferences
                              , renderHtmlTemplate
                              , decodeHtmlTemplate, decodeAtom
                              )
@@ -40,6 +42,7 @@ type Atom
     | BoolAtom Bool
     | LookupAtom String
     | LookupTemplateAtom String
+    | MsgAtom HtmlTemplateFuncall
     | StringListAtom (List String)
     | IntListAtom (List Int)
     | FloatListAtom (List Float)
@@ -57,6 +60,7 @@ atomType atom =
         BoolAtom _ -> "Bool"
         LookupAtom _ -> "Lookup"
         LookupTemplateAtom _ -> "LookupTemplate"
+        MsgAtom _ -> "Msg"
         StringListAtom _ -> "StringList"
         IntListAtom _ -> "IntList"
         FloatListAtom _ -> "FloatList"
@@ -99,6 +103,12 @@ isLookupTemplateAtom : Atom -> Bool
 isLookupTemplateAtom atom =
     case atom of
         LookupTemplateAtom _ -> True
+        _ -> False
+
+isMsgAtom : Atom -> Bool
+isMsgAtom atom =
+    case atom of
+        MsgAtom _ -> True
         _ -> False
 
 isListAtom : Atom -> Bool
@@ -189,9 +199,13 @@ templateReferencesLoop template res =
         HtmlRecord { body } ->
             List.foldl templateReferencesLoop res body
         HtmlFuncall { args } ->
-            atomReferencesLoop args []
+            atomReferences args
         _ ->
             res
+
+atomReferences : Atom -> List String
+atomReferences atom =
+    atomReferencesLoop atom []
 
 atomReferencesLoop : Atom -> List String -> List String
 atomReferencesLoop atom res =
@@ -200,6 +214,20 @@ atomReferencesLoop atom res =
             name :: res
         ListAtom atoms ->
             List.foldl atomReferencesLoop res atoms
+        _ ->
+            res
+
+atomAtomReferences : Atom -> List String
+atomAtomReferences atom =
+    atomAtomReferencesLoop atom []
+
+atomAtomReferencesLoop : Atom -> List String -> List String
+atomAtomReferencesLoop atom res =
+    case atom of
+        LookupAtom name ->
+            name :: res
+        ListAtom atoms ->
+            List.foldl atomAtomReferencesLoop res atoms
         _ ->
             res
 
@@ -322,6 +350,7 @@ attributeTable =
     Dict.fromList
         [ ("title", isStringAtom)
         , ("href", isStringAtom)
+        , ("onClick", isMsgAtom)
         ]
 
 isAttribute : String -> Atom -> Bool
@@ -340,6 +369,7 @@ atomDecoder =
     JD.oneOf
         [ JD.map LookupAtom htmlAtomLookupStringDecoder
         , JD.map LookupTemplateAtom htmlLookupStringDecoder
+        , JD.map MsgAtom <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
         , JD.map StringAtom JD.string
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
@@ -395,6 +425,7 @@ type FunctionType
     | BoolFunction
     | LookupFunction
     | LookupTemplateFunction
+    | MsgFunction
     | StringsFunction Int
     | IntsFunction Int
     | FloatsFunction Int
@@ -412,6 +443,7 @@ atomFunctionType atom =
         BoolAtom _ -> BoolFunction
         LookupAtom _ -> LookupFunction
         LookupTemplateAtom _ -> LookupTemplateFunction
+        MsgAtom _ -> MsgFunction
         StringListAtom strings ->
             StringsFunction <| List.length strings
         IntListAtom ints ->
