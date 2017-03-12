@@ -1,7 +1,8 @@
 module Main exposing (..)
 
 import HtmlTemplate exposing ( TemplateDicts, HtmlTemplate(..), Atom(..)
-                             , emptyTemplateDicts, renderHtmlTemplate
+                             , defaultTemplateDicts, renderHtmlTemplate
+                             , atomToHtmlTemplate
                              )
 
 import Html exposing ( Html, Attribute
@@ -21,6 +22,7 @@ main =
 
 type alias Model =
     { dicts: TemplateDicts Msg
+    , page: String
     , templateDir : String
     , unloadedTemplates : List String
     , error : Maybe String
@@ -44,7 +46,8 @@ templateFilename name =
 
 init : ( Model, Cmd Msg)
 init =
-    let model = { dicts = emptyTemplateDicts
+    let model = { dicts = defaultTemplateDicts
+                , page = "index"
                 , templateDir = "default"
                 , unloadedTemplates = []
                 , error = Just "Fetching templates..."
@@ -184,11 +187,45 @@ view model =
             p [ style [ ( "color", "red" ) ] ]
                 [ text err ]
         Nothing ->
-            div []
-                [ p []
-                      [ a [ href "template/" ]
-                            [ text "template/"]
-                      ]
-                , p []
-                    [ text <| toString model.dicts ]
-                ]
+            let dicts = model.dicts
+                templatesDict = dicts.templates
+                atomsDict = dicts.atoms
+                page = model.page
+                template = if page == "index" then "index" else "node"
+            in
+                case Dict.get template templatesDict of
+                    Nothing ->
+                        dictsDiv "Template" template model
+                    Just tmpl ->
+                        case Dict.get page atomsDict of
+                            Nothing ->
+                                dictsDiv "Page" page model
+                            Just atom ->
+                                let ad = if page == "index" then
+                                             Dict.insert "nodes" atom
+                                                 <| Dict.insert
+                                                     "title"
+                                                     (StringAtom "Index")
+                                                     atomsDict
+                                         else
+                                             Dict.insert "node" atom atomsDict
+                                in
+                                    renderHtmlTemplate tmpl { dicts | atoms = ad }
+
+dictsDiv : String -> String -> Model -> Html Msg
+dictsDiv thing page model =
+    div []
+        [ p [] [ text <| thing ++ " not found: " ++ page ]
+        , p []
+              [ a [ href "template/" ]
+                    [ text "template/"]
+              ]
+        , p []
+            [ text "dicts:"
+            , br
+            , text <| toString model.dicts ]
+        ]
+        
+br : Html Msg
+br =
+    Html.br [] []

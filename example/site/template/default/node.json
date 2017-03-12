@@ -1,5 +1,5 @@
 [ "div", {},
-  [ [ "h3", {}, [ "@node.title" ] ],
-    [ "/ps", [ "@node.ps" ] ]
+  [ [ "h3", {}, [ [ "a", { "href": "#" }, [ "@node.title" ] ] ] ],
+    [ "/ps", "@node.ps" ]
   ]
 ]

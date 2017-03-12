@@ -16,13 +16,14 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , templateReferences
                              , atomReferences, atomAtomReferences
                              , renderHtmlTemplate
+                             , atomToHtmlTemplate, atomToBody
                              , decodeHtmlTemplate, decodeAtom
                              , loopFunction, psFunction
                              , defaultDictsFunctions
                              )
 
 import Html exposing ( Html, Attribute
-                     , p, text
+                     , p, text, span
                      )
 
 import Html.Attributes as Attributes
@@ -316,6 +317,7 @@ tagTable =
         [ ("p", Html.p)
         , ("a", Html.a)
         , ("div", Html.div)
+        , ("span", Html.span)
         , ("h1", Html.h1)
         , ("h2", Html.h2)
         , ("h3", Html.h3)
@@ -582,6 +584,28 @@ getprop prop plist =
         Just (_, res) -> Just res
         Nothing -> Nothing
 
+maybeLookupTemplateAtom : Atom -> TemplateDicts msg -> Maybe HtmlTemplate
+maybeLookupTemplateAtom atom dicts =
+    case atom of
+        LookupTemplateAtom name ->
+            lookupTemplateAtom name dicts
+        TemplateAtom template ->
+            Just template
+        _ ->
+            Nothing
+
+lookupTemplateAtom : String -> TemplateDicts msg -> Maybe HtmlTemplate
+lookupTemplateAtom name dicts =
+    Dict.get name dicts.templates
+
+maybeLookupAtom : Atom -> TemplateDicts msg -> Maybe Atom
+maybeLookupAtom atom dicts =
+    case atom of
+        LookupAtom name ->
+            lookupAtom name dicts
+        _ ->
+            Just atom
+
 lookupAtom : String -> TemplateDicts msg -> Maybe Atom
 lookupAtom name dicts =
     case Dict.get name dicts.atoms of
@@ -607,27 +631,89 @@ br : Html msg
 br =
     Html.br [] []
 
-loopFunction : Atom -> Dicts msg -> Html msg
-loopFunction args theDicts =
+withTheDicts : Dicts msg -> (TemplateDicts msg -> Html msg) -> Html msg
+withTheDicts theDicts f =
     case theDicts of
         TheDicts dicts ->
-            case args of
-                ListAtom atoms ->
-                    case atoms of
-                        [ var, values, template ] ->
-                            -- TODO
-                            p []
-                                [ text <| "Loop for " ++ (toString var)
-                                , br
-                                , text <| " in " ++ (toString values)
-                                , br
-                                , text <| " do: " ++ (toString template)
-                                ]
-                        _ ->
-                            p [] [ text <| "Malformed args: " ++ (toString args) ]
-                _ ->
-                    p [] [ text <| "Args not a ListAtom: " ++ (toString args) ]
+            f dicts
 
+loopFunction : Atom -> Dicts msg -> Html msg
+loopFunction args theDicts =
+    withTheDicts theDicts <| loopFunctionInternal args
+
+loopFunctionInternal : Atom -> TemplateDicts msg -> Html msg
+loopFunctionInternal args dicts =
+    case args of
+        ListAtom atoms ->
+            case (log "atoms" atoms) of
+                [ var, values, template ] ->
+                    case (log "loopargs" <| loopArgs var values template dicts) of
+                        Nothing ->
+                            loopHelp var values template
+                        Just (varName, vals, tmpl) ->
+                            span []
+                                <| List.map (loopBody varName tmpl dicts) vals
+                _ ->
+                    p [] [ text <| "Malformed args: " ++ (toString args) ]
+        _ ->
+            p [] [ text <| "Args not a ListAtom: " ++ (toString args) ]
+
+atomizeListAtom : Atom -> Maybe (List Atom)
+atomizeListAtom atom =
+    case atom of
+        StringListAtom strings ->
+            Just <| List.map StringAtom strings
+        IntListAtom ints ->
+            Just <| List.map IntAtom ints
+        FloatListAtom floats ->
+            Just <| List.map FloatAtom floats
+        BoolListAtom bools ->
+            Just <| List.map BoolAtom bools
+        ListAtom atoms ->
+            Just atoms
+        _ ->
+            Nothing
+
+loopArgs : Atom -> Atom -> Atom -> TemplateDicts msg -> Maybe (String, List Atom, HtmlTemplate)
+loopArgs var vals template dicts =
+    case var of
+        LookupAtom varName ->
+            case maybeLookupAtom vals dicts of
+                Nothing -> Nothing
+                Just vsAtom ->
+                    case atomizeListAtom vsAtom of
+                        Nothing -> Nothing
+                        Just list ->
+                            case maybeLookupTemplateAtom template dicts of
+                                Nothing -> Nothing
+                                Just tmpl ->
+                                    Just (varName, list, tmpl)
+        _ ->
+            Nothing
+
+loopBody : String -> HtmlTemplate -> TemplateDicts msg -> Atom -> Html msg
+loopBody varName template dicts value =
+    let atomsDict = dicts.atoms
+    in
+        case maybeLookupAtom value dicts of
+            Nothing -> text <| "No value for: " ++ (toString value)
+            Just val ->
+                let ds = { dicts
+                             | atoms = Dict.insert varName val atomsDict
+                         }
+                in
+                    renderHtmlTemplate template ds
+
+loopHelp : Atom -> Atom -> Atom -> Html msg
+loopHelp var values template =
+    p []
+        [ text <| "Loop for " ++ (toString var)
+        , br
+        , text <| " in " ++ (toString values)
+        , br
+        , text <| " do: " ++ (toString template)
+        ]
+        
 tagWrap : String -> List (String, Atom) -> List HtmlTemplate -> HtmlTemplate
 tagWrap tag attributes body =
     HtmlRecord
@@ -682,9 +768,15 @@ atomToBody atom wrapper =
 
 psFunction : Atom -> Dicts msg -> Html msg
 psFunction atom theDicts =
-    case theDicts of
-        TheDicts dicts ->
-            let body = atomToBody atom (tagWrap "p" [])
+    withTheDicts theDicts <| psFunctionInternal atom
+
+psFunctionInternal : Atom -> TemplateDicts msg -> Html msg
+psFunctionInternal atom dicts =
+    case (log "ps" <| maybeLookupAtom atom dicts) of
+        Nothing ->
+            text <| "No value for: " ++ (toString atom)
+        Just a ->
+            let body = atomToBody a (tagWrap "p" [])
             in
                 renderHtmlTemplate (tagWrap "div" [] body) dicts
 
@@ -696,7 +788,7 @@ defaultDictsFunctions =
 
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
-    case template of
+    case (log "renderHtmlTemplate" template) of
         HtmlString text ->
             Html.text text
         HtmlTemplateLookup name ->
