@@ -47,10 +47,6 @@ type Atom
     | LookupAtom String
     | LookupTemplateAtom String
     | MsgAtom HtmlTemplateFuncall
-    | StringListAtom (List String)
-    | IntListAtom (List Int)
-    | FloatListAtom (List Float)
-    | BoolListAtom (List Bool)
     | ListAtom (List Atom)
     | PListAtom (List (String, Atom))
     | TemplateAtom HtmlTemplate
@@ -65,10 +61,6 @@ atomType atom =
         LookupAtom _ -> "Lookup"
         LookupTemplateAtom _ -> "LookupTemplate"
         MsgAtom _ -> "Msg"
-        StringListAtom _ -> "StringList"
-        IntListAtom _ -> "IntList"
-        FloatListAtom _ -> "FloatList"
-        BoolListAtom _ -> "BoolList"
         ListAtom _ -> "List"
         PListAtom _ -> "PList"
         TemplateAtom _ -> "Template"
@@ -125,12 +117,6 @@ isPListAtom : Atom -> Bool
 isPListAtom atom =
     case atom of
         PListAtom _ -> True
-        _ -> False
-
-isStringListAtom : Atom -> Bool
-isStringListAtom atom =
-    case atom of
-        StringListAtom _ -> True
         _ -> False
 
 type alias TemplateDicts msg =
@@ -387,18 +373,10 @@ atomDecoder =
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
         , JD.map BoolAtom JD.bool
-        , JD.map StringListAtom stringListDecoder
-        , JD.map IntListAtom intListDecoder
-        , JD.map FloatListAtom floatListDecoder
-        , JD.map BoolListAtom boolListDecoder
         , JD.map TemplateAtom <| JD.lazy (\_ -> htmlTemplateDecoder)
         , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
         , JD.map PListAtom <| JD.lazy (\_ -> atomPListDecoder)
         ]
-
-stringListDecoder : Decoder (List String)
-stringListDecoder =
-    JD.list <| JD.andThen ensureNotAtomLookup JD.string
 
 ensureNotAtomLookup : String -> Decoder String
 ensureNotAtomLookup string =
@@ -406,18 +384,6 @@ ensureNotAtomLookup string =
         JD.fail <| "Lookup string not allowed: " ++ string
     else
         JD.succeed string
-
-intListDecoder : Decoder (List Int)
-intListDecoder =
-    JD.list JD.int
-
-floatListDecoder : Decoder (List Float)
-floatListDecoder =
-    JD.list JD.float
-
-boolListDecoder : Decoder (List Bool)
-boolListDecoder =
-    JD.list JD.bool
 
 atomListDecoder : Decoder (List Atom)
 atomListDecoder =
@@ -457,14 +423,6 @@ atomFunctionType atom =
         LookupAtom _ -> LookupFunction
         LookupTemplateAtom _ -> LookupTemplateFunction
         MsgAtom _ -> MsgFunction
-        StringListAtom strings ->
-            StringsFunction <| List.length strings
-        IntListAtom ints ->
-            IntsFunction <| List.length ints
-        FloatListAtom floats ->
-            FloatsFunction <| List.length floats
-        BoolListAtom bools ->
-            BoolsFunction <| List.length bools
         ListAtom atoms ->
             ListFunction (List.length atoms) <| List.map atomFunctionType atoms
         PListAtom plist ->
@@ -478,10 +436,6 @@ type AttributeFunction msg
     | IntAttributeFunction (Int -> Attribute msg)
     | FloatAttributeFunction (Float -> Attribute msg)
     | BoolAttributeFunction (Bool -> Attribute msg)
-    | StringsAttributeFunction (List String -> Attribute msg)
-    | IntsAttributeFunction (List Int -> Attribute msg)
-    | FloatsAttributeFunction (List Float -> Attribute msg)
-    | BoolsAttributeFunction (List Bool -> Attribute msg)
     | AtomsAttributeFunction (List Atom -> Attribute msg)
 
 typedAttributeTable : Dict String (AttributeFunction msg)
@@ -525,22 +479,6 @@ renderAttributeAtom (name, atomOrLookup) dicts =
                     BoolAttributeFunction f ->
                         case atom of
                             BoolAtom bool -> f bool
-                            _ -> badTypeTitle name atom
-                    StringsAttributeFunction f ->
-                        case atom of
-                            StringListAtom strings -> f strings
-                            _ -> badTypeTitle name atom
-                    IntsAttributeFunction f ->
-                        case atom of
-                            IntListAtom ints -> f ints
-                            _ -> badTypeTitle name atom
-                    FloatsAttributeFunction f ->
-                        case atom of
-                            FloatListAtom floats -> f floats
-                            _ -> badTypeTitle name atom
-                    BoolsAttributeFunction f ->
-                        case atom of
-                            BoolListAtom bools -> f bools
                             _ -> badTypeTitle name atom
                     AtomsAttributeFunction f ->
                         case atom of
@@ -658,22 +596,6 @@ loopFunctionInternal args dicts =
         _ ->
             p [] [ text <| "Args not a ListAtom: " ++ (toString args) ]
 
-atomizeListAtom : Atom -> Maybe (List Atom)
-atomizeListAtom atom =
-    case atom of
-        StringListAtom strings ->
-            Just <| List.map StringAtom strings
-        IntListAtom ints ->
-            Just <| List.map IntAtom ints
-        FloatListAtom floats ->
-            Just <| List.map FloatAtom floats
-        BoolListAtom bools ->
-            Just <| List.map BoolAtom bools
-        ListAtom atoms ->
-            Just atoms
-        _ ->
-            Nothing
-
 loopArgs : Atom -> Atom -> Atom -> TemplateDicts msg -> Maybe (String, List Atom, HtmlTemplate)
 loopArgs var vals template dicts =
     case var of
@@ -681,13 +603,14 @@ loopArgs var vals template dicts =
             case maybeLookupAtom vals dicts of
                 Nothing -> Nothing
                 Just vsAtom ->
-                    case atomizeListAtom vsAtom of
-                        Nothing -> Nothing
-                        Just list ->
+                    case vsAtom of
+                        ListAtom list ->
                             case maybeLookupTemplateAtom template dicts of
                                 Nothing -> Nothing
                                 Just tmpl ->
                                     Just (varName, list, tmpl)
+                        _ ->
+                            Nothing
         _ ->
             Nothing
 
@@ -734,14 +657,6 @@ atomToHtmlTemplate atom =
             HtmlAtomLookup string
         LookupTemplateAtom string ->
             HtmlTemplateLookup string
-        StringListAtom strings ->
-            HtmlString <| String.concat strings
-        IntListAtom ints ->
-            HtmlString <| String.concat <| List.map toString ints
-        FloatListAtom floats ->
-            HtmlString <| String.concat <| List.map toString floats
-        BoolListAtom bools ->
-            HtmlString <| String.concat <| List.map toString bools
         ListAtom atoms ->
             tagWrap "span" [] <| List.map atomToHtmlTemplate atoms
         TemplateAtom template ->
@@ -753,14 +668,6 @@ atomToHtmlTemplate atom =
 atomToBody : Atom -> (List HtmlTemplate -> HtmlTemplate) -> List HtmlTemplate
 atomToBody atom wrapper =
     case atom of
-        StringListAtom strings ->
-            List.map (\s -> wrapper <| [ HtmlString s ]) strings
-        IntListAtom ints ->
-            List.map (\i -> wrapper <| [ HtmlString (toString i) ]) ints
-        FloatListAtom floats ->
-            List.map (\f -> wrapper <| [ HtmlString (toString f) ]) floats
-        BoolListAtom bools ->
-            List.map (\b -> wrapper <| [ HtmlString (toString b) ]) bools
         ListAtom atoms ->
             List.map (\a -> wrapper <| [ atomToHtmlTemplate a ]) atoms
         _ ->
