@@ -254,7 +254,7 @@ htmlAtomLookupDecoder =
 
 htmlAtomLookupStringDecoder : Decoder String
 htmlAtomLookupStringDecoder =
-    JD.andThen (ensureLookupString "@" "an atsign")  JD.string
+    JD.andThen (ensureLookupString "$" "a dollar sign")  JD.string
 
 htmlFuncallDecoder : Decoder HtmlTemplate
 htmlFuncallDecoder =
@@ -377,13 +377,6 @@ atomDecoder =
         , JD.map ListAtom <| JD.lazy (\_ -> atomListDecoder)
         , JD.map PListAtom <| JD.lazy (\_ -> atomPListDecoder)
         ]
-
-ensureNotAtomLookup : String -> Decoder String
-ensureNotAtomLookup string =
-    if (String.startsWith "@" string) || (String.startsWith "?" string) then
-        JD.fail <| "Lookup string not allowed: " ++ string
-    else
-        JD.succeed string
 
 atomListDecoder : Decoder (List Atom)
 atomListDecoder =
