@@ -301,18 +301,28 @@ tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
 tagTable =
     Dict.fromList
         [ ("p", Html.p)
+        , ("br", Html.br)
         , ("a", Html.a)
         , ("div", Html.div)
+        , ("style", style)
         , ("span", Html.span)
         , ("h1", Html.h1)
         , ("h2", Html.h2)
         , ("h3", Html.h3)
+        , ("table", Html.table)
+        , ("tr", Html.tr)
+        , ("th", Html.th)
+        , ("td", Html.td)
         , ("em", Html.em)
         , ("strong", Html.strong)
         , ("i", Html.i)
         , ("b", Html.b)
         , ("u", Html.u)
         ]
+
+style : List (Attribute msg) -> List (Html msg) -> Html msg
+style attributes body =
+    Html.node "style" attributes body
 
 ensureTag : String -> Decoder String
 ensureTag string =
