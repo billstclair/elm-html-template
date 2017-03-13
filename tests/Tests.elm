@@ -67,23 +67,23 @@ atomData =
     , ( "true"
       , Ok <| BoolAtom True
       )
-    , ( "\"@foo\""
+    , ( "\"$foo\""
       , Ok <| LookupAtom "foo"
       )
     , ( "\"?foo\""
       , Ok <| LookupTemplateAtom "foo"
       )
     , ( "[\"foo\",\"bar\"]"
-      , Ok <| StringListAtom ["foo", "bar"]
+      , Ok <| ListAtom [ StringAtom "foo", StringAtom "bar"]
       )
     , ( "[1,2,3]"
-      , Ok <| IntListAtom [1, 2, 3]
+      , Ok <| ListAtom [IntAtom 1, IntAtom 2, IntAtom 3]
       )
     , ( "[1.2,2.3,3.4,4.5]"
-      , Ok <| FloatListAtom [1.2, 2.3, 3.4, 4.5]
+      , Ok <| ListAtom [FloatAtom 1.2, FloatAtom 2.3, FloatAtom 3.4, FloatAtom 4.5]
       )
     , ( "[true,false,false,true]"
-      , Ok <| BoolListAtom [True, False, False, True]
+      , Ok <| ListAtom [BoolAtom True, BoolAtom False, BoolAtom False, BoolAtom True]
       )
     , ( "[1, 2.3, \"foo\"]"
       , Ok <| ListAtom [IntAtom 1, FloatAtom 2.3, StringAtom "foo"]
@@ -127,10 +127,10 @@ templateData =
     , ( "\"?that\""
       , Ok <| HtmlTemplateLookup "that"
       )
-    , ( "\"@atom\""
+    , ( "\"$atom\""
       , Ok <| HtmlAtomLookup "atom"
       )
-    , ( "[\"/loop\",[\"@p\",\"@ps\",[\"p\",{},[\"@p\"]]]]"
+    , ( "[\"/loop\",[\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]]"
       , Ok
             <| HtmlFuncall
                 <| HtmlTemplateFuncall
@@ -153,7 +153,7 @@ templateData =
                 , body = [ HtmlString "bar" ]
                 }
       )
-    , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" \", \"@frob\"]]"
+    , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" \", \"$frob\"]]"
       , Ok <| HtmlRecord
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
