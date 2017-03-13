@@ -12,6 +12,8 @@ import Html.Attributes as Attributes exposing ( style, href )
 import Dict exposing ( Dict )
 import Http
 
+log = Debug.log
+
 main =
     Html.program
         { init = init
@@ -22,7 +24,7 @@ main =
 
 type alias Model =
     { dicts: TemplateDicts Msg
-    , page: String
+    , page: Maybe String
     , templateDir : String
     , unloadedTemplates : List String
     , error : Maybe String
@@ -32,9 +34,20 @@ templateDirs : List String
 templateDirs =
     [ "default", "black", "red" ]
 
+settingsFile : String
+settingsFile =
+    "settings"
+
+pageTemplate : String
+pageTemplate = "page"
+
 indexTemplate : String
 indexTemplate =
     "index"
+
+postTemplate : String
+postTemplate =
+    "post"
 
 templateFileType : String
 templateFileType =
@@ -47,26 +60,33 @@ templateFilename name =
 init : ( Model, Cmd Msg)
 init =
     let model = { dicts = defaultTemplateDicts
-                , page = "index"
+                , page = Nothing
                 , templateDir = "default"
-                , unloadedTemplates = []
-                , error = Just "Fetching templates..."
+                , unloadedTemplates = [ "page" ]
+                , error = Just (log "error" "Fetching settings...")
                 }
     in
         ( model
-        , fetchTemplate indexTemplate model
+        , fetchSettings model
         )
 
 type Msg
-    = FetchDone String (Result Http.Error String)
+    = SettingsFetchDone (Result Http.Error String)
+    | TemplateFetchDone String (Result Http.Error String)
     | PageFetchDone String (Result Http.Error String)
+
+fetchSettings : Model -> Cmd Msg
+fetchSettings model =
+    let url = templateFilename settingsFile
+    in
+        Http.send SettingsFetchDone <| Http.getString url
 
 fetchTemplate : String -> Model -> Cmd Msg
 fetchTemplate name model =
     let filename = templateFilename name
         url = "template/" ++ model.templateDir ++ "/" ++ filename
     in
-        Http.send (FetchDone name) <| Http.getString url
+        Http.send (TemplateFetchDone name) <| Http.getString url
 
 fetchPage : String -> Model -> Cmd Msg
 fetchPage name model =
@@ -78,16 +98,58 @@ fetchPage name model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchDone name result ->
-            fetchDone name result model
+        SettingsFetchDone result ->
+            settingsFetchDone result model
+        TemplateFetchDone name result ->
+            templateFetchDone name result model
         PageFetchDone name result ->
             pageFetchDone name result model
 
-fetchDone : String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
-fetchDone name result model =
+setAtom : String -> Atom -> Model -> Model
+setAtom name atom model =
+    let dicts = model.dicts
+        atoms = dicts.atoms
+    in
+        { model | dicts = { dicts | atoms = Dict.insert name atom atoms } }
+
+settingsFetchDone : Result Http.Error String -> Model -> ( Model, Cmd Msg )
+settingsFetchDone result model =
     case result of
         Err err ->
-            ( { model | error = Just (toString err) }
+            ( { model
+                  | error =
+                      Just <| "Error fetching settings: " ++ (toString err)
+              }
+            , Cmd.none
+            )
+        Ok json ->
+            case HtmlTemplate.decodeAtom json of
+                Err msg ->
+                    ( { model
+                          | error =
+                              Just
+                              <| "While parsing settings: " ++ msg
+                      }
+                    , Cmd.none
+                    )
+                Ok settings ->
+                    ( setAtom "settings" settings
+                          <| { model
+                                 | error =
+                                     Just <| (log "error" <| "Fetching template: " ++ indexTemplate)
+                             }
+                    , fetchTemplate indexTemplate model
+                    )
+
+templateFetchDone : String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
+templateFetchDone name result model =
+    case result of
+        Err err ->
+            ( { model
+                  | error =
+                      Just
+                      <| "Error fetching template " ++ name ++ ": " ++ (toString err)
+              }
             , Cmd.none
             )
         Ok json ->
@@ -96,7 +158,7 @@ fetchDone name result model =
                     ( { model
                           | error =
                               Just
-                              <| "While loading template \"" ++
+                              <| "While parsing template \"" ++
                                   name ++ "\": " ++ msg
                       }
                     , Cmd.none
@@ -121,13 +183,15 @@ fetchDone name result model =
                     in
                         case unloaded of
                             [] ->
-                                ( { m | error = Just "Fetching pages..." }
+                                ( { m | error =
+                                          Just <| (log "error" <| "Fetching page: " ++ indexTemplate)
+                                  }
                                 , fetchPage indexTemplate model
                                 )
                             head :: tail ->
                                 ( { m
                                       | unloadedTemplates = tail
-                                      , error = Just <| "Fetching template: " ++ head
+                                      , error = Just <| (log "error" <| "Fetching template: " ++ head)
                                   }
                                 , fetchTemplate head m
                                 )
@@ -136,7 +200,11 @@ pageFetchDone : String -> Result Http.Error String -> Model -> ( Model, Cmd Msg 
 pageFetchDone name result model =
     case result of
         Err err ->
-            ( { model | error = Just (toString err) }
+            ( { model
+                  | error =
+                      Just
+                      <| "Error fetching page " ++ name ++ ": " ++ (toString err)
+              }
             , Cmd.none
             )
         Ok json ->
@@ -145,15 +213,14 @@ pageFetchDone name result model =
                     ( { model
                             | error =
                                 Just
-                                <| "While loading page \"" ++
-                                    name ++ "\": " ++ msg
+                                <| ("While loading page \"" ++ name ++ "\": " ++ msg)
                       }
                     , Cmd.none
                     )
                 Ok atom ->
                     let dicts = model.dicts
-                        atoms = Dict.insert name atom dicts.atoms
-                        names = HtmlTemplate.atomAtomReferences atom
+                        pages = Dict.insert name atom dicts.pages
+                        names = HtmlTemplate.atomPageReferences atom
                         unloaded = List.foldl
                                    (\name names ->
                                         if List.member name names then
@@ -164,7 +231,7 @@ pageFetchDone name result model =
                                    model.unloadedTemplates
                                    names
                         m = { model
-                                | dicts = { dicts | atoms = atoms }
+                                | dicts = { dicts | pages = pages }
                                 , unloadedTemplates = unloaded
                             }
                     in
@@ -175,42 +242,53 @@ pageFetchDone name result model =
                             head :: tail ->
                                 ( { m
                                       | unloadedTemplates = tail
-                                      , error = Just <| "Fetching page: " ++ head
+                                      , error = Just <| (log "error" <| "Fetching page: " ++ head)
                                   }
                                 , fetchPage head m
                                 )
 
 view : Model -> Html Msg
 view model =
-    case model.error of
-        Just err ->
-            p [ style [ ( "color", "red" ) ] ]
-                [ text err ]
-        Nothing ->
-            let dicts = model.dicts
-                templatesDict = dicts.templates
-                atomsDict = dicts.atoms
-                page = model.page
-                template = if page == "index" then "index" else "node"
-            in
-                case Dict.get template templatesDict of
-                    Nothing ->
-                        dictsDiv "Template" template model
-                    Just tmpl ->
-                        case Dict.get page atomsDict of
-                            Nothing ->
-                                dictsDiv "Page" page model
-                            Just atom ->
-                                let ad = if page == "index" then
-                                             Dict.insert "nodes" atom
-                                                 <| Dict.insert
-                                                     "title"
-                                                     (StringAtom "Index")
-                                                     atomsDict
-                                         else
-                                             Dict.insert "node" atom atomsDict
+    div []
+        [ case model.error of
+              Just err ->
+                  p [ style [ ( "color", "red" ) ] ]
+                      [ text err ]
+              Nothing ->
+                  text ""
+        , case model.page of
+              Nothing ->
+                  text ""
+              Just page ->
+                  let dicts = model.dicts
+                      templatesDict = dicts.templates
+                      atomsDict = dicts.atoms
+                      pagesDict = dicts.pages
+                      template = "page"
+                  in
+                      case Dict.get template templatesDict of
+                          Nothing ->
+                              dictsDiv "Template" template model
+                          Just tmpl ->
+                              case Dict.get page pagesDict of
+                                  Nothing ->
+                                      dictsDiv "Page" page model
+                                  Just atom ->
+                                      let ad
+                                          = Dict.insert "nodes" atom
+                                            <| Dict.insert "node" atom
+                                            <| Dict.insert
+                                                "content"
+                                                (LookupTemplateAtom
+                                                 <| if page == "index" then
+                                                        "index"
+                                                     else
+                                                         "node"
+                                                )
+                                                atomsDict
                                 in
                                     renderHtmlTemplate tmpl { dicts | atoms = ad }
+        ]
 
 dictsDiv : String -> String -> Model -> Html Msg
 dictsDiv thing page model =

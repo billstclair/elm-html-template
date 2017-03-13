@@ -1,18 +1,20 @@
 ["div",{},
- ["style",{},[]],
- ["h2",{},
-  [["a",{"href":"$settings.site-url"},
-    ["$settings.siteName"]
+ [["style",{},[]],
+  ["h2",{},
+   [["a",{"href":"$settings.site-url"},
+     ["$settings.siteName"]
+    ]
    ]
+  ],
+  ["h3",{},["$settings.siteSlogan"]],
+  ["table",{},
+   ["tr",{},
+    ["td",{},["links here"]],
+    ["td",{},["$content"]]
+   ]
+  ],
+  ["div",{},
+   ["$settings.footer"]
   ]
- ],
- ["h3",{},["$settings.siteSlogan"]],
- ["table",{},
-  ["tr",{},
-   ["td",{},["links here"]],
-   ["td",{},["$content"]]
-  ]
- ],
- ["div",{},
-  ["$settings.footer"]]
+ ]
 ]

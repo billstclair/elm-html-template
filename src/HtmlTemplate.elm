@@ -72,6 +72,7 @@ isStringAtom : Atom -> Bool
 isStringAtom atom =
     case atom of
         StringAtom _ -> True
+        LookupAtom _ -> True
         _ -> False
 
 isIntAtom : Atom -> Bool
@@ -208,7 +209,7 @@ templateReferencesLoop template res =
         HtmlRecord { body } ->
             List.foldl templateReferencesLoop res body
         HtmlFuncall { args } ->
-            atomReferences args
+            atomTemplateReferences args
         _ ->
             res
 
