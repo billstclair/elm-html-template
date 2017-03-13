@@ -70,6 +70,9 @@ atomData =
     , ( "\"$foo\""
       , Ok <| LookupAtom "foo"
       )
+    , ( "\"@foo\""
+      , Ok <| LookupPageAtom "foo"
+      )
     , ( "\"?foo\""
       , Ok <| LookupTemplateAtom "foo"
       )
