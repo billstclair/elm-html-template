@@ -7,11 +7,15 @@
   "sidebar": ["p",{},
               [["/pageLink","index"],
                ["br",{},[]],
+               ["br",{},[]],
                ["/pageLink","templates"],
                ["br",{},[]],
                ["/pageLink","pages"],
                ["br",{},[]],
-               ["/pageLink","settings"]
+               ["/pageLink","settings"],
+               ["br",{},[]],
+               ["br",{},[]],
+               ["/pageLink","stylesheet"]
               ]
              ],
   "footer": ["Copyright ","$entities.copyright"," 2017 Bill St. Clair"]
