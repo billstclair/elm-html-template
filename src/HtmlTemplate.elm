@@ -10,7 +10,7 @@
 ----------------------------------------------------------------------
 
 module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
-                             , TemplateDicts
+                             , TemplateDicts, Dicts
                              , HtmlTemplateFuncall, HtmlTemplateRecord
                              , emptyTemplateDicts, defaultTemplateDicts
                              , templateReferences
@@ -21,6 +21,7 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , decodeHtmlTemplate, decodeAtom
                              , loopFunction, psFunction
                              , defaultFunctionsDict, defaultAtomsDict
+                             , maybeLookupAtom, withTheDicts
                              )
 
 import Entities
@@ -30,6 +31,7 @@ import Html exposing ( Html, Attribute
                      )
 
 import Html.Attributes as Attributes
+import Html.Events as Events
 
 import Dict exposing ( Dict
                      )
@@ -420,6 +422,7 @@ tagTable =
         , ("i", Html.i)
         , ("b", Html.b)
         , ("u", Html.u)
+        , ("iframe", Html.iframe)
         ]
 
 style : List (Attribute msg) -> List (Html msg) -> Html msg
@@ -461,6 +464,7 @@ attributeTable =
     Dict.fromList
         [ ("title", isStringAtom)
         , ("href", isStringAtom)
+        , ("src", isStringAtom)
         , ("onClick", isMsgAtom)
         , ("type", isStringAtom)
         , ("class", isStringAtom)
@@ -548,12 +552,15 @@ type AttributeFunction msg
     | FloatAttributeFunction (Float -> Attribute msg)
     | BoolAttributeFunction (Bool -> Attribute msg)
     | AtomsAttributeFunction (List Atom -> Attribute msg)
+    | MsgAttributeFunction (msg -> Attribute msg)
 
 typedAttributeTable : Dict String (AttributeFunction msg)
 typedAttributeTable =
     Dict.fromList
         [ ( "title", StringAttributeFunction Attributes.title )
         , ( "href", StringAttributeFunction Attributes.href )
+        , ( "src", StringAttributeFunction Attributes.src )
+        , ( "onClick", MsgAttributeFunction Events.onClick )
         , ( "type", StringAttributeFunction Attributes.type_ )
         , ( "class", StringAttributeFunction Attributes.class )
         , ( "id", StringAttributeFunction Attributes.id )
@@ -602,6 +609,26 @@ renderAttributeAtom (name, atomOrLookup) dicts =
                         case atom of
                             ListAtom atoms -> f atoms
                             _ -> badTypeTitle name atom
+                    MsgAttributeFunction f ->
+                        handleMsgAttribute name f atom dicts
+
+handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom -> TemplateDicts msg -> Attribute msg
+handleMsgAttribute attributeName attributeWrapper atom dicts =
+    case atom of
+        MsgAtom { function, args } ->
+            case Dict.get function dicts.messages of
+                Nothing ->
+                    Attributes.title
+                        <| "Unknown message function: " ++ (toString atom)
+                Just f ->
+                    case maybeLookupAtom args dicts of
+                        Nothing ->
+                            Attributes.title
+                                <| "Unknown atom lookup " ++ (toString atom)
+                        Just a ->
+                            attributeWrapper <| f a <| TheDicts dicts
+        _ ->
+            badTypeTitle attributeName atom
 
 ---
 --- Html Rendering
@@ -697,7 +724,7 @@ br : Html msg
 br =
     Html.br [] []
 
-withTheDicts : Dicts msg -> (TemplateDicts msg -> Html msg) -> Html msg
+withTheDicts : Dicts msg -> (TemplateDicts msg -> a) -> a
 withTheDicts theDicts f =
     case theDicts of
         TheDicts dicts ->

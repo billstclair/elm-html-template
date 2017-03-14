@@ -5,16 +5,13 @@
   "siteDescription": "The HtmlTemplate module allows you to create an almost-entirely-data-driven web site with Elm.",
   "style": "default",
   "sidebar": ["p",{},
-              [["a",{"href":"#",
-                     "onClick":["/gotoPage","index"]
-                    },
-                ["index"]],
+              [["/pageLink","index"],
                ["br",{},[]],
-               ["a",{"href":"template/default/"},["templates"]],
+               ["/pageLink","templates"],
                ["br",{},[]],
-               ["a",{"href":"page/"},["pages"]],
+               ["/pageLink","pages"],
                ["br",{},[]],
-               ["a",{"href":"settings.json"},["settings"]]
+               ["/pageLink","settings"]
               ]
              ],
   "footer": ["Copyright ","$entities.copyright"," 2017 Bill St. Clair"]

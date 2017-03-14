@@ -1,10 +1,6 @@
 [ "div", {},
   [[ "h4", {},
-     [["a",{"href":"#",
-            "onClick":["/gotoPage","$page"]
-           },
-       ["$node.title"]
-      ]
+     [["/pageLink",["$node.page","$node.title"]]
      ]
    ],
    [ "/ps", "$node.ps" ]

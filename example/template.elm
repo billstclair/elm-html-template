@@ -1,14 +1,15 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( TemplateDicts, HtmlTemplate(..), Atom(..)
+import HtmlTemplate exposing ( TemplateDicts, HtmlTemplate(..), Atom(..), Dicts
                              , defaultTemplateDicts, renderHtmlTemplate
-                             , atomToHtmlTemplate
+                             , atomToHtmlTemplate, maybeLookupAtom, withTheDicts
                              )
 
 import Html exposing ( Html, Attribute
                      , div, p, text, a
                      )
 import Html.Attributes as Attributes exposing ( style, href )
+import Html.Events exposing ( onClick )
 import Dict exposing ( Dict )
 import Http
 
@@ -57,13 +58,82 @@ templateFilename : String -> String
 templateFilename name =
     name ++ templateFileType
 
+gotoPageFunction : Atom -> Dicts Msg -> Msg
+gotoPageFunction atom dicts =
+    case atom of
+        StringAtom page ->
+            GotoPage page
+        _ ->
+            SetError <| "Can't go to page: " ++ (toString atom)
+
+messages : Dict String (Atom -> Dicts Msg -> Msg)
+messages =
+    Dict.fromList
+        [ ( "gotoPage", gotoPageFunction )
+        ]
+
+pageLinkFunction : Atom -> Dicts Msg -> Html Msg
+pageLinkFunction atom dicts =
+    withTheDicts dicts <| pageLinkFunctionInternal atom
+
+pageLinkFunctionInternal : Atom -> TemplateDicts Msg -> Html Msg
+pageLinkFunctionInternal atom dicts =
+    case normalizePageLinkArgs atom dicts of
+        Just ( page, title ) ->
+            a [ href "#"
+              , onClick <| GotoPage page
+              ]
+            [ text title ]
+        _ ->
+            text <| "Bad link: " ++ (toString atom)
+
+normalizePageLinkArgs : Atom -> TemplateDicts Msg -> Maybe (String, String)
+normalizePageLinkArgs atom dicts =
+    case maybeLookupAtom atom dicts of
+        Nothing -> Nothing
+        Just atom ->
+            case atom of
+                StringAtom page ->
+                    Just (page, page)
+                ListAtom [ pageAtom, titleAtom ] ->
+                    case maybeLookupAtom pageAtom dicts of
+                        Nothing -> Nothing
+                        Just pa ->
+                            case pa of
+                                StringAtom page ->
+                                    case maybeLookupAtom titleAtom dicts of
+                                        Nothing -> Nothing
+                                        Just ta ->
+                                            case ta of
+                                                StringAtom title ->
+                                                    Just (page, title)
+                                                _ ->
+                                                    Nothing
+                                _ ->
+                                    Nothing
+                _ ->
+                    Nothing
+
+functions : Dict String (Atom -> Dicts Msg -> Html Msg)
+functions =
+    Dict.fromList
+        [ ( "pageLink", pageLinkFunction )
+        ]
+
 init : ( Model, Cmd Msg)
 init =
-    let model = { dicts = defaultTemplateDicts
+    let model = { dicts = { defaultTemplateDicts
+                              | messages =
+                                  Dict.union
+                                      messages defaultTemplateDicts.messages
+                              , functions =
+                                  Dict.union
+                                      functions defaultTemplateDicts.functions
+                          }
                 , page = Nothing
                 , templateDir = "default"
                 , unloadedTemplates = [ "page" ]
-                , error = Just (log "message" "Fetching settings...")
+                , error = Nothing
                 }
     in
         ( model
@@ -73,11 +143,13 @@ init =
 type Msg
     = SettingsFetchDone (Result Http.Error String)
     | TemplateFetchDone String (Result Http.Error String)
-    | PageFetchDone String (Result Http.Error String)
+    | PageFetchDone String String (Result Http.Error String)
+    | GotoPage String
+    | SetError String
 
 fetchUrl : String -> ((Result Http.Error String) -> Msg) -> Cmd Msg
 fetchUrl url wrapper =
-    Http.send wrapper <| httpGetString url
+    Http.send wrapper <| httpGetString (log "Getting URL" url)
 
 httpGetString : String -> Http.Request String
 httpGetString url =
@@ -104,12 +176,12 @@ fetchTemplate name model =
     in
         fetchUrl url <| TemplateFetchDone name
 
-fetchPage : String -> Model -> Cmd Msg
-fetchPage name model =
+fetchPage : String -> String -> Model -> Cmd Msg
+fetchPage name switchToPage model =
     let filename = templateFilename name
         url = "page/" ++ filename
     in
-        fetchUrl url <| PageFetchDone name
+        fetchUrl url <| PageFetchDone name switchToPage
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -118,8 +190,25 @@ update msg model =
             settingsFetchDone result model
         TemplateFetchDone name result ->
             templateFetchDone name result model
-        PageFetchDone name result ->
-            pageFetchDone name result model
+        PageFetchDone name switchToPage result ->
+            pageFetchDone name switchToPage result model
+        GotoPage page ->
+            gotoPage page model
+        SetError message ->
+            ( { model | error = Just message }
+            , Cmd.none
+            )
+
+-- TODO
+gotoPage : String -> Model -> ( Model, Cmd Msg )
+gotoPage page model =
+    let m = { model | error = Nothing
+            , unloadedTemplates = []
+            }
+    in
+        ( m
+        , fetchPage page page model
+        )
 
 setAtom : String -> Atom -> Model -> Model
 setAtom name atom model =
@@ -150,10 +239,7 @@ settingsFetchDone result model =
                     )
                 Ok settings ->
                     ( setAtom "settings" settings
-                          <| { model
-                                 | error =
-                                     Just <| (log "message" <| "Fetching template: " ++ indexTemplate)
-                             }
+                          <| { model | error = Nothing }
                     , fetchTemplate indexTemplate model
                     )
 
@@ -199,21 +285,19 @@ templateFetchDone name result model =
                     in
                         case unloaded of
                             [] ->
-                                ( { m | error =
-                                          Just <| (log "message" <| "Fetching page: " ++ indexTemplate)
-                                  }
-                                , fetchPage indexTemplate model
+                                ( { m | error = Nothing }
+                                , fetchPage indexTemplate indexTemplate model
                                 )
                             head :: tail ->
                                 ( { m
                                       | unloadedTemplates = tail
-                                      , error = Just <| (log "message" <| "Fetching template: " ++ head)
+                                      , error = Nothing
                                   }
                                 , fetchTemplate head m
                                 )
 
-pageFetchDone : String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
-pageFetchDone name result model =
+pageFetchDone : String -> String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
+pageFetchDone name switchToPage result model =
     case result of
         Err err ->
             ( { model
@@ -235,7 +319,13 @@ pageFetchDone name result model =
                     )
                 Ok atom ->
                     let dicts = model.dicts
-                        pages = Dict.insert name atom dicts.pages
+                        a = case atom of
+                                PListAtom plist ->
+                                    PListAtom
+                                    <| ( "page", StringAtom name ) :: plist
+                                _ ->
+                                    atom
+                        pages = Dict.insert name a dicts.pages
                         names = HtmlTemplate.atomPageReferences atom
                         unloaded = List.foldl
                                    (\name names ->
@@ -255,16 +345,15 @@ pageFetchDone name result model =
                             [] ->
                                 ( { m |
                                     error = Nothing
-                                  , page = Just "index"
-                                  , dicts = (log "dicts" m.dicts)
+                                  , page = Just switchToPage
                                   }
                                 , Cmd.none )
                             head :: tail ->
                                 ( { m
                                       | unloadedTemplates = tail
-                                      , error = Just <| (log "message" <| "Fetching page: " ++ head)
+                                      , error = Nothing
                                   }
-                                , fetchPage head m
+                                , fetchPage head switchToPage m
                                 )
 
 dictInserts : Dict String b -> List (String, b) -> Dict String b

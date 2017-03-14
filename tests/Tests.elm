@@ -76,6 +76,12 @@ atomData =
     , ( "\"?foo\""
       , Ok <| LookupTemplateAtom "foo"
       )
+    , ( "[\"/gotoPage\",[\"home\"]]"
+      , Ok <| MsgAtom
+            <| HtmlTemplateFuncall
+                "gotoPage"
+                <| ListAtom [ StringAtom "home" ]
+      )
     , ( "[\"foo\",\"bar\"]"
       , Ok <| ListAtom [ StringAtom "foo", StringAtom "bar"]
       )
