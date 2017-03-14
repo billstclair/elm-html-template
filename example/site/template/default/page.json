@@ -11,7 +11,7 @@
   ["h3",{},["$settings.siteSlogan"]],
   ["table",{},
    [["tr",{},
-     [["td",{},["links here"]],
+     [["td",{},["$settings.sidebar"]],
       ["td",{},["$content"]]
      ]
     ]

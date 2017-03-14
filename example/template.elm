@@ -75,25 +75,37 @@ type Msg
     | TemplateFetchDone String (Result Http.Error String)
     | PageFetchDone String (Result Http.Error String)
 
+httpGetString : String -> Http.Request String
+httpGetString url =
+    Http.request
+        { method = "GET"
+        , headers = [ Http.header "Cache-control" "no-cache" ]
+        , url = url
+        , body = Http.emptyBody
+        , expect = Http.expectString
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
 fetchSettings : Model -> Cmd Msg
 fetchSettings model =
     let url = templateFilename settingsFile
     in
-        Http.send SettingsFetchDone <| Http.getString url
+        Http.send SettingsFetchDone <| httpGetString url
 
 fetchTemplate : String -> Model -> Cmd Msg
 fetchTemplate name model =
     let filename = templateFilename name
         url = "template/" ++ model.templateDir ++ "/" ++ filename
     in
-        Http.send (TemplateFetchDone name) <| Http.getString url
+        Http.send (TemplateFetchDone name) <| httpGetString url
 
 fetchPage : String -> Model -> Cmd Msg
 fetchPage name model =
     let filename = templateFilename name
         url = "page/" ++ filename
     in
-        Http.send (PageFetchDone name) <| Http.getString url
+        Http.send (PageFetchDone name) <| httpGetString url
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -289,7 +301,9 @@ view model =
                                                      else
                                                          "node"
                                                 )
+                                            <| Dict.insert "page" (StringAtom page)
                                                 atomsDict
+
                                 in
                                     renderHtmlTemplate tmpl { dicts | atoms = ad }
         ]

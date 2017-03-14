@@ -1,8 +1,19 @@
 { "siteName": "HtmlTemplate Example",
-  "siteSlogan": "Elm pages from JSON.",
+  "siteSlogan": "Elm pages from JSON",
   "siteEditor": "Bill St. Clair",
   "site-url": "https://lisplog.org/elm-html-template/",
   "site-description": "The HtmlTemplate module allows you to create an almost-entirely-data-driven web site with Elm.",
   "style": "default",
+  "sidebar": ["div",{},
+              [["a",{"href":"#",
+                     "onClick":["/gotoPage","index"]
+                    },
+                ["index"]],
+               ["br",{},[]],
+               ["a",{"href":"template/default/"},["templates"]],
+               ["br",{},[]],
+               ["a",{"href":"page/"},["pages"]]
+              ]
+             ],
   "footer": ["Copyright ","$entities.copyright"," 2017 Bill St. Clair"]
 }

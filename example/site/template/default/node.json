@@ -1,7 +1,7 @@
 [ "div", {},
   [[ "h2", {},
      [["a",{"href":"#",
-            "onClick":["/gotoPage","index"]
+            "onClick":["/gotoPage","$page"]
            },
        ["$node.title"]
       ]
