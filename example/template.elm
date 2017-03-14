@@ -75,6 +75,10 @@ type Msg
     | TemplateFetchDone String (Result Http.Error String)
     | PageFetchDone String (Result Http.Error String)
 
+fetchUrl : String -> ((Result Http.Error String) -> Msg) -> Cmd Msg
+fetchUrl url wrapper =
+    Http.send wrapper <| httpGetString url
+
 httpGetString : String -> Http.Request String
 httpGetString url =
     Http.request
@@ -91,21 +95,21 @@ fetchSettings : Model -> Cmd Msg
 fetchSettings model =
     let url = templateFilename settingsFile
     in
-        Http.send SettingsFetchDone <| httpGetString url
+        fetchUrl url SettingsFetchDone
 
 fetchTemplate : String -> Model -> Cmd Msg
 fetchTemplate name model =
     let filename = templateFilename name
         url = "template/" ++ model.templateDir ++ "/" ++ filename
     in
-        Http.send (TemplateFetchDone name) <| httpGetString url
+        fetchUrl url <| TemplateFetchDone name
 
 fetchPage : String -> Model -> Cmd Msg
 fetchPage name model =
     let filename = templateFilename name
         url = "page/" ++ filename
     in
-        Http.send (PageFetchDone name) <| httpGetString url
+        fetchUrl url <| PageFetchDone name
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
