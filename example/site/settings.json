@@ -12,7 +12,9 @@
                ["br",{},[]],
                ["a",{"href":"template/default/"},["templates"]],
                ["br",{},[]],
-               ["a",{"href":"page/"},["pages"]]
+               ["a",{"href":"page/"},["pages"]],
+               ["br",{},[]],
+               ["a",{"href":"settings.json"},["settings"]]
               ]
              ],
   "footer": ["Copyright ","$entities.copyright"," 2017 Bill St. Clair"]
