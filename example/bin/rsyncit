@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Synchronize the current directory with the output of ./.sshdir
+# See https://steemit.com/hacking/@billstclair/rsyncit for documentation
+# Requires rsync
+
+if [[ -z $* ]];then rsync -av --exclude ".git" ./ `./.sshdir`;else rsync $* `./.sshdir`;fi
