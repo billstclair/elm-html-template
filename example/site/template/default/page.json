@@ -1,5 +1,7 @@
 ["div",{},
- [["style",{},[]],
+ [["style",{"type":"text/css"},
+   ["@@import \"style.css\""]
+  ],
   ["h2",{},
    [["a",{"href":"#",
           "onClick":["/gotoPage","index"]
@@ -9,15 +11,16 @@
    ]
   ],
   ["h3",{},["$settings.siteSlogan"]],
-  ["table",{},
+  ["table",{"class":"page"},
    [["tr",{},
-     [["td",{},["$settings.sidebar"]],
+     [["td",{"class":"sidebar"},
+       ["$settings.sidebar"]],
       ["td",{},["$content"]]
      ]
     ]
    ]
   ],
-  ["div",{},
+  ["div",{"class":"footer"},
    ["$settings.footer"]
   ]
  ]

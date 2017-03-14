@@ -284,10 +284,37 @@ htmlLookupStringDecoder : Decoder String
 htmlLookupStringDecoder =
     JD.andThen (ensureLookupString "?" "a question mark") JD.string
 
+quotedChars : List String
+quotedChars =
+    [ "@", "$", "/" ]
+
+maybeStripQuote : String -> Decoder String
+maybeStripQuote string =
+    if string == "" then
+        JD.succeed string
+    else
+        let first = String.left 1 string
+            rest = String.dropLeft 1 string
+            second = String.left 1 rest
+        in
+            if (List.member first quotedChars) && (first == second) then
+                JD.succeed rest
+            else
+                JD.succeed string
+
+stripQuoteDecoder : Decoder String
+stripQuoteDecoder =
+    JD.andThen maybeStripQuote JD.string
+
 ensureLookupString : String -> String -> String -> Decoder String
 ensureLookupString prefix name string =
     if String.startsWith prefix string then
-        JD.succeed <| String.dropLeft 1 string
+        let lookup = String.dropLeft 1 string
+        in
+            if String.startsWith prefix lookup then
+                JD.fail <| "Double " ++ prefix ++ " denotes quote."
+            else
+                JD.succeed <| lookup
     else
         JD.fail <| "Does not begin with " ++ name ++ ": " ++ string
 
@@ -323,7 +350,7 @@ htmlFuncallStringDecoder =
     
 htmlStringDecoder : Decoder HtmlTemplate
 htmlStringDecoder =
-    JD.map HtmlString JD.string
+    JD.map HtmlString stripQuoteDecoder
 
 htmlRecordDecoder : Decoder HtmlTemplate
 htmlRecordDecoder =
@@ -383,6 +410,7 @@ tagTable =
         , ("h1", Html.h1)
         , ("h2", Html.h2)
         , ("h3", Html.h3)
+        , ("h4", Html.h4)
         , ("table", Html.table)
         , ("tr", Html.tr)
         , ("th", Html.th)
@@ -434,6 +462,9 @@ attributeTable =
         [ ("title", isStringAtom)
         , ("href", isStringAtom)
         , ("onClick", isMsgAtom)
+        , ("type", isStringAtom)
+        , ("class", isStringAtom)
+        , ("id", isStringAtom)
         ]
 
 isAttribute : String -> Atom -> Bool
@@ -454,7 +485,7 @@ atomDecoder =
         , JD.map LookupPageAtom htmlPageLookupStringDecoder
         , JD.map LookupTemplateAtom htmlLookupStringDecoder
         , JD.map MsgAtom <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
-        , JD.map StringAtom JD.string
+        , JD.map StringAtom stripQuoteDecoder
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
         , JD.map BoolAtom JD.bool
@@ -523,6 +554,9 @@ typedAttributeTable =
     Dict.fromList
         [ ( "title", StringAttributeFunction Attributes.title )
         , ( "href", StringAttributeFunction Attributes.href )
+        , ( "type", StringAttributeFunction Attributes.type_ )
+        , ( "class", StringAttributeFunction Attributes.class )
+        , ( "id", StringAttributeFunction Attributes.id )
         ]
 
 renderAttributeAtom : (String, Atom) -> TemplateDicts msg -> Attribute msg
