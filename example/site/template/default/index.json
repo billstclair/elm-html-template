@@ -1,5 +1,5 @@
 ["div",{},
- [["p",{},["$settings.site-description"]],
+ [["p",{},["$settings.siteDescription"]],
   ["/loop",["$node","$node","?node"]]
  ]
 ]
