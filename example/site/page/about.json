@@ -1,8 +1,7 @@
 { "title": "About",
   "ps" : [ "This site is an example of using the HtmlTemplate module to create a web site.",
-           ["The \"index\" link in the sidebar goes to the index page, as does clicking on the site name at the top of the page.",
-            " The \"templates\", \"pages\", \"settings\", and \"stylesheets\" links in the sidebar can be used to inspect the JSON that defines the site."
-            ],
+           "The \"index\" link in the sidebar goes to the index page, as does clicking on the site name at the top of the page.",
+           " The \"templates\", \"pages\", \"settings\", and \"stylesheets\" links in the sidebar can be used to inspect the JSON that defines the site.",
            "Clicking a page title on the index page will go to that page.",
            ["Source code is at: ",
             ["a",{"href":"https://github.com/billstclair/elm-html-template"},
