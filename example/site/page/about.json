@@ -3,7 +3,7 @@
            ["The \"index\" link in the sidebar goes to the index page, as does clicking on the site name at the top of the page.",
             " The \"templates\", \"pages\", and \"settings\" links in the sidebar can be used to inspect the JSON that defines the site."
             ],
-           "The links on the page titles will soon go to individual pages. Soon thereafter, I'll add some CSS to make it look prettier.",
+           "The links on the page titles will soon go to individual pages.",
            ["Source code is at: ",
             ["a",{"href":"https://github.com/billstclair/elm-html-template"},
              ["github.com/billstclair/elm-html-template"]
