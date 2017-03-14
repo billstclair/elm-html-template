@@ -1,20 +1,5 @@
 { "title": "Page 1",
   "ps" : [ "This is the first page.",
-           "This page isn't about anything in particular. Sort of like all the other pages",
-           [ [ "a",
-               { "href": "#", "onClick": [ "/gotoPage", "4" ] },
-               [ "-4-" ]
-             ],
-             " ",
-             [ "a",
-               { "href": "#", "onClick": [ "/gotoPage", "index" ] },
-               [ "Index" ]
-             ],
-             " ",
-             [ "a",
-               { "href": "#", "onClick": [ "/gotoPage", "2" ] },
-               [ "-2-" ]
-             ]
-           ]
+           "This page isn't about anything in particular. Sort of like all the other pages"
          ]
 }

@@ -4,5 +4,5 @@
   "site-url": "https://lisplog.org/elm-html-template/",
   "site-description": "The HtmlTemplate module allows you to create an almost-entirely-data-driven web site with Elm.",
   "style": "default",
-  "footer": "Copyright &copy; 2017 Bill St. Clair"
+  "footer": ["Copyright ","$entities.copyright"," 2017 Bill St. Clair"]
 }

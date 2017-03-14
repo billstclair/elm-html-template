@@ -1,5 +1,12 @@
 [ "div", {},
-  [ [ "h2", {}, [ [ "a", { "href": "#" }, [ "$node.title" ] ] ] ],
-    [ "/ps", "$node.ps" ]
+  [[ "h2", {},
+     [["a",{"href":"#",
+            "onClick":["/gotoPage","index"]
+           },
+       ["$node.title"]
+      ]
+     ]
+   ],
+   [ "/ps", "$node.ps" ]
   ]
 ]

@@ -20,8 +20,10 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , atomToHtmlTemplate, atomToBody
                              , decodeHtmlTemplate, decodeAtom
                              , loopFunction, psFunction
-                             , defaultDictsFunctions
+                             , defaultFunctionsDict, defaultAtomsDict
                              )
+
+import Entities
 
 import Html exposing ( Html, Attribute
                      , p, text, span
@@ -141,13 +143,28 @@ type alias TemplateDicts msg =
 type Dicts msg
     = TheDicts (TemplateDicts msg)
 
+entitiesPlist : Atom
+entitiesPlist =
+    PListAtom
+    <| List.map (\pair ->
+                     let (name, val) = pair
+                     in
+                         (name, StringAtom val))
+        Entities.entities
+
+defaultAtomsDict : Dict String Atom
+defaultAtomsDict =
+    Dict.fromList [ ( "entities", entitiesPlist )
+                  ]                          
+
 emptyTemplateDicts : TemplateDicts msg
 emptyTemplateDicts =
     TemplateDicts Dict.empty Dict.empty Dict.empty Dict.empty Dict.empty
 
 defaultTemplateDicts : TemplateDicts msg
 defaultTemplateDicts =
-    TemplateDicts Dict.empty Dict.empty Dict.empty defaultDictsFunctions Dict.empty
+    TemplateDicts
+        defaultAtomsDict Dict.empty Dict.empty defaultFunctionsDict Dict.empty
 
 decodeHtmlTemplate : String -> Result String HtmlTemplate
 decodeHtmlTemplate json =
@@ -326,7 +343,29 @@ htmlTemplateDecoder =
 
 htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
 htmlTemplateRecordDecoder =
-    JD.map3 HtmlTemplateRecord
+    JD.andThen
+        (\pair ->
+             let (good, res) = pair
+             in
+                 if good then
+                     JD.succeed res -- (log "HtmlTemplateRecordDecoder" res)
+                 else
+                     JD.fail "Plausible HTMLTemplateRecord is too long."
+        )
+        (JD.lazy (\_ -> htmlTemplateRecordDecoderInternal))
+                    
+htmlTemplateRecordDecoderInternal : Decoder (Bool, HtmlTemplateRecord)
+htmlTemplateRecordDecoderInternal =
+    JD.map4 (\good tag attributes body ->
+                 ( good
+                 , HtmlTemplateRecord tag attributes body
+                 )
+            )
+        (JD.oneOf
+             [ JD.index 3 <| JD.succeed False
+             , JD.succeed True
+             ]
+        )
         (JD.andThen ensureTag (JD.index 0 JD.string))
         (JD.index 1 <| JD.lazy (\_ -> attributesDecoder))
         (JD.index 2 <| JD.list <| JD.lazy (\_ -> htmlTemplateDecoder))
@@ -538,7 +577,7 @@ renderHtmlJson : String -> TemplateDicts msg -> Html msg
 renderHtmlJson templateJson dicts =
     case decodeHtmlTemplate templateJson of
         Err msg ->
-          Html.text <| "Decoding error: " ++ msg ++ ", JSON: " ++ templateJson
+          text <| "Decoding error: " ++ msg ++ ", JSON: " ++ templateJson
         Ok template ->
           renderHtmlTemplate template dicts
 
@@ -589,9 +628,13 @@ maybeLookupAtom : Atom -> TemplateDicts msg -> Maybe Atom
 maybeLookupAtom atom dicts =
     case atom of
         LookupAtom name ->
-            lookupAtom name dicts
+            case lookupAtom name dicts of
+                Nothing -> Nothing
+                Just a -> maybeLookupAtom a dicts
         LookupPageAtom name ->
-            lookupPageAtom name dicts
+            case lookupPageAtom name dicts of
+                Nothing -> Nothing
+                Just p -> maybeLookupAtom p dicts
         _ ->
             Just atom
 
@@ -739,8 +782,8 @@ psFunctionInternal atom dicts =
             in
                 renderHtmlTemplate (tagWrap "div" [] body) dicts
 
-defaultDictsFunctions : Dict String (Atom -> Dicts msg -> Html msg)
-defaultDictsFunctions =
+defaultFunctionsDict : Dict String (Atom -> Dicts msg -> Html msg)
+defaultFunctionsDict =
     Dict.fromList [ ( "loop", loopFunction)
                   , ( "ps", psFunction )
                   ]
@@ -748,36 +791,36 @@ defaultDictsFunctions =
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
-        HtmlString text ->
-            Html.text text
+        HtmlString string ->
+            text string
         HtmlTemplateLookup name ->
             case Dict.get name dicts.templates of
                 Nothing ->
-                    Html.text <| "Unknown HTML template: " ++ name
+                    text <| toString template
                 Just templ ->
                     renderHtmlTemplate templ dicts
         HtmlAtomLookup name ->
             case lookupAtom name dicts of
                 Just atom ->
-                    Html.text <| atomToString atom
+                    renderAtom atom dicts
                 Nothing ->
-                    Html.text <| "Unknown atom: " ++ name
+                    text <| toString template
         HtmlPageLookup name ->
             case lookupPageAtom name dicts of
                 Just atom ->
-                    Html.text <| atomToString atom
+                    renderAtom atom dicts
                 Nothing ->
-                    Html.text <| "Unknown atom: " ++ name
+                    text <| toString template
         HtmlFuncall { function, args } ->
             case Dict.get function dicts.functions of
                 Nothing ->
-                    Html.text <| "Unknown HTML function: " ++ function
+                    text <| toString template
                 Just f ->
                     f args <| TheDicts dicts
         HtmlRecord { tag, attributes, body } ->
             case Dict.get tag tagTable of
                 Nothing ->
-                    Html.text <| "Unknown HTML tag: " ++ tag
+                    text <| toString template
                 Just f ->
                     let attrs = renderHtmlAttributes attributes dicts
                         b = List.map (\t -> renderHtmlTemplate t dicts) body
@@ -792,3 +835,33 @@ badTypeTitle : String -> Atom -> Attribute msg
 badTypeTitle name atom =
     Attributes.title
         <| "Bad arg for attribute: " ++ name ++ ": " ++ (toString atom)
+
+renderAtom : Atom -> TemplateDicts msg -> Html msg
+renderAtom atom dicts =
+    case maybeLookupAtom atom dicts of
+        Nothing ->
+            text <| toString (log "lookup failed" atom)
+        Just atom ->
+            case atom of
+                StringAtom string ->
+                    text string
+                IntAtom int ->
+                    text <| toString int
+                FloatAtom float ->
+                    text <| toString float
+                BoolAtom bool ->
+                    text <| toString bool
+                LookupTemplateAtom name ->
+                    case lookupTemplateAtom name dicts of
+                        Nothing -> text <| toString atom
+                        Just t -> renderHtmlTemplate t dicts
+                MsgAtom _ ->
+                    text <| toString atom
+                ListAtom list ->
+                    span [] <| List.map (\a -> renderAtom a dicts) list
+                PListAtom _ ->
+                    text <| toString atom
+                TemplateAtom template ->
+                    renderHtmlTemplate template dicts
+                _ ->
+                    text <| toString atom

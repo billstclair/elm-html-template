@@ -63,7 +63,7 @@ init =
                 , page = Nothing
                 , templateDir = "default"
                 , unloadedTemplates = [ "page" ]
-                , error = Just (log "error" "Fetching settings...")
+                , error = Just (log "message" "Fetching settings...")
                 }
     in
         ( model
@@ -136,7 +136,7 @@ settingsFetchDone result model =
                     ( setAtom "settings" settings
                           <| { model
                                  | error =
-                                     Just <| (log "error" <| "Fetching template: " ++ indexTemplate)
+                                     Just <| (log "message" <| "Fetching template: " ++ indexTemplate)
                              }
                     , fetchTemplate indexTemplate model
                     )
@@ -184,14 +184,14 @@ templateFetchDone name result model =
                         case unloaded of
                             [] ->
                                 ( { m | error =
-                                          Just <| (log "error" <| "Fetching page: " ++ indexTemplate)
+                                          Just <| (log "message" <| "Fetching page: " ++ indexTemplate)
                                   }
                                 , fetchPage indexTemplate model
                                 )
                             head :: tail ->
                                 ( { m
                                       | unloadedTemplates = tail
-                                      , error = Just <| (log "error" <| "Fetching template: " ++ head)
+                                      , error = Just <| (log "message" <| "Fetching template: " ++ head)
                                   }
                                 , fetchTemplate head m
                                 )
@@ -237,12 +237,16 @@ pageFetchDone name result model =
                     in
                         case unloaded of
                             [] ->
-                                ( { m | error = Nothing }
+                                ( { m |
+                                    error = Nothing
+                                  , page = Just "index"
+                                  , dicts = (log "dicts" m.dicts)
+                                  }
                                 , Cmd.none )
                             head :: tail ->
                                 ( { m
                                       | unloadedTemplates = tail
-                                      , error = Just <| (log "error" <| "Fetching page: " ++ head)
+                                      , error = Just <| (log "message" <| "Fetching page: " ++ head)
                                   }
                                 , fetchPage head m
                                 )
