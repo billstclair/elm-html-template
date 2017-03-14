@@ -263,6 +263,16 @@ pageFetchDone name result model =
                                 , fetchPage head m
                                 )
 
+dictInserts : Dict String b -> List (String, b) -> Dict String b
+dictInserts dict list =
+    List.foldl (\pair dict ->
+                    let (a, b) = pair
+                    in
+                        Dict.insert a b dict
+               )
+        dict
+        list
+
 view : Model -> Html Msg
 view model =
     div []
@@ -281,6 +291,12 @@ view model =
                       atomsDict = dicts.atoms
                       pagesDict = dicts.pages
                       template = "page"
+                      content = (LookupTemplateAtom
+                                     <| if page == "index" then
+                                            "index"
+                                        else
+                                            "node"
+                                )
                   in
                       case Dict.get template templatesDict of
                           Nothing ->
@@ -290,21 +306,14 @@ view model =
                                   Nothing ->
                                       dictsDiv "Page" page model
                                   Just atom ->
-                                      let ad
-                                          = Dict.insert "node" atom
-                                            <| Dict.insert
-                                                "content"
-                                                (LookupTemplateAtom
-                                                 <| if page == "index" then
-                                                        "index"
-                                                     else
-                                                         "node"
-                                                )
-                                            <| Dict.insert "page" (StringAtom page)
-                                                atomsDict
-
-                                in
-                                    renderHtmlTemplate tmpl { dicts | atoms = ad }
+                                      let ad = dictInserts atomsDict
+                                               [ ("node", atom)
+                                               , ("content", content)
+                                               , ("page", (StringAtom page))
+                                               ]
+                                      in
+                                          renderHtmlTemplate
+                                              tmpl { dicts | atoms = ad }
         ]
 
 dictsDiv : String -> String -> Model -> Html Msg
