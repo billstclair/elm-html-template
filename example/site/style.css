@@ -1,6 +1,7 @@
 body {
-    margin: 2em;
+    margin: auto;
     width: 40em;
+    
 }
 h2 {
     margin-bottom: 0;
@@ -35,5 +36,6 @@ td.sidebar {
     padding-right: 2em;
 }
 div.footer {
+    margin-top: 1em;
     text-align: center;
 }
