@@ -3,11 +3,7 @@
    ["@@import \"style.css\""]
   ],
   ["h2",{},
-   [["a",{"href":"#",
-          "onClick":["/gotoPage","index"]
-         },
-     ["$settings.siteName"]
-    ]
+   [["/pageLink",["index","$settings.siteName"]]
    ]
   ],
   ["h3",{},["$settings.siteSlogan"]],
