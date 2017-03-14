@@ -291,8 +291,7 @@ view model =
                                       dictsDiv "Page" page model
                                   Just atom ->
                                       let ad
-                                          = Dict.insert "nodes" atom
-                                            <| Dict.insert "node" atom
+                                          = Dict.insert "node" atom
                                             <| Dict.insert
                                                 "content"
                                                 (LookupTemplateAtom
