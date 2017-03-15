@@ -23,7 +23,9 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , defaultFunctionsDict, defaultAtomsDict
                              , maybeLookupAtom, withTheDicts
                              , Loaders
-                             , makeLoaders, addOutstandingPagesAndTemplates
+                             , makeLoaders, getTemplate, getPage
+                             , clearTemplates, clearPages
+                             , addOutstandingPagesAndTemplates
                              , loadTemplate, receiveTemplate
                              , loadPage, receivePage
                              , loadOutstandingPageOrTemplate
@@ -933,21 +935,20 @@ renderAtom atom dicts =
                 _ ->
                     text <| toString atom
 
-{-|
-Push the elements of the first arg that are not in the second arg onto it.
-If the second arg has duplicates, they will be retained.
-If the first arg has duplicates, they will be removed.
--}
-stringUnion : List String -> List String -> List String
-stringUnion from to =
-    case from of
+-- There really COULD be a first-element getter for Set, which would
+-- be fast and wouldn't cons (much).
+-- I submitted a pull request to add Set.first & Set.last.
+popSet : Set comparable -> Maybe (comparable, Set comparable)
+popSet set =
+    case Set.toList set of
         [] ->
-            to
-        car :: cdr ->
-            if List.member car to then
-                stringUnion cdr to
-            else
-                stringUnion cdr (car :: to)
+            Nothing
+        res :: _ ->
+            Just (res, Set.remove res set)
+
+setMinusDict : Set comparable -> Dict comparable a -> Set comparable
+setMinusDict set dict =
+    Dict.foldr (\k _ s -> Set.remove k s) set dict
 
 ---
 --- Support for loading pages and templates
@@ -960,11 +961,11 @@ type alias LoadersRecord msg =
     { templateLoader : String -> Loaders msg -> Cmd msg
     , templateReceiver : String -> Result String HtmlTemplate -> Loaders msg -> msg
     , templatesToLoad : Set String
-    , templatesLoaded : Set String
+    , templates : Dict String HtmlTemplate
     , pageLoader : String -> Loaders msg -> Cmd msg
     , pageReceiver : String -> Result String Atom -> Loaders msg -> msg
     , pagesToLoad : Set String
-    , pagesLoaded : Set String
+    , pages : Dict String Atom
     }
 
 makeLoaders : (String -> Loaders msg -> Cmd msg) -> (String -> Result String HtmlTemplate -> Loaders msg -> msg) -> (String -> Loaders msg -> Cmd msg) -> (String -> Result String Atom -> Loaders msg -> msg) -> Loaders msg
@@ -973,26 +974,34 @@ makeLoaders templateLoader templateReceiver pageLoader pageReceiver =
         { templateLoader = templateLoader
         , templateReceiver = templateReceiver
         , templatesToLoad = Set.empty
-        , templatesLoaded = Set.empty
+        , templates = Dict.empty
         , pageLoader = pageLoader
         , pageReceiver = pageReceiver
         , pagesToLoad = Set.empty
-        , pagesLoaded = Set.empty
+        , pages = Dict.empty
         }    
+
+getTemplate : String -> Loaders msg -> Maybe HtmlTemplate
+getTemplate name (TheLoaders loaders) =
+    Dict.get name loaders.templates
+
+getPage : String -> Loaders msg -> Maybe Atom
+getPage name (TheLoaders loaders) =
+    Dict.get name loaders.pages
+
+clearTemplates : Loaders msg -> Loaders msg
+clearTemplates (TheLoaders loaders) =
+    TheLoaders
+        { loaders | templates = Dict.empty }
+
+clearPages : Loaders msg -> Loaders msg
+clearPages (TheLoaders loaders) =
+    TheLoaders
+        { loaders | pages = Dict.empty }
 
 loadTemplate : String -> Loaders msg -> Cmd msg
 loadTemplate name (TheLoaders loaders) =
     loaders.templateLoader name <| TheLoaders loaders
-
--- There really COULD be a first-element getter for Set, which would
--- be fast and wouldn't cons. Sigh...
-popSet : Set comparable -> Maybe (comparable, Set comparable)
-popSet set =
-    case Set.toList set of
-        [] ->
-            Nothing
-        string :: _ ->
-            Just (string, Set.remove string set)
 
 receiveTemplate : String -> String -> Loaders msg -> msg
 receiveTemplate name json (TheLoaders loaders) =
@@ -1002,8 +1011,8 @@ receiveTemplate name json (TheLoaders loaders) =
         Ok template ->
             let refs = templateReferences template
                 lo = { loaders |
-                       templatesLoaded
-                           = Set.insert name loaders.templatesLoaded
+                       templates
+                           = Dict.insert name template loaders.templates
                      }
                 loaders2 = addOutstandingPagesAndTemplates
                            [] refs <| TheLoaders lo
@@ -1023,7 +1032,7 @@ receivePage name json (TheLoaders loaders) =
             let templates = atomTemplateReferences page
                 pages = atomPageReferences page
                 lo = { loaders |
-                       pagesLoaded = Set.insert name loaders.pagesLoaded
+                       pages = Dict.insert name page loaders.pages
                      }
                 loaders2 = addOutstandingPagesAndTemplates
                            pages templates <| TheLoaders lo
@@ -1033,26 +1042,15 @@ receivePage name json (TheLoaders loaders) =
 addOutstandingPagesAndTemplates : List String -> List String -> Loaders msg -> Loaders msg
 addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
     let templates = Set.fromList templatesList
-        newtemps = Set.diff templates loaders.templatesLoaded
+        newtemps = setMinusDict templates loaders.templates
         pages = Set.fromList pagesList
-        newpages = Set.diff pages loaders.pagesLoaded
-        empty = (Set.isEmpty newtemps) &&
-                (Set.isEmpty newpages) &&
-                (Set.isEmpty loaders.templatesToLoad) &&
-                (Set.isEmpty loaders.pagesToLoad)
-        lo = if empty then
-                 { loaders | pagesLoaded = Set.empty }
-             else
-                 { loaders |
-                   templatesToLoad
-                       = Set.union newtemps loaders.templatesToLoad
-                 , templatesLoaded
-                       = Set.union newtemps loaders.templatesLoaded
-                 , pagesToLoad
-                       = Set.union newpages loaders.pagesToLoad
-                 , pagesLoaded
-                       = Set.union newpages loaders.pagesLoaded
-                 }
+        newpages = setMinusDict pages loaders.pages
+        lo = { loaders |
+               templatesToLoad
+                   = Set.union newtemps loaders.templatesToLoad
+             , pagesToLoad
+                   = Set.union newpages loaders.pagesToLoad
+             }
     in
         TheLoaders lo
 
