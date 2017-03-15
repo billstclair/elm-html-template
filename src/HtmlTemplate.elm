@@ -22,6 +22,11 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , loopFunction, psFunction
                              , defaultFunctionsDict, defaultAtomsDict
                              , maybeLookupAtom, withTheDicts
+                             , Loaders
+                             , makeLoaders, addOutstandingPagesAndTemplates
+                             , loadTemplate, receiveTemplate
+                             , loadPage, receivePage
+                             , loadOutstandingPageOrTemplate
                              )
 
 import Entities
@@ -39,6 +44,7 @@ import Dict exposing ( Dict
 import Json.Decode as JD exposing ( Decoder
 
                                   )
+import Set exposing ( Set )
 
 import List.Extra as LE
 
@@ -926,3 +932,142 @@ renderAtom atom dicts =
                     renderHtmlTemplate template dicts
                 _ ->
                     text <| toString atom
+
+{-|
+Push the elements of the first arg that are not in the second arg onto it.
+If the second arg has duplicates, they will be retained.
+If the first arg has duplicates, they will be removed.
+-}
+stringUnion : List String -> List String -> List String
+stringUnion from to =
+    case from of
+        [] ->
+            to
+        car :: cdr ->
+            if List.member car to then
+                stringUnion cdr to
+            else
+                stringUnion cdr (car :: to)
+
+---
+--- Support for loading pages and templates
+---
+
+type Loaders msg =
+    TheLoaders (LoadersRecord msg)
+
+type alias LoadersRecord msg =
+    { templateLoader : String -> Loaders msg -> Cmd msg
+    , templateReceiver : String -> Result String HtmlTemplate -> Loaders msg -> msg
+    , templatesToLoad : Set String
+    , templatesLoaded : Set String
+    , pageLoader : String -> Loaders msg -> Cmd msg
+    , pageReceiver : String -> Result String Atom -> Loaders msg -> msg
+    , pagesToLoad : Set String
+    , pagesLoaded : Set String
+    }
+
+makeLoaders : (String -> Loaders msg -> Cmd msg) -> (String -> Result String HtmlTemplate -> Loaders msg -> msg) -> (String -> Loaders msg -> Cmd msg) -> (String -> Result String Atom -> Loaders msg -> msg) -> Loaders msg
+makeLoaders templateLoader templateReceiver pageLoader pageReceiver =
+    TheLoaders
+        { templateLoader = templateLoader
+        , templateReceiver = templateReceiver
+        , templatesToLoad = Set.empty
+        , templatesLoaded = Set.empty
+        , pageLoader = pageLoader
+        , pageReceiver = pageReceiver
+        , pagesToLoad = Set.empty
+        , pagesLoaded = Set.empty
+        }    
+
+loadTemplate : String -> Loaders msg -> Cmd msg
+loadTemplate name (TheLoaders loaders) =
+    loaders.templateLoader name <| TheLoaders loaders
+
+-- There really COULD be a first-element getter for Set, which would
+-- be fast and wouldn't cons. Sigh...
+popSet : Set comparable -> Maybe (comparable, Set comparable)
+popSet set =
+    case Set.toList set of
+        [] ->
+            Nothing
+        string :: _ ->
+            Just (string, Set.remove string set)
+
+receiveTemplate : String -> String -> Loaders msg -> msg
+receiveTemplate name json (TheLoaders loaders) =
+    case decodeHtmlTemplate json of
+        Err msg ->
+            loaders.templateReceiver name (Err msg) <| TheLoaders loaders
+        Ok template ->
+            let refs = templateReferences template
+                lo = { loaders |
+                       templatesLoaded
+                           = Set.insert name loaders.templatesLoaded
+                     }
+                loaders2 = addOutstandingPagesAndTemplates
+                           [] refs <| TheLoaders lo
+            in
+                loaders.templateReceiver name (Ok template) loaders2
+
+loadPage : String -> Loaders msg -> Cmd msg
+loadPage name (TheLoaders loaders) =
+    loaders.pageLoader name <| TheLoaders loaders
+
+receivePage : String -> String -> Loaders msg -> msg
+receivePage name json (TheLoaders loaders) =
+    case decodeAtom json of
+        Err msg ->
+            loaders.pageReceiver name (Err msg) <| TheLoaders loaders
+        Ok page ->
+            let templates = atomTemplateReferences page
+                pages = atomPageReferences page
+                lo = { loaders |
+                       pagesLoaded = Set.insert name loaders.pagesLoaded
+                     }
+                loaders2 = addOutstandingPagesAndTemplates
+                           pages templates <| TheLoaders lo
+            in
+                loaders.pageReceiver name (Ok page) loaders2
+
+addOutstandingPagesAndTemplates : List String -> List String -> Loaders msg -> Loaders msg
+addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
+    let templates = Set.fromList templatesList
+        newtemps = Set.diff templates loaders.templatesLoaded
+        pages = Set.fromList pagesList
+        newpages = Set.diff pages loaders.pagesLoaded
+        empty = (Set.isEmpty newtemps) &&
+                (Set.isEmpty newpages) &&
+                (Set.isEmpty loaders.templatesToLoad) &&
+                (Set.isEmpty loaders.pagesToLoad)
+        lo = if empty then
+                 { loaders | pagesLoaded = Set.empty }
+             else
+                 { loaders |
+                   templatesToLoad
+                       = Set.union newtemps loaders.templatesToLoad
+                 , templatesLoaded
+                       = Set.union newtemps loaders.templatesLoaded
+                 , pagesToLoad
+                       = Set.union newpages loaders.pagesToLoad
+                 , pagesLoaded
+                       = Set.union newpages loaders.pagesLoaded
+                 }
+    in
+        TheLoaders lo
+
+loadOutstandingPageOrTemplate : Loaders msg -> Cmd msg
+loadOutstandingPageOrTemplate (TheLoaders loaders) =
+    case popSet loaders.pagesToLoad of
+        Just (name, names) ->
+            let lo = { loaders | pagesToLoad = names }
+            in
+                loadPage name <| TheLoaders lo
+        Nothing ->
+            case popSet loaders.templatesToLoad of
+                Nothing ->
+                    Cmd.none
+                Just (name, names) ->
+                    let lo = { loaders | templatesToLoad = names }
+                    in
+                        loadTemplate name <| TheLoaders lo
