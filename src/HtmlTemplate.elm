@@ -16,19 +16,23 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , templateReferences
                              , atomReferences, atomPageReferences
                              , atomTemplateReferences
-                             , renderHtmlTemplate
+                             , renderTemplate
                              , atomToHtmlTemplate, atomToBody
                              , decodeHtmlTemplate, decodeAtom
                              , loopFunction, psFunction
                              , defaultFunctionsDict, defaultAtomsDict
                              , maybeLookupAtom, withTheDicts
                              , Loaders
-                             , makeLoaders, getTemplate, getPage
+                             , makeLoaders, getExtra, getDicts
+                             , getTemplate, getPage, setPages, addPageProperties
+                             , getAtom, setAtoms
+                             , insertFunctions, insertMessages
                              , clearTemplates, clearPages
                              , addOutstandingPagesAndTemplates
                              , loadTemplate, receiveTemplate
                              , loadPage, receivePage
                              , loadOutstandingPageOrTemplate
+                             , maybeLoadOutstandingPageOrTemplate
                              )
 
 import Entities
@@ -857,6 +861,10 @@ defaultFunctionsDict =
                   , ( "ps", psFunction )
                   ]
 
+renderTemplate : HtmlTemplate -> Loaders msg x -> Html msg
+renderTemplate template (TheLoaders loaders) =
+    renderHtmlTemplate template loaders.dicts
+
 renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
@@ -954,97 +962,178 @@ setMinusDict set dict =
 --- Support for loading pages and templates
 ---
 
-type Loaders msg =
-    TheLoaders (LoadersRecord msg)
+type Loaders msg x =
+    TheLoaders (LoadersRecord msg x)
 
-type alias LoadersRecord msg =
-    { templateLoader : String -> Loaders msg -> Cmd msg
-    , templateReceiver : String -> Result String HtmlTemplate -> Loaders msg -> msg
+type alias LoadersRecord msg x =
+    { templateLoader : String -> Loaders msg x -> Cmd msg
     , templatesToLoad : Set String
-    , templates : Dict String HtmlTemplate
-    , pageLoader : String -> Loaders msg -> Cmd msg
-    , pageReceiver : String -> Result String Atom -> Loaders msg -> msg
+    , pageLoader : String -> Loaders msg x -> Cmd msg
     , pagesToLoad : Set String
-    , pages : Dict String Atom
+    , dicts : TemplateDicts msg
+    , extra : x
     }
 
-makeLoaders : (String -> Loaders msg -> Cmd msg) -> (String -> Result String HtmlTemplate -> Loaders msg -> msg) -> (String -> Loaders msg -> Cmd msg) -> (String -> Result String Atom -> Loaders msg -> msg) -> Loaders msg
-makeLoaders templateLoader templateReceiver pageLoader pageReceiver =
+makeLoaders : (String -> Loaders msg x -> Cmd msg) -> (String -> Loaders msg x -> Cmd msg) -> x -> Loaders msg x
+makeLoaders templateLoader pageLoader extra =
     TheLoaders
         { templateLoader = templateLoader
-        , templateReceiver = templateReceiver
         , templatesToLoad = Set.empty
-        , templates = Dict.empty
         , pageLoader = pageLoader
-        , pageReceiver = pageReceiver
         , pagesToLoad = Set.empty
-        , pages = Dict.empty
-        }    
+        , dicts = defaultTemplateDicts
+        , extra = extra
+        }
 
-getTemplate : String -> Loaders msg -> Maybe HtmlTemplate
+getExtra : Loaders msg x -> x
+getExtra (TheLoaders loaders) =
+    loaders.extra
+
+setExtra : x -> Loaders msg x -> Loaders msg x
+setExtra extra (TheLoaders loaders) =
+    TheLoaders <| { loaders | extra = extra }
+
+getDicts : Loaders msg x -> Dicts msg
+getDicts (TheLoaders loaders) =
+    TheDicts loaders.dicts
+
+getTemplate : String -> Loaders msg x -> Maybe HtmlTemplate
 getTemplate name (TheLoaders loaders) =
-    Dict.get name loaders.templates
+    Dict.get name loaders.dicts.templates
 
-getPage : String -> Loaders msg -> Maybe Atom
+getPage : String -> Loaders msg x -> Maybe Atom
 getPage name (TheLoaders loaders) =
-    Dict.get name loaders.pages
+    Dict.get name loaders.dicts.pages
 
-clearTemplates : Loaders msg -> Loaders msg
+setPages : List (String, Atom) -> Loaders msg x -> Loaders msg x
+setPages pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        pages = List.foldl insertPair dicts.pages pairs
+    in
+        TheLoaders { loaders | dicts = { dicts | pages = pages } }
+
+addPageProperties : String -> List (String, Atom) -> Loaders msg x -> Loaders msg x
+addPageProperties pageName properties (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        pages = dicts.pages
+    in
+        case Dict.get pageName pages of
+            Nothing ->
+                TheLoaders loaders
+            Just page ->
+                case page of
+                    PListAtom plist ->
+                        let new = PListAtom <| List.append properties plist
+                        in
+                            TheLoaders <|
+                                { loaders | dicts =
+                                      { dicts | pages =
+                                            Dict.insert pageName new pages
+                                      }
+                                }
+                    _ ->
+                        TheLoaders loaders
+
+getAtom : String -> Loaders msg x -> Maybe Atom
+getAtom name (TheLoaders loaders) =
+    Dict.get name loaders.dicts.atoms
+
+setAtoms : List (String, Atom) -> Loaders msg x -> Loaders msg x
+setAtoms pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        atoms = List.foldl insertPair dicts.atoms pairs
+    in
+        TheLoaders { loaders | dicts = { dicts | atoms = atoms } }
+
+insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
+insertPair (k, v) dict =
+    Dict.insert k v dict
+
+insertFunctions : List (String, (Atom -> Dicts msg -> Html msg)) -> Loaders msg x -> Loaders msg x
+insertFunctions pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        functions = List.foldl insertPair dicts.functions pairs
+    in
+        TheLoaders
+            { loaders | dicts = { dicts | functions = functions } }
+
+insertMessages : List (String, (Atom -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
+insertMessages pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        messages = List.foldl insertPair dicts.messages pairs
+    in
+        TheLoaders
+            { loaders | dicts = { dicts | messages = messages } }
+
+clearTemplates : Loaders msg x -> Loaders msg x
 clearTemplates (TheLoaders loaders) =
-    TheLoaders
-        { loaders | templates = Dict.empty }
+    let dicts = loaders.dicts
+    in
+        TheLoaders { loaders |
+                         dicts = { dicts | templates = Dict.empty }
+                   }
 
-clearPages : Loaders msg -> Loaders msg
+clearPages : Loaders msg x -> Loaders msg x
 clearPages (TheLoaders loaders) =
-    TheLoaders
-        { loaders | pages = Dict.empty }
+    let dicts = loaders.dicts
+    in
+        TheLoaders { loaders |
+                         dicts = { dicts | pages = Dict.empty }
+                   }
 
-loadTemplate : String -> Loaders msg -> Cmd msg
+loadTemplate : String -> Loaders msg x -> Cmd msg
 loadTemplate name (TheLoaders loaders) =
     loaders.templateLoader name <| TheLoaders loaders
 
-receiveTemplate : String -> String -> Loaders msg -> msg
+receiveTemplate : String -> String -> Loaders msg x -> Result String (Loaders msg x)
 receiveTemplate name json (TheLoaders loaders) =
     case decodeHtmlTemplate json of
         Err msg ->
-            loaders.templateReceiver name (Err msg) <| TheLoaders loaders
+            Err msg
         Ok template ->
             let refs = templateReferences template
+                dicts = loaders.dicts
                 lo = { loaders |
-                       templates
-                           = Dict.insert name template loaders.templates
+                           dicts = { dicts | templates
+                                         = Dict.insert
+                                           name template dicts.templates
+                                         }
                      }
                 loaders2 = addOutstandingPagesAndTemplates
                            [] refs <| TheLoaders lo
             in
-                loaders.templateReceiver name (Ok template) loaders2
+                Ok loaders2
 
-loadPage : String -> Loaders msg -> Cmd msg
+loadPage : String -> Loaders msg x -> Cmd msg
 loadPage name (TheLoaders loaders) =
     loaders.pageLoader name <| TheLoaders loaders
 
-receivePage : String -> String -> Loaders msg -> msg
+receivePage : String -> String -> Loaders msg x -> Result String (Loaders msg x)
 receivePage name json (TheLoaders loaders) =
     case decodeAtom json of
         Err msg ->
-            loaders.pageReceiver name (Err msg) <| TheLoaders loaders
+            Err msg
         Ok page ->
             let templates = atomTemplateReferences page
                 pages = atomPageReferences page
+                dicts = loaders.dicts
                 lo = { loaders |
-                       pages = Dict.insert name page loaders.pages
+                       dicts = { dicts |
+                                 pages = Dict.insert name page dicts.pages
+                               }
                      }
                 loaders2 = addOutstandingPagesAndTemplates
                            pages templates <| TheLoaders lo
             in
-                loaders.pageReceiver name (Ok page) loaders2
+                Ok loaders2
 
-addOutstandingPagesAndTemplates : List String -> List String -> Loaders msg -> Loaders msg
+addOutstandingPagesAndTemplates : List String -> List String -> Loaders msg x -> Loaders msg x
 addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
     let templates = Set.fromList templatesList
-        newtemps = setMinusDict templates loaders.templates
+        dicts = loaders.dicts
+        newtemps = setMinusDict templates dicts.templates
         pages = Set.fromList pagesList
-        newpages = setMinusDict pages loaders.pages
+        newpages = setMinusDict pages dicts.pages
         lo = { loaders |
                templatesToLoad
                    = Set.union newtemps loaders.templatesToLoad
@@ -1054,18 +1143,26 @@ addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
     in
         TheLoaders lo
 
-loadOutstandingPageOrTemplate : Loaders msg -> Cmd msg
-loadOutstandingPageOrTemplate (TheLoaders loaders) =
+maybeLoadOutstandingPageOrTemplate : Loaders msg x -> Maybe (Cmd msg)
+maybeLoadOutstandingPageOrTemplate (TheLoaders loaders) =
     case popSet loaders.pagesToLoad of
         Just (name, names) ->
             let lo = { loaders | pagesToLoad = names }
             in
-                loadPage name <| TheLoaders lo
+                Just <| loadPage name <| TheLoaders lo
         Nothing ->
             case popSet loaders.templatesToLoad of
                 Nothing ->
-                    Cmd.none
+                    Nothing
                 Just (name, names) ->
                     let lo = { loaders | templatesToLoad = names }
                     in
-                        loadTemplate name <| TheLoaders lo
+                        Just <| loadTemplate name <| TheLoaders lo
+
+loadOutstandingPageOrTemplate : Loaders msg x -> Cmd msg
+loadOutstandingPageOrTemplate loaders =
+    case maybeLoadOutstandingPageOrTemplate loaders of
+        Nothing ->
+            Cmd.none
+        Just cmd ->
+            cmd

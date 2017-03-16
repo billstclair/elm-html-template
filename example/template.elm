@@ -1,8 +1,18 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( TemplateDicts, HtmlTemplate(..), Atom(..), Dicts
-                             , defaultTemplateDicts, renderHtmlTemplate
+import HtmlTemplate exposing ( Loaders, HtmlTemplate(..), Atom(..), Dicts
+                             , TemplateDicts
+                             , makeLoaders, insertFunctions, insertMessages
+                             , getExtra, getDicts
+                             , addOutstandingPagesAndTemplates
+                             , loadPage, receivePage, loadTemplate, receiveTemplate
+                             , loadOutstandingPageOrTemplate
+                             , maybeLoadOutstandingPageOrTemplate
+                             , getPage, addPageProperties, getTemplate
+                             , getAtom, setAtoms
+                             , clearPages, clearTemplates
                              , atomToHtmlTemplate, maybeLookupAtom, withTheDicts
+                             , renderTemplate
                              )
 
 import Html exposing ( Html, Attribute
@@ -24,10 +34,9 @@ main =
         }
 
 type alias Model =
-    { dicts: TemplateDicts Msg
+    { loaders: Loaders Msg Extra
     , page: Maybe String
-    , templateDir : String
-    , unloadedTemplates : List String
+    , pendingPage : Maybe String
     , error : Maybe String
     }
 
@@ -39,11 +48,24 @@ settingsFile : String
 settingsFile =
     "settings"
 
-pageTemplate : String
-pageTemplate = "page"
-
 indexTemplate : String
 indexTemplate =
+    "index"
+
+pageTemplate : String
+pageTemplate =
+    "page"
+
+nodeTemplate : String
+nodeTemplate =
+    "node"
+
+initialTemplates : List String
+initialTemplates =
+    [ pageTemplate, indexTemplate, nodeTemplate ]
+
+indexPage : String
+indexPage =
     "index"
 
 postTemplate : String
@@ -66,11 +88,10 @@ gotoPageFunction atom dicts =
         _ ->
             SetError <| "Can't go to page: " ++ (toString atom)
 
-messages : Dict String (Atom -> Dicts Msg -> Msg)
+messages : List (String, Atom -> Dicts Msg -> Msg)
 messages =
-    Dict.fromList
-        [ ( "gotoPage", gotoPageFunction )
-        ]
+    [ ( "gotoPage", gotoPageFunction )
+    ]
 
 pageLinkFunction : Atom -> Dicts Msg -> Html Msg
 pageLinkFunction atom dicts =
@@ -114,25 +135,32 @@ normalizePageLinkArgs atom dicts =
                 _ ->
                     Nothing
 
-functions : Dict String (Atom -> Dicts Msg -> Html Msg)
+functions : List (String, Atom -> Dicts Msg -> Html Msg)
 functions =
-    Dict.fromList
-        [ ( "pageLink", pageLinkFunction )
-        ]
+    [ ( "pageLink", pageLinkFunction )
+    ]
+
+type alias Extra =
+    { templateDir : String
+    }
+
+initialExtra : Extra
+initialExtra =
+    { templateDir = "default"
+    }
+
+initialLoaders : Loaders Msg Extra
+initialLoaders =
+    makeLoaders fetchTemplate fetchPage initialExtra
+    |> insertFunctions functions
+    |> insertMessages messages
+    |> addOutstandingPagesAndTemplates [indexPage] initialTemplates
 
 init : ( Model, Cmd Msg)
 init =
-    let model = { dicts = { defaultTemplateDicts
-                              | messages =
-                                  Dict.union
-                                      messages defaultTemplateDicts.messages
-                              , functions =
-                                  Dict.union
-                                      functions defaultTemplateDicts.functions
-                          }
+    let model = { loaders = initialLoaders
                 , page = Nothing
-                , templateDir = "default"
-                , unloadedTemplates = [ "page" ]
+                , pendingPage = Just indexPage
                 , error = Nothing
                 }
     in
@@ -142,8 +170,8 @@ init =
 
 type Msg
     = SettingsFetchDone (Result Http.Error String)
-    | TemplateFetchDone String (Result Http.Error String)
-    | PageFetchDone String String (Result Http.Error String)
+    | TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
+    | PageFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | GotoPage String
     | SetError String
 
@@ -169,29 +197,33 @@ fetchSettings model =
     in
         fetchUrl url SettingsFetchDone
 
-fetchTemplate : String -> Model -> Cmd Msg
-fetchTemplate name model =
-    let filename = templateFilename name
-        url = "template/" ++ model.templateDir ++ "/" ++ filename
-    in
-        fetchUrl url <| TemplateFetchDone name
+templateDir : Loaders Msg Extra -> String
+templateDir loaders =
+    .templateDir <| getExtra loaders
 
-fetchPage : String -> String -> Model -> Cmd Msg
-fetchPage name switchToPage model =
+fetchTemplate : String -> Loaders Msg Extra -> Cmd Msg
+fetchTemplate name loaders =
+    let filename = templateFilename name
+        url = "template/" ++ (templateDir loaders) ++ "/" ++ filename
+    in
+        fetchUrl url <| TemplateFetchDone name loaders
+
+fetchPage : String -> Loaders Msg Extra -> Cmd Msg
+fetchPage name loaders =
     let filename = templateFilename name
         url = "page/" ++ filename
     in
-        fetchUrl url <| PageFetchDone name switchToPage
+        fetchUrl url <| PageFetchDone name loaders
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         SettingsFetchDone result ->
             settingsFetchDone result model
-        TemplateFetchDone name result ->
-            templateFetchDone name result model
-        PageFetchDone name switchToPage result ->
-            pageFetchDone name switchToPage result model
+        TemplateFetchDone name loaders result ->
+            templateFetchDone name loaders result model
+        PageFetchDone name loaders result ->
+            pageFetchDone name loaders result model
         GotoPage page ->
             gotoPage page model
         SetError message ->
@@ -203,19 +235,16 @@ update msg model =
 gotoPage : String -> Model -> ( Model, Cmd Msg )
 gotoPage page model =
     let m = { model | error = Nothing
-            , unloadedTemplates = []
+            , pendingPage = Just page
             }
     in
         ( m
-        , fetchPage page page model
+        , fetchPage page <| clearPages model.loaders
         )
 
 setAtom : String -> Atom -> Model -> Model
 setAtom name atom model =
-    let dicts = model.dicts
-        atoms = dicts.atoms
-    in
-        { model | dicts = { dicts | atoms = Dict.insert name atom atoms } }
+    { model | loaders = setAtoms [(name, atom)] model.loaders }
 
 settingsFetchDone : Result Http.Error String -> Model -> ( Model, Cmd Msg )
 settingsFetchDone result model =
@@ -238,13 +267,15 @@ settingsFetchDone result model =
                     , Cmd.none
                     )
                 Ok settings ->
-                    ( setAtom "settings" settings
-                          <| { model | error = Nothing }
-                    , fetchTemplate indexTemplate model
-                    )
+                    let m = setAtom "settings" settings
+                            <| { model | error = Nothing }
+                    in
+                        ( m
+                        , loadOutstandingPageOrTemplate m.loaders
+                        )
 
-templateFetchDone : String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
-templateFetchDone name result model =
+templateFetchDone : String -> Loaders Msg Extra -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
+templateFetchDone name loaders result model =
     case result of
         Err err ->
             ( { model
@@ -255,49 +286,42 @@ templateFetchDone name result model =
             , Cmd.none
             )
         Ok json ->
-            case HtmlTemplate.decodeHtmlTemplate json of
+            case receiveTemplate name json loaders of
                 Err msg ->
                     ( { model
-                          | error =
+                          | loaders = loaders
+                          , error =
                               Just
                               <| "While parsing template \"" ++
                                   name ++ "\": " ++ msg
                       }
                     , Cmd.none
                     )
-                Ok template ->
-                    let dicts = model.dicts
-                        templates = Dict.insert name template dicts.templates
-                        names = HtmlTemplate.templateReferences template
-                        unloaded = List.foldl
-                                   (\name names ->
-                                        if List.member name names then
-                                            names
-                                        else
-                                            name :: names
-                                   )
-                                   model.unloadedTemplates
-                                   names
-                        m = { model
-                                | dicts = { dicts | templates = templates }
-                                , unloadedTemplates = unloaded
-                            }
-                    in
-                        case unloaded of
-                            [] ->
-                                ( { m | error = Nothing }
-                                , fetchPage indexTemplate indexTemplate model
-                                )
-                            head :: tail ->
-                                ( { m
-                                      | unloadedTemplates = tail
-                                      , error = Nothing
-                                  }
-                                , fetchTemplate head m
-                                )
+                Ok loaders2 ->
+                    continueLoading loaders2 model
 
-pageFetchDone : String -> String -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
-pageFetchDone name switchToPage result model =
+continueLoading : Loaders Msg Extra -> Model -> ( Model, Cmd Msg )
+continueLoading loaders model =
+    case maybeLoadOutstandingPageOrTemplate loaders of
+        Just cmd ->
+            -- Do NOT update model.loaders yet, or the screen flashes
+            ( model, cmd )
+        Nothing ->
+            let m = { model | loaders = loaders }
+            in
+                ( case m.pendingPage of
+                      Nothing ->
+                          m
+                      Just page ->
+                          { m |
+                            page = Just page
+                          , pendingPage = Nothing
+                          }
+                , Cmd.none
+                )
+
+pageFetchDone : String -> Loaders Msg Extra -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
+pageFetchDone name loaders result model =
     case result of
         Err err ->
             ( { model
@@ -308,7 +332,7 @@ pageFetchDone name switchToPage result model =
             , Cmd.none
             )
         Ok json ->
-            case HtmlTemplate.decodeAtom json of
+            case receivePage name json loaders of
                 Err msg ->
                     ( { model
                             | error =
@@ -317,54 +341,10 @@ pageFetchDone name switchToPage result model =
                       }
                     , Cmd.none
                     )
-                Ok atom ->
-                    let dicts = model.dicts
-                        a = case atom of
-                                PListAtom plist ->
-                                    PListAtom
-                                    <| ( "page", StringAtom name ) :: plist
-                                _ ->
-                                    atom
-                        pages = Dict.insert name a dicts.pages
-                        names = HtmlTemplate.atomPageReferences atom
-                        unloaded = List.foldl
-                                   (\name names ->
-                                        if List.member name names then
-                                            names
-                                        else
-                                            name :: names
-                                   )
-                                   model.unloadedTemplates
-                                   names
-                        m = { model
-                                | dicts = { dicts | pages = pages }
-                                , unloadedTemplates = unloaded
-                            }
-                    in
-                        case unloaded of
-                            [] ->
-                                ( { m |
-                                    error = Nothing
-                                  , page = Just switchToPage
-                                  }
-                                , Cmd.none )
-                            head :: tail ->
-                                ( { m
-                                      | unloadedTemplates = tail
-                                      , error = Nothing
-                                  }
-                                , fetchPage head switchToPage m
-                                )
-
-dictInserts : Dict String b -> List (String, b) -> Dict String b
-dictInserts dict list =
-    List.foldl (\pair dict ->
-                    let (a, b) = pair
-                    in
-                        Dict.insert a b dict
-               )
-        dict
-        list
+                Ok loaders2 ->
+                    continueLoading
+                      (addPageProperties name [("page", StringAtom name)] loaders2)
+                      model
 
 view : Model -> Html Msg
 view model =
@@ -379,38 +359,35 @@ view model =
               Nothing ->
                   text ""
               Just page ->
-                  let dicts = model.dicts
-                      templatesDict = dicts.templates
-                      atomsDict = dicts.atoms
-                      pagesDict = dicts.pages
-                      template = "page"
+                  let loaders = model.loaders
+                      template = pageTemplate
                       content = (LookupTemplateAtom
                                      <| if page == "index" then
-                                            "index"
+                                            indexTemplate
                                         else
-                                            "node"
+                                            nodeTemplate
                                 )
                   in
-                      case Dict.get template templatesDict of
+                      case getTemplate template loaders of
                           Nothing ->
-                              dictsDiv "Template" template model
+                              dictsDiv "Template" template loaders
                           Just tmpl ->
-                              case Dict.get page pagesDict of
+                              case getPage page loaders of
                                   Nothing ->
-                                      dictsDiv "Page" page model
+                                      dictsDiv "Page" page loaders
                                   Just atom ->
-                                      let ad = dictInserts atomsDict
-                                               [ ("node", atom)
-                                               , ("content", content)
-                                               , ("page", (StringAtom page))
-                                               ]
+                                      let lds = setAtoms
+                                                [ ("node", atom)
+                                                , ("content", content)
+                                                , ("page", (StringAtom page))
+                                                ]
+                                                loaders
                                       in
-                                          renderHtmlTemplate
-                                              tmpl { dicts | atoms = ad }
+                                          renderTemplate tmpl lds
         ]
 
-dictsDiv : String -> String -> Model -> Html Msg
-dictsDiv thing page model =
+dictsDiv : String -> String -> Loaders Msg Extra -> Html Msg
+dictsDiv thing page loaders =
     div []
         [ p [] [ text <| thing ++ " not found: " ++ page ]
         , p []
@@ -420,7 +397,7 @@ dictsDiv thing page model =
         , p []
             [ text "dicts:"
             , br
-            , text <| toString model.dicts ]
+            , text <| toString <| getDicts loaders ]
         ]
         
 br : Html Msg
