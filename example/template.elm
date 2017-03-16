@@ -1,7 +1,6 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( Loaders, HtmlTemplate(..), Atom(..), Dicts
-                             , TemplateDicts
+import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , makeLoaders, insertFunctions, insertMessages
                              , addPageProcessors
                              , getExtra, getDicts
@@ -11,8 +10,7 @@ import HtmlTemplate exposing ( Loaders, HtmlTemplate(..), Atom(..), Dicts
                              , maybeLoadOutstandingPageOrTemplate
                              , getPage, addPageProperties, getTemplate
                              , getAtom, setAtoms
-                             , clearPages, clearTemplates
-                             , atomToHtmlTemplate, maybeLookupAtom, withTheDicts
+                             , clearPages
                              , renderTemplate, renderAtom
                              )
 
