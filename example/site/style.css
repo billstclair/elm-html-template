@@ -45,3 +45,10 @@ iframe {
     height: 30em;
     margin: 0;
 }
+table.bordered {
+    border: 1px solid black;
+}
+table.bordered>tr>td {
+    border: 1px solid black;
+    text-align: center;
+}

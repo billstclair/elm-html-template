@@ -6,6 +6,31 @@
                },
         ["Bold and 150% size via \"style\" attribute"]
        ],
-       ["node:b",{},["Bold via \"node:b\""]]
+       ["node:b",{},["Bold via \"node:b\""]],
+       ["span",{"attribute:title":"Here's lookin' atcha!"},
+        ["Hover to see title via \"attribute:title\"."]
+       ],
+       ["Table illustrates integer (\"colspan\") attribute values.",
+        ["br",{},[]],
+        ["table",{"class":"bordered"},
+         [["tr",{},
+           [["td",{},["1.1"]],
+            ["td",{},["1.2"]],
+            ["td",{},["1.3"]],
+            ["td",{},["1.4"]]
+           ]
+          ],
+          ["tr",{},
+           [["td",{"colspan":2},["2.1-2"]],
+            ["td",{"colspan":2},["2.3-4"]]
+           ]
+          ],
+          ["tr",{},
+           [["td",{"colspan":4},["3.1-4"]]
+           ]
+          ]
+         ]
+        ]
+       ]
       ]
 }

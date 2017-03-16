@@ -471,6 +471,7 @@ tagTable =
         , ("footer", Html.footer)
         , ("address", Html.address)
         , ("main", Html.main_)
+        , ("main_", Html.main_)
         , ("body", Html.body)
         -- Figures
         , ("figure", Html.figure)
@@ -584,24 +585,176 @@ ensureAttributes keyValuePairs =
             in
                 JD.fail <| "Unknown attribute: " ++ key
 
--- TODO: Many more attributes.
+-- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html-Attributes
 attributeTable : Dict String (AttributeFunction msg)
 attributeTable =
     Dict.fromList
-        [ ("style", StringPairListAttributeFunction Attributes.style)
-        , ("title", StringAttributeFunction Attributes.title)
-        , ("href", StringAttributeFunction Attributes.href)
-        , ("src", StringAttributeFunction Attributes.src)
-        , ("onClick", MsgAttributeFunction Events.onClick)
-        , ("type", StringAttributeFunction Attributes.type_)
+        [
+         -- Primitives
+         -- use "attribute:<name>" for missing string attributes
+          ("style", StringPairListAttributeFunction Attributes.style)
+         -- Super Common Attributes
         , ("class", StringAttributeFunction Attributes.class)
+            -- classlist not implemented
         , ("id", StringAttributeFunction Attributes.id)
+        , ("title", StringAttributeFunction Attributes.title)
+        , ("hidden", BoolAttributeFunction Attributes.hidden)
+        -- Inputs
+        , ("type", StringAttributeFunction Attributes.type_)
+        , ("type_", StringAttributeFunction Attributes.type_)
+        , ("value", StringAttributeFunction Attributes.value)
+        , ("defaultValue", StringAttributeFunction Attributes.defaultValue)
+        , ("checked", BoolAttributeFunction Attributes.checked)
+        , ("placeholder", StringAttributeFunction Attributes.placeholder)
+        , ("selected", BoolAttributeFunction Attributes.selected)
+        -- Input Helpers
+        , ("accept", StringAttributeFunction Attributes.accept)
+        , ("acceptCharset", StringAttributeFunction Attributes.acceptCharset)
+        , ("action", StringAttributeFunction Attributes.action)
+        , ("autocomplete", BoolAttributeFunction Attributes.autocomplete)
+        , ("autofocus", BoolAttributeFunction Attributes.autofocus)
+        , ("disabled", BoolAttributeFunction Attributes.disabled)
+        , ("enctype", StringAttributeFunction Attributes.enctype)
+        , ("formaction", StringAttributeFunction Attributes.formaction)
+        , ("list", StringAttributeFunction Attributes.list)
+        , ("maxlength", IntAttributeFunction Attributes.maxlength)
+        , ("minlength", IntAttributeFunction Attributes.minlength)
+        , ("method", StringAttributeFunction Attributes.method)
+        , ("multiple", BoolAttributeFunction Attributes.multiple)
+        , ("name", StringAttributeFunction Attributes.name)
+        , ("novalidate", BoolAttributeFunction Attributes.novalidate)
+        , ("pattern", StringAttributeFunction Attributes.pattern)
+        , ("readonly", BoolAttributeFunction Attributes.readonly)
+        , ("required", BoolAttributeFunction Attributes.required)
+        , ("size", IntAttributeFunction Attributes.size)
+        , ("for", StringAttributeFunction Attributes.for)
+        , ("form", StringAttributeFunction Attributes.form)
+        -- Input Ranges
+        , ("max", StringAttributeFunction Attributes.max)
+        , ("min", StringAttributeFunction Attributes.min)
+        , ("step", StringAttributeFunction Attributes.step)
+        -- Input Text Areas
+        , ("cols", IntAttributeFunction Attributes.cols)
+        , ("rows", IntAttributeFunction Attributes.rows)
+        , ("wrap", StringAttributeFunction Attributes.wrap)
+        -- Links and Areas
+        , ("href", StringAttributeFunction Attributes.href)
+        , ("target", StringAttributeFunction Attributes.target)
+        , ("download", BoolAttributeFunction Attributes.download)
+        , ("downloadAs", StringAttributeFunction Attributes.downloadAs)
+        , ("hreflang", StringAttributeFunction Attributes.hreflang)
+        , ("media", StringAttributeFunction Attributes.media)
+        , ("ping", StringAttributeFunction Attributes.ping)
+        , ("rel", StringAttributeFunction Attributes.rel)
+        -- Maps
+        , ("ismap", BoolAttributeFunction Attributes.ismap)
+        , ("usemap", StringAttributeFunction Attributes.usemap)
+        , ("shape", StringAttributeFunction Attributes.shape)
+        , ("coords", StringAttributeFunction Attributes.coords)
+        -- Embedded Content
+        , ("src", StringAttributeFunction Attributes.src)
+        , ("height", IntAttributeFunction Attributes.height)
+        , ("width", IntAttributeFunction Attributes.width)
+        , ("alt", StringAttributeFunction Attributes.alt)
+        -- Audio and Video
+        , ("autoplay", BoolAttributeFunction Attributes.autoplay)
+        , ("controls", BoolAttributeFunction Attributes.controls)
+        , ("loop", BoolAttributeFunction Attributes.loop)
+        , ("preload", StringAttributeFunction Attributes.preload)
+        , ("poster", StringAttributeFunction Attributes.poster)
+        , ("default", BoolAttributeFunction Attributes.default)
+        , ("kind", StringAttributeFunction Attributes.kind)
+        , ("srclang", StringAttributeFunction Attributes.srclang)
+        -- iframes
+        , ("sandbox", StringAttributeFunction Attributes.sandbox)
+        , ("seamless", BoolAttributeFunction Attributes.seamless)
+        , ("srcdoc", StringAttributeFunction Attributes.srcdoc)
+        -- Ordered Lists
+        , ("reversed", BoolAttributeFunction Attributes.reversed)
+        , ("start", IntAttributeFunction Attributes.start)
+        -- Tables
+        , ("align", StringAttributeFunction Attributes.align)
+        , ("colspan", IntAttributeFunction Attributes.colspan)
+        , ("rowspan", IntAttributeFunction Attributes.rowspan)
+        , ("headers", StringAttributeFunction Attributes.headers)
+        , ("scope", StringAttributeFunction Attributes.scope)
+        -- Header Stuff
+        , ("async", BoolAttributeFunction Attributes.async)
+        , ("charset", StringAttributeFunction Attributes.charset)
+        , ("content", StringAttributeFunction Attributes.content)
+        , ("defer", BoolAttributeFunction Attributes.defer)
+        , ("httpEquiv", StringAttributeFunction Attributes.httpEquiv)
+        , ("language", StringAttributeFunction Attributes.language)
+        , ("scoped", BoolAttributeFunction Attributes.scoped)
+        -- Less Common Global Attributes
+        , ("accesskey", CharAttributeFunction Attributes.accesskey)
+        , ("contenteditable", BoolAttributeFunction Attributes.contenteditable)
+        , ("contextmenu", StringAttributeFunction Attributes.contextmenu)
+        , ("dir", StringAttributeFunction Attributes.dir)
+        , ("draggable", StringAttributeFunction Attributes.draggable)
+        , ("dropzone", StringAttributeFunction Attributes.dropzone)
+        , ("itemprop", StringAttributeFunction Attributes.itemprop)
+        , ("lang", StringAttributeFunction Attributes.lang)
+        , ("spellcheck", BoolAttributeFunction Attributes.spellcheck)
+        , ("tabindex", IntAttributeFunction Attributes.tabindex)
+        -- Key Generation
+        , ("challenge", StringAttributeFunction Attributes.challenge)
+        , ("keytype", StringAttributeFunction Attributes.keytype)
+        -- Miscellaneous
+        , ("cite", StringAttributeFunction Attributes.cite)
+        , ("datetime", StringAttributeFunction Attributes.datetime)
+        , ("pubdate", StringAttributeFunction Attributes.pubdate)
+        , ("manifest", StringAttributeFunction Attributes.manifest)
+
+        -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html-Events
+        -- Mouse Helpers
+        , ("onClick", MsgAttributeFunction Events.onClick)
+        , ("onDoubleClick", MsgAttributeFunction Events.onDoubleClick)
+        , ("onMouseDown", MsgAttributeFunction Events.onMouseDown)
+        , ("onMouseUp", MsgAttributeFunction Events.onMouseUp)
+        , ("onMouseEnter", MsgAttributeFunction Events.onMouseEnter)
+        , ("onMouseLeave", MsgAttributeFunction Events.onMouseLeave)
+        , ("onMouseOver", MsgAttributeFunction Events.onMouseOver)
+        , ("onMouseOut", MsgAttributeFunction Events.onMouseOut)
+        -- Form Helpers
+        -- onInput & onCheck always error.
+        -- I may never bother to implement them, since they
+        -- are either tightly coupled to Elm code, or require a scripting langage.
+        , ("onInput", MsgAttributeStringLookupFunction Events.onInput)
+        , ("onCheck", MsgAttributeBoolLookupFunction Events.onCheck)
+        , ("onSubmit", MsgAttributeFunction Events.onSubmit)
+        -- Focus Helpers
+        , ("onBlur", MsgAttributeFunction Events.onBlur)
+        , ("onFocus", MsgAttributeFunction Events.onFocus)
+        -- Custom Event Handlers
+        -- Custom Decoders
+        -- Both too hard for now
         ]
+
+attributeMarker : String
+attributeMarker =
+    "attribute:"
+
+attributeMarkerLength : Int
+attributeMarkerLength =
+    String.length attributeMarker
+
+stripAttributeMarker : String -> Maybe String
+stripAttributeMarker string =
+    if String.startsWith attributeMarker string then
+        Just <| String.dropLeft attributeMarkerLength string
+    else
+        Nothing
 
 isAttribute : String -> Atom msg -> Bool
 isAttribute string atom =
     case Dict.get string attributeTable of
-        Nothing -> False
+        Nothing ->
+            case stripAttributeMarker string of
+                Nothing ->
+                    False
+                Just _ ->
+                    True
         Just _ ->
             True
 
@@ -644,12 +797,31 @@ type AttributeFunction msg
     | BoolAttributeFunction (Bool -> Attribute msg)
     | AtomsAttributeFunction (List (Atom msg) -> Attribute msg)
     | MsgAttributeFunction (msg -> Attribute msg)
+    | MsgAttributeStringLookupFunction ((String -> msg) -> Attribute msg)
+    | MsgAttributeBoolLookupFunction ((Bool -> msg) -> Attribute msg)
     -- Only used for "style".
     | StringPairListAttributeFunction (List (String, String) -> Attribute msg)
+    | CharAttributeFunction (Char -> Attribute msg)
+
+genericAttributeFunction : String -> AttributeFunction msg
+genericAttributeFunction name =
+    StringAttributeFunction (Attributes.attribute name)
+
+getAttributeFunction : String -> Maybe (AttributeFunction msg)
+getAttributeFunction name =
+    case Dict.get name attributeTable of
+        Just f ->
+            Just f
+        Nothing ->
+            case stripAttributeMarker name of
+                Nothing ->
+                    Nothing
+                Just name ->
+                    Just <| genericAttributeFunction name
 
 renderAttributeAtom : (String, Atom msg) -> TemplateDicts msg -> Attribute msg
 renderAttributeAtom (name, atomOrLookup) dicts =
-    case Dict.get name attributeTable of
+    case getAttributeFunction name of
         Nothing ->
             Attributes.title <| "Unknown attribute: " ++ name
         Just attributeFunction ->
@@ -700,8 +872,14 @@ renderAttributeAtomInternal name atomOrLookup function dicts =
                     _ -> badTypeTitle name atom
             MsgAttributeFunction f ->
                 handleMsgAttribute name f atom dicts
+            MsgAttributeStringLookupFunction f ->
+                handleStringLookupMsgAttribute name f atom dicts
+            MsgAttributeBoolLookupFunction f ->
+                handleBoolLookupMsgAttribute name f atom dicts
             StringPairListAttributeFunction f ->
                 handleStringPairListAttribute name f atom
+            CharAttributeFunction f ->
+                handleCharAttribute name f atom
 
 handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleMsgAttribute attributeName attributeWrapper atom dicts =
@@ -722,6 +900,22 @@ handleMsgAttribute attributeName attributeWrapper atom dicts =
                             <| TheDicts dicts
         _ ->
             badTypeTitle attributeName atom
+
+-- TODO
+-- Requires another table in dicts
+-- Would take an entire scripting language to be able to
+-- specify handlers dynamically.
+handleStringLookupMsgAttribute : String -> ((String -> msg) -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
+handleStringLookupMsgAttribute attributeName attributeWrapper atom dicts =
+    badTypeTitle attributeName atom
+
+-- TODO
+-- Requires another table in dicts
+-- Would take an entire scripting language to be able to
+-- specify handlers dynamically.
+handleBoolLookupMsgAttribute : String -> ((Bool -> msg) -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
+handleBoolLookupMsgAttribute attributeName attributeWrapper atom dicts =
+    badTypeTitle attributeName atom
 
 handleStringPairListAttribute : String -> (List (String, String) -> Attribute msg) -> Atom msg -> Attribute msg
 handleStringPairListAttribute attributeName attributeWrapper atom =
@@ -763,6 +957,18 @@ atomsToStringPairs atoms res =
                             Nothing
                 _ ->
                     Nothing
+
+handleCharAttribute : String -> (Char -> Attribute msg) -> Atom msg -> Attribute msg
+handleCharAttribute attributeName attributeWrapper atom =
+    case atom of
+        StringAtom string ->
+            case String.uncons string of
+                Just (char, "") ->
+                    attributeWrapper char
+                _ ->
+                    badTypeTitle attributeName atom
+        _ ->
+            badTypeTitle attributeName atom
 
 ---
 --- Html Rendering
