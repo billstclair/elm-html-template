@@ -1,0 +1,11 @@
+{ "title": "Attributes",
+  "ps" : [ "This is a test page for unusual attributes.",
+           ["span",{"style":[["font-weight","bold"],
+                             ["font-size","150%"]
+                             ]
+                    },
+            ["Bold and 150% size via \"style\" attribute"]
+           ],
+           ["node:b",{},["Bold via \"node:b\""]]
+         ]
+}
