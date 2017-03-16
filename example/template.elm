@@ -20,7 +20,6 @@ import Html exposing ( Html, Attribute
                      )
 import Html.Attributes as Attributes exposing ( style, href )
 import Html.Events exposing ( onClick )
-import Dict exposing ( Dict )
 import Http
 
 log = Debug.log
@@ -48,6 +47,10 @@ settingsFile : String
 settingsFile =
     "settings"
 
+settingsPageName : String
+settingsPageName =
+    "_settings"
+
 indexTemplate : String
 indexTemplate =
     "index"
@@ -67,6 +70,10 @@ initialTemplates =
 indexPage : String
 indexPage =
     "index"
+
+initialPages : List String
+initialPages =
+    [ settingsPageName, indexPage ]
 
 postTemplate : String
 postTemplate =
@@ -154,7 +161,7 @@ initialLoaders =
     makeLoaders fetchTemplate fetchPage initialExtra
     |> insertFunctions functions
     |> insertMessages messages
-    |> addOutstandingPagesAndTemplates [indexPage] initialTemplates
+    |> addOutstandingPagesAndTemplates initialPages initialTemplates
 
 init : ( Model, Cmd Msg)
 init =
@@ -165,12 +172,11 @@ init =
                 }
     in
         ( model
-        , fetchSettings model
+        , loadOutstandingPageOrTemplate model.loaders
         )
 
 type Msg
-    = SettingsFetchDone (Result Http.Error String)
-    | TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
+    = TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | PageFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | GotoPage String
     | SetError String
@@ -191,12 +197,6 @@ httpGetString url =
         , withCredentials = False
         }
 
-fetchSettings : Model -> Cmd Msg
-fetchSettings model =
-    let url = templateFilename settingsFile
-    in
-        fetchUrl url SettingsFetchDone
-
 templateDir : Loaders Msg Extra -> String
 templateDir loaders =
     .templateDir <| getExtra loaders
@@ -210,16 +210,16 @@ fetchTemplate name loaders =
 
 fetchPage : String -> Loaders Msg Extra -> Cmd Msg
 fetchPage name loaders =
-    let filename = templateFilename name
-        url = "page/" ++ filename
+    let url = if name == settingsPageName then
+                  templateFilename settingsFile
+              else
+                  "page/" ++ (templateFilename name)
     in
         fetchUrl url <| PageFetchDone name loaders
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        SettingsFetchDone result ->
-            settingsFetchDone result model
         TemplateFetchDone name loaders result ->
             templateFetchDone name loaders result model
         PageFetchDone name loaders result ->
@@ -245,34 +245,6 @@ gotoPage page model =
 setAtom : String -> Atom -> Model -> Model
 setAtom name atom model =
     { model | loaders = setAtoms [(name, atom)] model.loaders }
-
-settingsFetchDone : Result Http.Error String -> Model -> ( Model, Cmd Msg )
-settingsFetchDone result model =
-    case result of
-        Err err ->
-            ( { model
-                  | error =
-                      Just <| "Error fetching settings: " ++ (toString err)
-              }
-            , Cmd.none
-            )
-        Ok json ->
-            case HtmlTemplate.decodeAtom json of
-                Err msg ->
-                    ( { model
-                          | error =
-                              Just
-                              <| "While parsing settings: " ++ msg
-                      }
-                    , Cmd.none
-                    )
-                Ok settings ->
-                    let m = setAtom "settings" settings
-                            <| { model | error = Nothing }
-                    in
-                        ( m
-                        , loadOutstandingPageOrTemplate m.loaders
-                        )
 
 templateFetchDone : String -> Loaders Msg Extra -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
 templateFetchDone name loaders result model =
@@ -342,9 +314,17 @@ pageFetchDone name loaders result model =
                     , Cmd.none
                     )
                 Ok loaders2 ->
-                    continueLoading
-                      (addPageProperties name [("page", StringAtom name)] loaders2)
-                      model
+                    let loaders3 = if name == settingsPageName then
+                                       case getPage name loaders2 of
+                                           Nothing -> loaders2
+                                           Just settings ->
+                                               setAtoms [(settingsFile,settings)]
+                                                   loaders2
+                                   else
+                                       addPageProperties
+                                           name [("page", StringAtom name)] loaders2
+                    in
+                        continueLoading loaders3 model
 
 view : Model -> Html Msg
 view model =
