@@ -413,41 +413,153 @@ htmlTemplateRecordDecoderInternal =
         (JD.index 1 <| JD.lazy (\_ -> attributesDecoder))
         (JD.index 2 <| JD.list <| JD.lazy (\_ -> htmlTemplateDecoder))
 
--- Not yet complete
 tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
 tagTable =
+    -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html
     Dict.fromList
-        [ ("p", Html.p)
-        , ("br", Html.br)
-        , ("a", Html.a)
-        , ("div", Html.div)
-        , ("style", style)
-        , ("span", Html.span)
-        , ("h1", Html.h1)
+        [
+        -- Headers
+          ("h1", Html.h1)
         , ("h2", Html.h2)
         , ("h3", Html.h3)
         , ("h4", Html.h4)
-        , ("table", Html.table)
-        , ("tr", Html.tr)
-        , ("th", Html.th)
-        , ("td", Html.td)
+        , ("h5", Html.h5)
+        , ("h6", Html.h6)
+        -- Grouping Content
+        , ("div", Html.div)
+        , ("p", Html.p)
+        , ("hr", Html.hr)
+        , ("pre", Html.pre)
+        , ("blockquote", Html.blockquote)
+        -- Text
+        , ("span", Html.span)
+        , ("a", Html.a)
+        , ("code", Html.code)
         , ("em", Html.em)
         , ("strong", Html.strong)
         , ("i", Html.i)
         , ("b", Html.b)
         , ("u", Html.u)
+        , ("sub", Html.sub)
+        , ("sup", Html.sup)
+        , ("br", Html.br)
+        -- Lists
+        , ("ol", Html.ol)
+        , ("ul", Html.ul)
+        , ("li", Html.li)
+        , ("dl", Html.dl)
+        , ("dt", Html.dt)
+        , ("dd", Html.dd)
+        -- Embedded Content
+        , ("img", Html.img)
         , ("iframe", Html.iframe)
+        , ("canvas", Html.canvas)
+        , ("math", Html.math)
+        -- Inputs
+        , ("form", Html.form)
+        , ("input", Html.input)
+        , ("textarea", Html.textarea)
+        , ("button", Html.button)
+        , ("select", Html.select)
+        , ("option", Html.option)
+        -- Sections
+        , ("section", Html.section)
+        , ("nav", Html.nav)
+        , ("article", Html.article)
+        , ("aside", Html.aside)
+        , ("header", Html.header)
+        , ("footer", Html.footer)
+        , ("address", Html.address)
+        , ("main", Html.main_)
+        , ("body", Html.body)
+        -- Figures
+        , ("figure", Html.figure)
+        , ("figcaption", Html.figcaption)
+        -- Tables
+        , ("table", Html.table)
+        , ("caption", Html.caption)
+        , ("colgroup", Html.colgroup)
+        , ("col", Html.col)
+        , ("tbody", Html.tbody)
+        , ("thead", Html.thead)
+        , ("tfoot", Html.tfoot)
+        , ("tr", Html.tr)
+        , ("td", Html.td)
+        , ("th", Html.th)
+        -- Less Common Elements
+        , ("fieldset", Html.fieldset)
+        , ("legend", Html.legend)
+        , ("label", Html.label)
+        , ("datalist", Html.datalist)
+        , ("optgroup", Html.optgroup)
+        , ("keygen", Html.keygen)
+        , ("output", Html.output)
+        , ("progress", Html.progress)
+        , ("meter", Html.meter)
+        -- Audio and Video
+        , ("audio", Html.audio)
+        , ("video", Html.video)
+        , ("source", Html.source)
+        , ("track", Html.track)
+        -- Embedded Objects
+        , ("embed", Html.embed)
+        , ("object", Html.object)
+        , ("param", Html.param)
+        -- Text Edits
+        , ("ins", Html.ins)
+        , ("del", Html.del)
+        -- Semantic Text
+        , ("small", Html.small)
+        , ("cite", Html.cite)
+        , ("dfn", Html.dfn)
+        , ("abbr", Html.abbr)
+        , ("time", Html.time)
+        , ("var", Html.var)
+        , ("samp", Html.samp)
+        , ("kbd", Html.kbd)
+        , ("s", Html.s)
+        , ("q", Html.q)
+        -- Less Common Text Tags
+        , ("mark", Html.mark)
+        , ("ruby", Html.ruby)
+        , ("rt", Html.rt)
+        , ("rp", Html.rp)
+        , ("bdi", Html.bdi)
+        , ("bdo", Html.bdo)
+        , ("wbr", Html.wbr)
+        -- Interactive Elements
+        , ("details", Html.details)
+        , ("summary", Html.summary)
+        , ("menuitem", Html.menuitem)
+        , ("menu", Html.menu)
+        -- Not in Html module
+        , ("style", Html.node "style")
         ]
 
-style : List (Attribute msg) -> List (Html msg) -> Html msg
-style attributes body =
-    Html.node "style" attributes body
+nodeMarker : String
+nodeMarker =
+    "node:"
+
+nodeMarkerLength : Int
+nodeMarkerLength =
+    String.length nodeMarker
+
+stripNodeMarker : String -> Maybe String
+stripNodeMarker string =
+    if String.startsWith nodeMarker string then
+        Just <| String.dropLeft nodeMarkerLength string
+    else
+        Nothing
 
 ensureTag : String -> Decoder String
 ensureTag string =
     case Dict.get string tagTable of
         Nothing ->
-            JD.fail <| "Unknown tag: " ++ string
+            case stripNodeMarker string of
+                Just _ ->
+                    JD.succeed string
+                Nothing ->
+                    JD.fail <| "Unknown tag: " ++ string
         _ ->
             JD.succeed string    
 
@@ -473,23 +585,24 @@ ensureAttributes keyValuePairs =
                 JD.fail <| "Unknown attribute: " ++ key
 
 -- TODO: Many more attributes.
-attributeTable : Dict String (Atom msg -> Bool)
+attributeTable : Dict String (AttributeFunction msg)
 attributeTable =
     Dict.fromList
-        [ ("title", isStringAtom)
-        , ("href", isStringAtom)
-        , ("src", isStringAtom)
-        , ("onClick", isMsgAtom)
-        , ("type", isStringAtom)
-        , ("class", isStringAtom)
-        , ("id", isStringAtom)
+        [ ("style", StringPairListAttributeFunction Attributes.style)
+        , ("title", StringAttributeFunction Attributes.title)
+        , ("href", StringAttributeFunction Attributes.href)
+        , ("src", StringAttributeFunction Attributes.src)
+        , ("onClick", MsgAttributeFunction Events.onClick)
+        , ("type", StringAttributeFunction Attributes.type_)
+        , ("class", StringAttributeFunction Attributes.class)
+        , ("id", StringAttributeFunction Attributes.id)
         ]
 
 isAttribute : String -> Atom msg -> Bool
 isAttribute string atom =
     case Dict.get string attributeTable of
         Nothing -> False
-        Just validator ->
+        Just _ ->
             True
 
 ---
@@ -524,42 +637,6 @@ atomPListDecoder =
 --- Attribute rendering
 ---
 
-type FunctionType
-    = StringFunction
-    | IntFunction
-    | FloatFunction
-    | BoolFunction
-    | LookupFunction
-    | LookupPageFunction
-    | LookupTemplateFunction
-    | MsgFunction
-    | StringsFunction Int
-    | IntsFunction Int
-    | FloatsFunction Int
-    | BoolsFunction Int
-    | ListFunction Int (List FunctionType)
-    | PListFunction Int (List FunctionType)
-    | NoFunction
-
-atomFunctionType : Atom msg -> FunctionType
-atomFunctionType atom =
-    case atom of
-        StringAtom _ -> StringFunction
-        IntAtom _ -> IntFunction
-        FloatAtom _ -> FloatFunction
-        BoolAtom _ -> BoolFunction
-        LookupAtom _ -> LookupFunction
-        LookupPageAtom _ -> LookupPageFunction
-        LookupTemplateAtom _ -> LookupTemplateFunction
-        MsgAtom _ -> MsgFunction
-        ListAtom atoms ->
-            ListFunction (List.length atoms) <| List.map atomFunctionType atoms
-        PListAtom plist ->
-            PListFunction (List.length plist)
-                <| List.map (\pair -> atomFunctionType <| Tuple.second pair) plist
-        TemplateAtom _ ->
-            NoFunction
-
 type AttributeFunction msg
     = StringAttributeFunction (String -> Attribute msg)
     | IntAttributeFunction (Int -> Attribute msg)
@@ -567,25 +644,17 @@ type AttributeFunction msg
     | BoolAttributeFunction (Bool -> Attribute msg)
     | AtomsAttributeFunction (List (Atom msg) -> Attribute msg)
     | MsgAttributeFunction (msg -> Attribute msg)
-
-typedAttributeTable : Dict String (AttributeFunction msg)
-typedAttributeTable =
-    Dict.fromList
-        [ ( "title", StringAttributeFunction Attributes.title )
-        , ( "href", StringAttributeFunction Attributes.href )
-        , ( "src", StringAttributeFunction Attributes.src )
-        , ( "onClick", MsgAttributeFunction Events.onClick )
-        , ( "type", StringAttributeFunction Attributes.type_ )
-        , ( "class", StringAttributeFunction Attributes.class )
-        , ( "id", StringAttributeFunction Attributes.id )
-        ]
+    -- Only used for "style".
+    | StringPairListAttributeFunction (List (String, String) -> Attribute msg)
 
 renderAttributeAtom : (String, Atom msg) -> TemplateDicts msg -> Attribute msg
 renderAttributeAtom (name, atomOrLookup) dicts =
-    case Dict.get name typedAttributeTable of
+    case Dict.get name attributeTable of
         Nothing ->
             Attributes.title <| "Unknown attribute: " ++ name
         Just attributeFunction ->
+            -- This abomination makes simple function calls work,
+            -- e.g. "/concat". Needs generalization.
             case atomOrLookup of
                 MsgAtom { function, args } ->
                     case attributeFunction of
@@ -606,21 +675,7 @@ renderAttributeAtom (name, atomOrLookup) dicts =
 
 renderAttributeAtomInternal : String -> Atom msg -> AttributeFunction msg -> TemplateDicts msg -> Attribute msg
 renderAttributeAtomInternal name atomOrLookup function dicts =
-    let atom = case atomOrLookup of
-                   LookupAtom n ->
-                       case lookupAtom n dicts of
-                           Just a -> a
-                           Nothing -> atomOrLookup
-                   LookupPageAtom n ->
-                       case lookupPageAtom n dicts of
-                           Just a -> a
-                           Nothing -> atomOrLookup
-                   LookupTemplateAtom n ->
-                       case Dict.get n dicts.templates of
-                           Just t -> TemplateAtom t
-                           Nothing -> atomOrLookup
-                   _ ->
-                       atomOrLookup
+    let atom = processFuncallArgs atomOrLookup dicts
     in
         case function of
             StringAttributeFunction f ->
@@ -645,6 +700,8 @@ renderAttributeAtomInternal name atomOrLookup function dicts =
                     _ -> badTypeTitle name atom
             MsgAttributeFunction f ->
                 handleMsgAttribute name f atom dicts
+            StringPairListAttributeFunction f ->
+                handleStringPairListAttribute name f atom
 
 handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleMsgAttribute attributeName attributeWrapper atom dicts =
@@ -665,6 +722,47 @@ handleMsgAttribute attributeName attributeWrapper atom dicts =
                             <| TheDicts dicts
         _ ->
             badTypeTitle attributeName atom
+
+handleStringPairListAttribute : String -> (List (String, String) -> Attribute msg) -> Atom msg -> Attribute msg
+handleStringPairListAttribute attributeName attributeWrapper atom =
+    case atomToStringPairList atom of
+        Nothing ->
+            badTypeTitle attributeName atom
+        Just args ->
+            attributeWrapper args
+
+atomToStringPairList : Atom msg -> Maybe (List (String, String))
+atomToStringPairList atom =
+    case atom of
+        ListAtom list ->
+            atomsToStringPairs list []
+        _ ->
+            Nothing
+
+atomsToStringPairs : List (Atom msg) -> List (String, String) -> Maybe (List (String, String))
+atomsToStringPairs atoms res =
+    case atoms of
+        [] ->
+            Just <| List.reverse res
+        head :: tail ->
+            case head of
+                ListAtom list ->
+                    case list of
+                        [a, b] ->
+                            case a of
+                                StringAtom sa ->
+                                    case b of
+                                        StringAtom sb ->
+                                            atomsToStringPairs
+                                                tail ((sa, sb) :: res)
+                                        _ ->
+                                            Nothing
+                                _ ->
+                                    Nothing
+                        _ ->
+                            Nothing
+                _ ->
+                    Nothing
 
 ---
 --- Html Rendering
@@ -943,6 +1041,8 @@ atomToHtmlTemplate atom =
             tagWrap "span" [] <| List.map atomToHtmlTemplate atoms
         TemplateAtom template ->
             template
+        MsgAtom f ->
+            HtmlFuncall f
         _ ->
             HtmlString <| toString atom
 
@@ -998,7 +1098,7 @@ renderHtmlTemplate template dicts =
         HtmlFuncall { function, args } ->
             renderHtmlTemplate (doFuncall function args dicts) dicts
         HtmlRecord { tag, attributes, body } ->
-            case Dict.get tag tagTable of
+            case getTagFunction tag of
                 Nothing ->
                     text <| toString template
                 Just f ->
@@ -1008,6 +1108,18 @@ renderHtmlTemplate template dicts =
                         f attrs b
         HtmlWrapper html ->
             html
+
+getTagFunction : String -> Maybe (List (Attribute msg) -> List (Html msg) -> Html msg)
+getTagFunction tag =
+    case Dict.get tag tagTable of
+        Just f ->
+            Just f
+        Nothing ->
+            case stripNodeMarker tag of
+                Just tag ->
+                    Just <| Html.node tag
+                Nothing ->
+                    Nothing
 
 doFuncall : String -> Atom msg -> TemplateDicts msg -> HtmlTemplate msg
 doFuncall function args dicts =

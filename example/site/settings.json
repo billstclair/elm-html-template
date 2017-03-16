@@ -7,6 +7,8 @@
   "sidebar": ["p",{},
               [["/pageLink","index"],
                ["br",{},[]],
+               ["/pageLink","attributes"],
+               ["br",{},[]],
                ["br",{},[]],
                ["/pageLink","templates"],
                ["br",{},[]],
