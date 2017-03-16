@@ -3,6 +3,7 @@ module Main exposing (..)
 import HtmlTemplate exposing ( Loaders, HtmlTemplate(..), Atom(..), Dicts
                              , TemplateDicts
                              , makeLoaders, insertFunctions, insertMessages
+                             , addPageProcessors
                              , getExtra, getDicts
                              , addOutstandingPagesAndTemplates
                              , loadPage, receivePage, loadTemplate, receiveTemplate
@@ -156,11 +157,18 @@ initialExtra =
     { templateDir = "default"
     }
 
+pageProcessors : List (String, String -> Atom -> Loaders Msg Extra -> (Loaders Msg Extra, Bool))
+pageProcessors =
+    [ ( settingsPageName, installSettings )
+    , ( "", add_page_Property )
+    ]
+
 initialLoaders : Loaders Msg Extra
 initialLoaders =
     makeLoaders fetchTemplate fetchPage initialExtra
     |> insertFunctions functions
     |> insertMessages messages
+    |> addPageProcessors pageProcessors
     |> addOutstandingPagesAndTemplates initialPages initialTemplates
 
 init : ( Model, Cmd Msg)
@@ -174,6 +182,18 @@ init =
         ( model
         , loadOutstandingPageOrTemplate model.loaders
         )
+
+installSettings : String -> Atom -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
+installSettings _ settings loaders =
+    ( setAtoms [(settingsFile, settings)] loaders
+    , True
+    )
+
+add_page_Property : String -> Atom -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
+add_page_Property name page loaders =
+    ( addPageProperties name [("page", StringAtom name)] loaders
+    , False
+    )
 
 type Msg
     = TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
@@ -314,17 +334,7 @@ pageFetchDone name loaders result model =
                     , Cmd.none
                     )
                 Ok loaders2 ->
-                    let loaders3 = if name == settingsPageName then
-                                       case getPage name loaders2 of
-                                           Nothing -> loaders2
-                                           Just settings ->
-                                               setAtoms [(settingsFile,settings)]
-                                                   loaders2
-                                   else
-                                       addPageProperties
-                                           name [("page", StringAtom name)] loaders2
-                    in
-                        continueLoading loaders3 model
+                    continueLoading loaders2 model
 
 view : Model -> Html Msg
 view model =

@@ -1,5 +1,12 @@
-{ "title": "Page 4",
-  "ps" : [ "This is the fourth page.",
-           "I picked a bad day to give up sniffing glue."
-         ]
+{ "title":"Page 4",
+  "ps":["This is the fourth page.",
+        ["I picked ",
+         ["a",{"href":"http://www.imdb.com/title/tt0080339/",
+               "title":"Airplane!"
+              },
+          ["a bad day"]
+         ],
+         " to give up sniffing glue."
+        ]
+       ]
 }

@@ -26,7 +26,7 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , makeLoaders, getExtra, getDicts
                              , getTemplate, getPage, setPages, addPageProperties
                              , getAtom, setAtoms
-                             , insertFunctions, insertMessages
+                             , insertFunctions, insertMessages, addPageProcessors
                              , clearTemplates, clearPages
                              , addOutstandingPagesAndTemplates
                              , loadTemplate, receiveTemplate
@@ -971,6 +971,7 @@ type alias LoadersRecord msg x =
     , pageLoader : String -> Loaders msg x -> Cmd msg
     , pagesToLoad : Set String
     , dicts : TemplateDicts msg
+    , pageProcessors : Dict String (String -> Atom -> Loaders msg x -> (Loaders msg x, Bool))
     , extra : x
     }
 
@@ -982,6 +983,7 @@ makeLoaders templateLoader pageLoader extra =
         , pageLoader = pageLoader
         , pagesToLoad = Set.empty
         , dicts = defaultTemplateDicts
+        , pageProcessors = Dict.empty
         , extra = extra
         }
 
@@ -1005,12 +1007,25 @@ getPage : String -> Loaders msg x -> Maybe Atom
 getPage name (TheLoaders loaders) =
     Dict.get name loaders.dicts.pages
 
+removePage : String -> Loaders msg x -> Loaders msg x
+removePage name (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        pages = Dict.remove name dicts.pages
+    in
+        TheLoaders { loaders | dicts = { dicts | pages = pages } }
+
 setPages : List (String, Atom) -> Loaders msg x -> Loaders msg x
 setPages pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         pages = List.foldl insertPair dicts.pages pairs
     in
         TheLoaders { loaders | dicts = { dicts | pages = pages } }
+
+addPageProcessors : List (String, String -> Atom -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
+addPageProcessors pairs (TheLoaders loaders) =
+    let pp = List.foldl insertPair loaders.pageProcessors pairs
+    in
+        TheLoaders { loaders | pageProcessors = pp }        
 
 addPageProperties : String -> List (String, Atom) -> Loaders msg x -> Loaders msg x
 addPageProperties pageName properties (TheLoaders loaders) =
@@ -1124,8 +1139,32 @@ receivePage name json (TheLoaders loaders) =
                      }
                 loaders2 = addOutstandingPagesAndTemplates
                            pages templates <| TheLoaders lo
+                loaders3 = runPageProcessors name page loaders2
             in
-                Ok loaders2
+                Ok loaders3
+
+runPageProcessors : String -> Atom -> Loaders msg x -> Loaders msg x
+runPageProcessors name page (TheLoaders loaders) =
+    let dict = loaders.pageProcessors
+    in
+        case Dict.get name dict of
+            Just f ->
+                runPageProcessor name page f <| TheLoaders loaders
+            Nothing ->
+                case Dict.get "" dict of
+                    Just f ->
+                        runPageProcessor name page f <| TheLoaders loaders
+                    Nothing ->
+                        TheLoaders loaders
+
+runPageProcessor : String -> Atom -> (String -> Atom -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
+runPageProcessor name page processor loaders =
+    let (res, delete) = processor name page loaders
+    in
+        if delete then
+            removePage name res
+        else
+            res                
 
 addOutstandingPagesAndTemplates : List String -> List String -> Loaders msg x -> Loaders msg x
 addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
