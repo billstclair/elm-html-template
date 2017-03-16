@@ -13,7 +13,7 @@ import HtmlTemplate exposing ( Loaders, HtmlTemplate(..), Atom(..), Dicts
                              , getAtom, setAtoms
                              , clearPages, clearTemplates
                              , atomToHtmlTemplate, maybeLookupAtom, withTheDicts
-                             , renderTemplate
+                             , renderTemplate, renderAtom
                              )
 
 import Html exposing ( Html, Attribute
@@ -89,7 +89,7 @@ templateFilename name =
     name ++ templateFileType
 
 gotoPageFunction : Atom -> Dicts Msg -> Msg
-gotoPageFunction atom dicts =
+gotoPageFunction atom _ =
     case atom of
         StringAtom page ->
             GotoPage page
@@ -102,12 +102,8 @@ messages =
     ]
 
 pageLinkFunction : Atom -> Dicts Msg -> Html Msg
-pageLinkFunction atom dicts =
-    withTheDicts dicts <| pageLinkFunctionInternal atom
-
-pageLinkFunctionInternal : Atom -> TemplateDicts Msg -> Html Msg
-pageLinkFunctionInternal atom dicts =
-    case normalizePageLinkArgs atom dicts of
+pageLinkFunction atom _ =
+    case normalizePageLinkArgs atom of
         Just ( page, title ) ->
             a [ href "#"
               , onClick <| GotoPage page
@@ -116,32 +112,23 @@ pageLinkFunctionInternal atom dicts =
         _ ->
             text <| "Bad link: " ++ (toString atom)
 
-normalizePageLinkArgs : Atom -> TemplateDicts Msg -> Maybe (String, String)
-normalizePageLinkArgs atom dicts =
-    case maybeLookupAtom atom dicts of
-        Nothing -> Nothing
-        Just atom ->
-            case atom of
+normalizePageLinkArgs : Atom -> Maybe (String, String)
+normalizePageLinkArgs atom =
+    case atom of
+        StringAtom page ->
+            Just (page, page)
+        ListAtom [ pageAtom, titleAtom ] ->
+            case pageAtom of
                 StringAtom page ->
-                    Just (page, page)
-                ListAtom [ pageAtom, titleAtom ] ->
-                    case maybeLookupAtom pageAtom dicts of
-                        Nothing -> Nothing
-                        Just pa ->
-                            case pa of
-                                StringAtom page ->
-                                    case maybeLookupAtom titleAtom dicts of
-                                        Nothing -> Nothing
-                                        Just ta ->
-                                            case ta of
-                                                StringAtom title ->
-                                                    Just (page, title)
-                                                _ ->
-                                                    Nothing
-                                _ ->
-                                    Nothing
+                    case titleAtom of
+                        StringAtom title ->
+                            Just (page, title)
+                        _ ->
+                            Nothing
                 _ ->
                     Nothing
+        _ ->
+            Nothing
 
 functions : List (String, Atom -> Dicts Msg -> Html Msg)
 functions =
@@ -308,6 +295,12 @@ continueLoading loaders model =
                           { m |
                             page = Just page
                           , pendingPage = Nothing
+                          , loaders = case m.page of
+                                          Nothing -> loaders
+                                          Just referer ->
+                                              setAtoms
+                                                [("referer", StringAtom referer)]
+                                                loaders
                           }
                 , Cmd.none
                 )
@@ -373,7 +366,7 @@ view model =
                                                 ]
                                                 loaders
                                       in
-                                          renderTemplate tmpl lds
+                                          renderTemplate tmpl <| getDicts lds
         ]
 
 dictsDiv : String -> String -> Loaders Msg Extra -> Html Msg
