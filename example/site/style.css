@@ -33,7 +33,8 @@ table td {
     vertical-align: top;
 }
 td.sidebar {
-    padding-right: 2em;
+    width: 4em;
+    padding-right: 0.5em;
 }
 div.footer {
     margin-top: 1em;
@@ -42,4 +43,5 @@ div.footer {
 iframe {
     width: 100%;
     height: 30em;
+    margin: 0;
 }
