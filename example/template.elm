@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
+import HtmlTemplate exposing ( Loaders, Atom(..), HtmlTemplate(..)
                              , makeLoaders, insertFunctions, insertMessages
                              , addPageProcessors
                              , getExtra, getDicts
@@ -11,7 +11,7 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , getPage, addPageProperties, getTemplate
                              , getAtom, setAtoms
                              , clearPages
-                             , renderTemplate, renderAtom
+                             , renderTemplate
                              )
 
 import Html exposing ( Html, Attribute
@@ -86,7 +86,7 @@ templateFilename : String -> String
 templateFilename name =
     name ++ templateFileType
 
-gotoPageFunction : Atom -> Dicts Msg -> Msg
+gotoPageFunction : Atom Msg -> x -> Msg
 gotoPageFunction atom _ =
     case atom of
         StringAtom page ->
@@ -94,23 +94,24 @@ gotoPageFunction atom _ =
         _ ->
             SetError <| "Can't go to page: " ++ (toString atom)
 
-messages : List (String, Atom -> Dicts Msg -> Msg)
+messages : List (String, Atom Msg -> x -> Msg)
 messages =
     [ ( "gotoPage", gotoPageFunction )
     ]
 
-pageLinkFunction : Atom -> Dicts Msg -> Html Msg
+pageLinkFunction : Atom Msg -> x -> HtmlTemplate Msg
 pageLinkFunction atom _ =
     case normalizePageLinkArgs atom of
         Just ( page, title ) ->
-            a [ href "#"
-              , onClick <| GotoPage page
-              ]
-            [ text title ]
+            HtmlWrapper
+            <| a [ href "#"
+                 , onClick <| GotoPage page
+                 ]
+                [ text title ]
         _ ->
-            text <| "Bad link: " ++ (toString atom)
+            HtmlString <| "Bad link: " ++ (toString atom)
 
-normalizePageLinkArgs : Atom -> Maybe (String, String)
+normalizePageLinkArgs : Atom Msg -> Maybe (String, String)
 normalizePageLinkArgs atom =
     case atom of
         StringAtom page ->
@@ -128,7 +129,7 @@ normalizePageLinkArgs atom =
         _ ->
             Nothing
 
-functions : List (String, Atom -> Dicts Msg -> Html Msg)
+functions : List (String, Atom Msg -> x -> HtmlTemplate Msg)
 functions =
     [ ( "pageLink", pageLinkFunction )
     ]
@@ -142,7 +143,7 @@ initialExtra =
     { templateDir = "default"
     }
 
-pageProcessors : List (String, String -> Atom -> Loaders Msg Extra -> (Loaders Msg Extra, Bool))
+pageProcessors : List (String, String -> Atom Msg -> Loaders Msg Extra -> (Loaders Msg Extra, Bool))
 pageProcessors =
     [ ( settingsPageName, installSettings )
     , ( "", add_page_Property )
@@ -168,13 +169,13 @@ init =
         , loadOutstandingPageOrTemplate model.loaders
         )
 
-installSettings : String -> Atom -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
+installSettings : String -> Atom Msg -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
 installSettings _ settings loaders =
     ( setAtoms [(settingsFile, settings)] loaders
     , True
     )
 
-add_page_Property : String -> Atom -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
+add_page_Property : String -> Atom Msg -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
 add_page_Property name page loaders =
     ( addPageProperties name [("page", StringAtom name)] loaders
     , False
@@ -247,7 +248,7 @@ gotoPage page model =
         , fetchPage page <| clearPages model.loaders
         )
 
-setAtom : String -> Atom -> Model -> Model
+setAtom : String -> Atom Msg -> Model -> Model
 setAtom name atom model =
     { model | loaders = setAtoms [(name, atom)] model.loaders }
 

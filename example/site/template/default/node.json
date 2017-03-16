@@ -3,6 +3,7 @@
      [["/pageLink",["$node.page","$node.title"]]
      ]
    ],
-   [ "/ps", "$node.ps" ]
+   [ "/ps", "$node.ps" ],
+   ["/if",["==","$page","$node.page","?refererlink"]]
   ]
 ]

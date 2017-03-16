@@ -21,7 +21,7 @@ module HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
                              , decodeHtmlTemplate, decodeAtom
                              , loopFunction, psFunction
                              , defaultFunctionsDict, defaultAtomsDict
-                             , maybeLookupAtom, withTheDicts
+                             , maybeLookupAtom
                              , Loaders
                              , makeLoaders, getExtra, getDicts
                              , getTemplate, getPage, setPages, removePage
@@ -57,7 +57,7 @@ import List.Extra as LE
 
 log = Debug.log
 
-type Atom
+type Atom msg
     = StringAtom String
     | IntAtom Int
     | FloatAtom Float
@@ -65,12 +65,12 @@ type Atom
     | LookupAtom String
     | LookupPageAtom String
     | LookupTemplateAtom String
-    | MsgAtom HtmlTemplateFuncall
-    | ListAtom (List Atom)
-    | PListAtom (List (String, Atom))
-    | TemplateAtom HtmlTemplate
+    | MsgAtom (HtmlTemplateFuncall msg)
+    | ListAtom (List (Atom msg))
+    | PListAtom (List (String, Atom msg))
+    | TemplateAtom (HtmlTemplate msg)
 
-atomType : Atom -> String
+atomType : Atom msg -> String
 atomType atom =
     case atom of
         StringAtom _ -> "String"
@@ -85,80 +85,80 @@ atomType atom =
         PListAtom _ -> "PList"
         TemplateAtom _ -> "Template"
 
-isStringAtom : Atom -> Bool
+isStringAtom : Atom msg -> Bool
 isStringAtom atom =
     case atom of
         StringAtom _ -> True
         LookupAtom _ -> True
         _ -> False
 
-isIntAtom : Atom -> Bool
+isIntAtom : Atom msg -> Bool
 isIntAtom atom =
     case atom of
         IntAtom _ -> True
         _ -> False
 
-isFloatAtom : Atom -> Bool
+isFloatAtom : Atom msg -> Bool
 isFloatAtom atom =
     case atom of
         FloatAtom _ -> True
         _ -> False
 
-isBoolAtom : Atom -> Bool
+isBoolAtom : Atom msg -> Bool
 isBoolAtom atom =
     case atom of
         BoolAtom _ -> True
         _ -> False
 
-isLookupAtom : Atom -> Bool
+isLookupAtom : Atom msg -> Bool
 isLookupAtom atom =
     case atom of
         LookupAtom _ -> True
         _ -> False
 
-isLookupPageAtom : Atom -> Bool
+isLookupPageAtom : Atom msg -> Bool
 isLookupPageAtom atom =
     case atom of
         LookupPageAtom _ -> True
         _ -> False
 
-isLookupTemplateAtom : Atom -> Bool
+isLookupTemplateAtom : Atom msg -> Bool
 isLookupTemplateAtom atom =
     case atom of
         LookupTemplateAtom _ -> True
         _ -> False
 
-isMsgAtom : Atom -> Bool
+isMsgAtom : Atom msg -> Bool
 isMsgAtom atom =
     case atom of
         MsgAtom _ -> True
         _ -> False
 
-isListAtom : Atom -> Bool
+isListAtom : Atom msg -> Bool
 isListAtom atom =
     case atom of
         ListAtom _ -> True
         _ -> False
 
-isPListAtom : Atom -> Bool
+isPListAtom : Atom msg -> Bool
 isPListAtom atom =
     case atom of
         PListAtom _ -> True
         _ -> False
 
 type alias TemplateDicts msg =
-    { atoms : Dict String Atom
-    , templates : Dict String HtmlTemplate
-    , pages : Dict String Atom
-    , functions : Dict String (Atom -> Dicts msg -> Html msg)
-    , messages : Dict String (Atom -> Dicts msg -> msg)
+    { atoms : Dict String (Atom msg)
+    , templates : Dict String (HtmlTemplate msg)
+    , pages : Dict String (Atom msg)
+    , functions : Dict String (Atom msg -> Dicts msg -> (HtmlTemplate msg) )
+    , messages : Dict String (Atom msg -> Dicts msg -> msg)
     }
 
 -- Have to tag this for recursive use
 type Dicts msg
     = TheDicts (TemplateDicts msg)
 
-entitiesPlist : Atom
+entitiesPlist : Atom msg
 entitiesPlist =
     PListAtom
     <| List.map (\pair ->
@@ -167,7 +167,7 @@ entitiesPlist =
                          (name, StringAtom val))
         Entities.entities
 
-defaultAtomsDict : Dict String Atom
+defaultAtomsDict : Dict String (Atom msg)
 defaultAtomsDict =
     Dict.fromList [ ( "entities", entitiesPlist )
                   ]                          
@@ -181,11 +181,11 @@ defaultTemplateDicts =
     TemplateDicts
         defaultAtomsDict Dict.empty Dict.empty defaultFunctionsDict Dict.empty
 
-decodeHtmlTemplate : String -> Result String HtmlTemplate
+decodeHtmlTemplate : String -> Result String (HtmlTemplate msg)
 decodeHtmlTemplate json =
     JD.decodeString htmlTemplateDecoder json
 
-decodeAtom : String -> Result String Atom
+decodeAtom : String -> Result String (Atom msg)
 decodeAtom json =
     JD.decodeString atomDecoder json
 
@@ -199,38 +199,39 @@ decodeAtom json =
 --       ]
 -- If <value> begins with a "$", it's a variable lookup.
 -- Maybe later: <value> can also be [ "/<function>" args... ]
-type alias HtmlTemplateRecord =
+type alias HtmlTemplateRecord msg =
     { tag : String
-    , attributes : List (String, Atom)
-    , body : List HtmlTemplate
+    , attributes : List (String, Atom msg)
+    , body : List (HtmlTemplate msg)
     }
 
 -- JSON: [ "/<function name>
 --         , args
 --         , ...
 --       ]
-type alias HtmlTemplateFuncall =
+type alias HtmlTemplateFuncall msg =
     { function : String
-    , args : Atom
+    , args : Atom msg
     }
 
 -- JSON: "?<templateName>"
 --     | <HtmlTemplateFuncall JSON>
 --     | "foo"
 --     | <HtmlTemplateRecord JSON>
-type HtmlTemplate
+type HtmlTemplate msg
     = HtmlTemplateLookup String
     | HtmlAtomLookup String
     | HtmlPageLookup String
-    | HtmlFuncall HtmlTemplateFuncall
+    | HtmlFuncall (HtmlTemplateFuncall msg)
     | HtmlString String
-    | HtmlRecord HtmlTemplateRecord
+    | HtmlRecord (HtmlTemplateRecord msg)
+    | HtmlWrapper (Html msg)
 
-templateReferences : HtmlTemplate -> List String
+templateReferences : HtmlTemplate msg -> List String
 templateReferences template =
     templateReferencesLoop template []
 
-templateReferencesLoop : HtmlTemplate -> List String -> List String
+templateReferencesLoop : HtmlTemplate msg -> List String -> List String
 templateReferencesLoop template res =
     case template of
         HtmlTemplateLookup name ->
@@ -245,11 +246,11 @@ templateReferencesLoop template res =
         _ ->
             res
 
-atomReferences : Atom -> List String
+atomReferences : Atom msg -> List String
 atomReferences atom =
     atomReferencesLoop atom []
 
-atomReferencesLoop : Atom -> List String -> List String
+atomReferencesLoop : Atom msg -> List String -> List String
 atomReferencesLoop atom res =
     case atom of
         LookupAtom name ->
@@ -259,11 +260,11 @@ atomReferencesLoop atom res =
         _ ->
             res
 
-atomPageReferences : Atom -> List String
+atomPageReferences : Atom msg -> List String
 atomPageReferences atom =
     atomPageReferencesLoop atom []
 
-atomPageReferencesLoop : Atom -> List String -> List String
+atomPageReferencesLoop : Atom msg -> List String -> List String
 atomPageReferencesLoop atom res =
     case atom of
         LookupPageAtom name ->
@@ -273,11 +274,11 @@ atomPageReferencesLoop atom res =
         _ ->
             res
 
-atomTemplateReferences : Atom -> List String
+atomTemplateReferences : Atom msg -> List String
 atomTemplateReferences atom =
     atomTemplateReferencesLoop atom []
 
-atomTemplateReferencesLoop : Atom -> List String -> List String
+atomTemplateReferencesLoop : Atom msg -> List String -> List String
 atomTemplateReferencesLoop atom res =
     case atom of
         LookupTemplateAtom name ->
@@ -291,7 +292,7 @@ atomTemplateReferencesLoop atom res =
 --- Template Decoders
 ---
 
-htmlTemplateLookupDecoder : Decoder HtmlTemplate
+htmlTemplateLookupDecoder : Decoder (HtmlTemplate msg)
 htmlTemplateLookupDecoder =
     JD.map HtmlTemplateLookup htmlLookupStringDecoder
 
@@ -333,7 +334,7 @@ ensureLookupString prefix name string =
     else
         JD.fail <| "Does not begin with " ++ name ++ ": " ++ string
 
-htmlAtomLookupDecoder : Decoder HtmlTemplate
+htmlAtomLookupDecoder : Decoder (HtmlTemplate msg)
 htmlAtomLookupDecoder =
     JD.map HtmlAtomLookup htmlAtomLookupStringDecoder
 
@@ -341,7 +342,7 @@ htmlAtomLookupStringDecoder : Decoder String
 htmlAtomLookupStringDecoder =
     JD.andThen (ensureLookupString "$" "a dollar sign")  JD.string
 
-htmlPageLookupDecoder : Decoder HtmlTemplate
+htmlPageLookupDecoder : Decoder (HtmlTemplate msg)
 htmlPageLookupDecoder =
     JD.map HtmlPageLookup htmlPageLookupStringDecoder
 
@@ -349,11 +350,11 @@ htmlPageLookupStringDecoder : Decoder String
 htmlPageLookupStringDecoder =
     JD.andThen (ensureLookupString "@" "an atsign")  JD.string
 
-htmlFuncallDecoder : Decoder HtmlTemplate
+htmlFuncallDecoder : Decoder (HtmlTemplate msg)
 htmlFuncallDecoder =
     JD.map HtmlFuncall <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
 
-htmlTemplateFuncallDecoder : Decoder HtmlTemplateFuncall
+htmlTemplateFuncallDecoder : Decoder (HtmlTemplateFuncall msg)
 htmlTemplateFuncallDecoder =
     JD.map2 HtmlTemplateFuncall
         (JD.index 0 htmlFuncallStringDecoder)
@@ -363,16 +364,16 @@ htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
     JD.andThen (ensureLookupString "/" "a slash") JD.string
     
-htmlStringDecoder : Decoder HtmlTemplate
+htmlStringDecoder : Decoder (HtmlTemplate msg)
 htmlStringDecoder =
     JD.map HtmlString stripQuoteDecoder
 
-htmlRecordDecoder : Decoder HtmlTemplate
+htmlRecordDecoder : Decoder (HtmlTemplate msg)
 htmlRecordDecoder =
     JD.map HtmlRecord
       <| JD.lazy (\_ -> htmlTemplateRecordDecoder)
 
-htmlTemplateDecoder : Decoder HtmlTemplate
+htmlTemplateDecoder : Decoder (HtmlTemplate msg)
 htmlTemplateDecoder =
   JD.oneOf
     [ htmlTemplateLookupDecoder
@@ -383,7 +384,7 @@ htmlTemplateDecoder =
     , JD.lazy (\_ -> htmlRecordDecoder)
     ]
 
-htmlTemplateRecordDecoder : Decoder HtmlTemplateRecord
+htmlTemplateRecordDecoder : Decoder (HtmlTemplateRecord msg)
 htmlTemplateRecordDecoder =
     JD.andThen
         (\pair ->
@@ -396,7 +397,7 @@ htmlTemplateRecordDecoder =
         )
         (JD.lazy (\_ -> htmlTemplateRecordDecoderInternal))
                     
-htmlTemplateRecordDecoderInternal : Decoder (Bool, HtmlTemplateRecord)
+htmlTemplateRecordDecoderInternal : Decoder (Bool, HtmlTemplateRecord msg)
 htmlTemplateRecordDecoderInternal =
     JD.map4 (\good tag attributes body ->
                  ( good
@@ -450,12 +451,12 @@ ensureTag string =
         _ ->
             JD.succeed string    
 
-attributesDecoder : Decoder (List (String, Atom))
+attributesDecoder : Decoder (List (String, Atom msg))
 attributesDecoder =
     JD.andThen ensureAttributes
       <| JD.keyValuePairs <| JD.lazy (\_ -> atomDecoder)
 
-ensureAttributes : List (String, Atom) -> Decoder (List (String, Atom))
+ensureAttributes : List (String, Atom msg) -> Decoder (List (String, Atom msg))
 ensureAttributes keyValuePairs =
     case LE.find (\pair ->
                       let (key, value) = pair
@@ -472,7 +473,7 @@ ensureAttributes keyValuePairs =
                 JD.fail <| "Unknown attribute: " ++ key
 
 -- TODO: Many more attributes.
-attributeTable : Dict String (Atom -> Bool)
+attributeTable : Dict String (Atom msg -> Bool)
 attributeTable =
     Dict.fromList
         [ ("title", isStringAtom)
@@ -484,18 +485,18 @@ attributeTable =
         , ("id", isStringAtom)
         ]
 
-isAttribute : String -> Atom -> Bool
+isAttribute : String -> Atom msg -> Bool
 isAttribute string atom =
     case Dict.get string attributeTable of
         Nothing -> False
         Just validator ->
-            validator atom
+            True
 
 ---
 --- Decode Atoms
 ---
 
-atomDecoder : Decoder Atom
+atomDecoder : Decoder (Atom msg)
 atomDecoder =
     JD.oneOf
         [ JD.map LookupAtom htmlAtomLookupStringDecoder
@@ -511,11 +512,11 @@ atomDecoder =
         , JD.map PListAtom <| JD.lazy (\_ -> atomPListDecoder)
         ]
 
-atomListDecoder : Decoder (List Atom)
+atomListDecoder : Decoder (List (Atom msg))
 atomListDecoder =
     JD.list <| JD.lazy (\_ -> atomDecoder)
 
-atomPListDecoder : Decoder (List (String, Atom))
+atomPListDecoder : Decoder (List (String, Atom msg))
 atomPListDecoder =
     JD.keyValuePairs <| JD.lazy (\_ -> atomDecoder)
 
@@ -540,7 +541,7 @@ type FunctionType
     | PListFunction Int (List FunctionType)
     | NoFunction
 
-atomFunctionType : Atom -> FunctionType
+atomFunctionType : Atom msg -> FunctionType
 atomFunctionType atom =
     case atom of
         StringAtom _ -> StringFunction
@@ -564,7 +565,7 @@ type AttributeFunction msg
     | IntAttributeFunction (Int -> Attribute msg)
     | FloatAttributeFunction (Float -> Attribute msg)
     | BoolAttributeFunction (Bool -> Attribute msg)
-    | AtomsAttributeFunction (List Atom -> Attribute msg)
+    | AtomsAttributeFunction (List (Atom msg) -> Attribute msg)
     | MsgAttributeFunction (msg -> Attribute msg)
 
 typedAttributeTable : Dict String (AttributeFunction msg)
@@ -579,53 +580,73 @@ typedAttributeTable =
         , ( "id", StringAttributeFunction Attributes.id )
         ]
 
-renderAttributeAtom : (String, Atom) -> TemplateDicts msg -> Attribute msg
+renderAttributeAtom : (String, Atom msg) -> TemplateDicts msg -> Attribute msg
 renderAttributeAtom (name, atomOrLookup) dicts =
     case Dict.get name typedAttributeTable of
         Nothing ->
             Attributes.title <| "Unknown attribute: " ++ name
-        Just function ->
-            let atom = case atomOrLookup of
-                           LookupAtom n ->
-                               case lookupAtom n dicts of
-                                   Just a -> a
-                                   Nothing -> atomOrLookup
-                           LookupPageAtom n ->
-                               case lookupPageAtom n dicts of
-                                   Just a -> a
-                                   Nothing -> atomOrLookup
-                           LookupTemplateAtom n ->
-                               case Dict.get n dicts.templates of
-                                   Just t -> TemplateAtom t
-                                   Nothing -> atomOrLookup
-                           _ ->
-                               atomOrLookup
-            in
-                case function of
-                    StringAttributeFunction f ->
-                        case atom of
-                            StringAtom string -> f string
-                            _ -> badTypeTitle name atom
-                    IntAttributeFunction f ->
-                        case atom of
-                            IntAtom int -> f int
-                            _ -> badTypeTitle name atom
-                    FloatAttributeFunction f ->
-                        case atom of
-                            FloatAtom float -> f float
-                            _ -> badTypeTitle name atom
-                    BoolAttributeFunction f ->
-                        case atom of
-                            BoolAtom bool -> f bool
-                            _ -> badTypeTitle name atom
-                    AtomsAttributeFunction f ->
-                        case atom of
-                            ListAtom atoms -> f atoms
-                            _ -> badTypeTitle name atom
-                    MsgAttributeFunction f ->
-                        handleMsgAttribute name f atom dicts
+        Just attributeFunction ->
+            case atomOrLookup of
+                MsgAtom { function, args } ->
+                    case attributeFunction of
+                        MsgAttributeFunction _ ->
+                            renderAttributeAtomInternal
+                                name atomOrLookup attributeFunction dicts
+                        _ ->
+                            case doFuncall function args dicts of
+                                HtmlString s ->
+                                    renderAttributeAtomInternal
+                                        name (StringAtom s) attributeFunction dicts
+                                _ ->
+                                    renderAttributeAtomInternal
+                                        name atomOrLookup attributeFunction dicts
+                _ ->
+                    renderAttributeAtomInternal
+                        name atomOrLookup attributeFunction dicts
 
-handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom -> TemplateDicts msg -> Attribute msg
+renderAttributeAtomInternal : String -> Atom msg -> AttributeFunction msg -> TemplateDicts msg -> Attribute msg
+renderAttributeAtomInternal name atomOrLookup function dicts =
+    let atom = case atomOrLookup of
+                   LookupAtom n ->
+                       case lookupAtom n dicts of
+                           Just a -> a
+                           Nothing -> atomOrLookup
+                   LookupPageAtom n ->
+                       case lookupPageAtom n dicts of
+                           Just a -> a
+                           Nothing -> atomOrLookup
+                   LookupTemplateAtom n ->
+                       case Dict.get n dicts.templates of
+                           Just t -> TemplateAtom t
+                           Nothing -> atomOrLookup
+                   _ ->
+                       atomOrLookup
+    in
+        case function of
+            StringAttributeFunction f ->
+                case atom of
+                    StringAtom string -> f string
+                    _ -> badTypeTitle name atom
+            IntAttributeFunction f ->
+                case atom of
+                    IntAtom int -> f int
+                    _ -> badTypeTitle name atom
+            FloatAttributeFunction f ->
+                case atom of
+                    FloatAtom float -> f float
+                    _ -> badTypeTitle name atom
+            BoolAttributeFunction f ->
+                case atom of
+                    BoolAtom bool -> f bool
+                    _ -> badTypeTitle name atom
+            AtomsAttributeFunction f ->
+                case atom of
+                    ListAtom atoms -> f atoms
+                    _ -> badTypeTitle name atom
+            MsgAttributeFunction f ->
+                handleMsgAttribute name f atom dicts
+
+handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleMsgAttribute attributeName attributeWrapper atom dicts =
     case atom of
         MsgAtom { function, args } ->
@@ -657,7 +678,7 @@ renderHtmlJson templateJson dicts =
         Ok template ->
           renderHtmlTemplate template dicts
 
-atomToString : Atom -> String
+atomToString : Atom msg -> String
 atomToString atom =
     case atom of
         StringAtom string -> string
@@ -676,13 +697,13 @@ plistRefParts string =
             _ ->
                 Nothing
 
-getprop : String -> List (String, Atom) -> Maybe Atom
+getprop : String -> List (String, Atom msg) -> Maybe (Atom msg)
 getprop prop plist =
     case LE.find (\pair -> prop == Tuple.first pair) plist of
         Just (_, res) -> Just res
         Nothing -> Nothing
 
-maybeLookupTemplateAtom : Atom -> TemplateDicts msg -> Maybe HtmlTemplate
+maybeLookupTemplateAtom : Atom msg -> TemplateDicts msg -> Maybe (HtmlTemplate msg)
 maybeLookupTemplateAtom atom dicts =
     case atom of
         LookupTemplateAtom name ->
@@ -692,15 +713,15 @@ maybeLookupTemplateAtom atom dicts =
         _ ->
             Nothing
 
-lookupTemplateAtom : String -> TemplateDicts msg -> Maybe HtmlTemplate
+lookupTemplateAtom : String -> TemplateDicts msg -> Maybe (HtmlTemplate msg)
 lookupTemplateAtom name dicts =
     Dict.get name dicts.templates
 
-lookupPageAtom : String -> TemplateDicts msg -> Maybe Atom
+lookupPageAtom : String -> TemplateDicts msg -> Maybe (Atom msg)
 lookupPageAtom name dicts =
     Dict.get name dicts.pages
 
-maybeLookupAtom : Atom -> TemplateDicts msg -> Maybe Atom
+maybeLookupAtom : Atom msg -> TemplateDicts msg -> Maybe (Atom msg)
 maybeLookupAtom atom dicts =
     case atom of
         LookupAtom name ->
@@ -714,7 +735,7 @@ maybeLookupAtom atom dicts =
         _ ->
             Just atom
 
-lookupAtom : String -> TemplateDicts msg -> Maybe Atom
+lookupAtom : String -> TemplateDicts msg -> Maybe (Atom msg)
 lookupAtom name dicts =
     case Dict.get name dicts.atoms of
         Just atom ->
@@ -739,13 +760,7 @@ br : Html msg
 br =
     Html.br [] []
 
-withTheDicts : Dicts msg -> (TemplateDicts msg -> a) -> a
-withTheDicts theDicts f =
-    case theDicts of
-        TheDicts dicts ->
-            f dicts
-
-loopFunction : Atom -> Dicts msg -> Html msg
+loopFunction : Atom msg -> Dicts msg -> HtmlTemplate msg
 loopFunction args (TheDicts dicts) =
     case args of
         ListAtom atoms ->
@@ -755,14 +770,18 @@ loopFunction args (TheDicts dicts) =
                         Nothing ->
                             loopHelp var values template
                         Just (varName, vals, tmpl) ->
-                            span []
+                            tagWrap "span" []
                                 <| List.map (loopBody varName tmpl dicts) vals
                 _ ->
-                    p [] [ text <| "Malformed args: " ++ (toString args) ]
+                    tagWrap "p" [] [ HtmlString
+                                     <| "Malformed args: " ++ (toString args)
+                                   ]
         _ ->
-            p [] [ text <| "Args not a ListAtom: " ++ (toString args) ]
+            tagWrap "p" [] [ HtmlString
+                             <| "Args not a ListAtom: " ++ (toString args)
+                           ]
 
-loopArgs : Atom -> Atom -> Atom -> TemplateDicts msg -> Maybe (String, List Atom, Atom)
+loopArgs : Atom msg -> Atom msg -> Atom msg -> TemplateDicts msg -> Maybe (String, List (Atom msg), Atom msg)
 loopArgs var vals template dicts =
     case var of
         StringAtom varName ->
@@ -774,7 +793,7 @@ loopArgs var vals template dicts =
         _ ->
             Nothing
 
-loopBody : String -> Atom -> TemplateDicts msg -> Atom -> Html msg
+loopBody : String -> Atom msg -> TemplateDicts msg -> Atom msg -> (HtmlTemplate msg)
 loopBody varName template dicts value =
     let atomsDict = dicts.atoms
     in
@@ -782,24 +801,128 @@ loopBody varName template dicts value =
                      | atoms = Dict.insert varName value atomsDict
                  }
         in
-            renderHtmlAtom template ds
+            HtmlWrapper <| renderHtmlAtom template ds
 
-loopHelp : Atom -> Atom -> Atom -> Html msg
+brTemplate : HtmlTemplate msg
+brTemplate =
+    tagWrap "br" [] []
+
+loopHelp : Atom msg -> Atom msg -> Atom msg -> HtmlTemplate msg
 loopHelp var values template =
-    p []
-        [ text <| "Loop for " ++ (toString var)
-        , br
-        , text <| " in " ++ (toString values)
-        , br
-        , text <| " do: " ++ (toString template)
+    tagWrap "p" []
+        [ HtmlString <| "Loop for " ++ (toString var)
+        , brTemplate
+        , HtmlString <| " in " ++ (toString values)
+        , brTemplate
+        , HtmlString <| " do: " ++ (toString template)
         ]
         
-tagWrap : String -> List (String, Atom) -> List HtmlTemplate -> HtmlTemplate
+ifOperatorDict : Dict String (Atom msg -> Atom msg -> Bool)
+ifOperatorDict =
+    Dict.fromList
+        [ ( "==", atomsEqual )
+        , ( "/=", atomsNotEqual )
+        , ( "<", atomLessp )
+        , ( ">", atomGreaterp )
+        , ( "<=", atomLessEqualp )
+        , ( ">=", atomGreaterEqualp )
+        ]
+
+atomsEqual : Atom msg -> Atom msg -> Bool
+atomsEqual a1 a2 =
+    a1 == a2
+
+atomsNotEqual : Atom msg -> Atom msg -> Bool
+atomsNotEqual a1 a2 =
+    not <| atomsEqual a1 a2
+
+compareAtoms : Atom msg -> Atom msg -> Maybe Order
+compareAtoms a1 a2 =
+    case a1 of
+        StringAtom s1 ->
+            case a2 of
+                StringAtom s2 ->
+                    Just <| compare s1 s2
+                _ ->
+                    Nothing
+        IntAtom i1 ->
+            case a2 of
+                IntAtom i2 ->
+                    Just <| compare i1 i2
+                _ ->
+                    Nothing
+        FloatAtom f1 ->
+            case a2 of
+                FloatAtom f2 ->
+                    Just <| compare f1 f2
+                _ ->
+                    Nothing
+        _ ->
+            Nothing
+
+atomLessp: Atom msg -> Atom msg -> Bool
+atomLessp a1 a2 =
+    case compareAtoms a1 a2 of
+        Just LT -> True
+        _ -> False
+
+atomGreaterp: Atom msg -> Atom msg -> Bool
+atomGreaterp a1 a2 =
+    case compareAtoms a1 a2 of
+        Just GT -> True
+        _ -> False
+
+atomLessEqualp: Atom msg -> Atom msg -> Bool
+atomLessEqualp a1 a2 =
+    case compareAtoms a1 a2 of
+        Just LT -> True
+        Just EQ -> True
+        _ -> False
+
+atomGreaterEqualp: Atom msg -> Atom msg -> Bool
+atomGreaterEqualp a1 a2 =
+    case compareAtoms a1 a2 of
+        Just GT -> True
+        Just EQ -> True
+        _ -> False
+
+ifFunction : Atom msg -> Dicts msg -> HtmlTemplate msg
+ifFunction args (TheDicts dicts) =
+    case args of
+        ListAtom [ operator, c1, c2, body ] ->
+            case operator of
+                StringAtom op ->
+                    case Dict.get op ifOperatorDict of
+                        Nothing ->
+                            ifHelp args
+                        Just f ->
+                            if f c1 c2 then
+                                HtmlWrapper <| renderHtmlAtom body dicts
+                            else
+                                HtmlString ""
+                _ ->
+                    ifHelp args
+        _ ->
+            ifHelp args
+
+ifHelp : Atom msg -> HtmlTemplate msg
+ifHelp args =
+    HtmlString <| "[/if," ++ (toString args) ++ "]"
+
+concatFunction : Atom msg -> x -> HtmlTemplate msg
+concatFunction atom _ =
+    case atom of
+        ListAtom list ->
+            HtmlString <| String.concat <| List.map atomToString list
+        _ ->
+            HtmlString <| atomToString atom
+
+tagWrap : String -> List (String, Atom msg) -> List (HtmlTemplate msg) -> HtmlTemplate msg
 tagWrap tag attributes body =
     HtmlRecord
     <| HtmlTemplateRecord tag attributes body
 
-atomToHtmlTemplate : Atom -> HtmlTemplate
+atomToHtmlTemplate : Atom msg -> HtmlTemplate msg
 atomToHtmlTemplate atom =
     case atom of
         StringAtom string ->
@@ -823,7 +946,7 @@ atomToHtmlTemplate atom =
         _ ->
             HtmlString <| toString atom
 
-atomToBody : Atom -> (List HtmlTemplate -> HtmlTemplate) -> List HtmlTemplate
+atomToBody : Atom msg -> (List (HtmlTemplate msg) -> HtmlTemplate msg) -> List (HtmlTemplate msg)
 atomToBody atom wrapper =
     case atom of
         ListAtom atoms ->
@@ -831,23 +954,25 @@ atomToBody atom wrapper =
         _ ->
             [ wrapper [ atomToHtmlTemplate atom ] ]
 
-psFunction : Atom -> Dicts msg -> Html msg
+psFunction : Atom msg -> Dicts msg -> HtmlTemplate msg
 psFunction atom (TheDicts dicts) =
     let body = atomToBody atom (tagWrap "p" [])
     in
-        renderHtmlTemplate (tagWrap "div" [] body) dicts
+        tagWrap "div" [] body
 
-defaultFunctionsDict : Dict String (Atom -> Dicts msg -> Html msg)
+defaultFunctionsDict : Dict String (Atom msg -> Dicts msg -> HtmlTemplate msg)
 defaultFunctionsDict =
     Dict.fromList [ ( "loop", loopFunction)
                   , ( "ps", psFunction )
+                  , ( "if", ifFunction )
+                  , ( "concat", concatFunction )
                   ]
 
-renderTemplate : HtmlTemplate -> Dicts msg -> Html msg
+renderTemplate : HtmlTemplate msg -> Dicts msg -> Html msg
 renderTemplate template (TheDicts dicts) =
     renderHtmlTemplate template dicts
 
-renderHtmlTemplate : HtmlTemplate -> TemplateDicts msg -> Html msg
+renderHtmlTemplate : HtmlTemplate msg -> TemplateDicts msg -> Html msg
 renderHtmlTemplate template dicts =
     case template of
         HtmlString string ->
@@ -871,11 +996,7 @@ renderHtmlTemplate template dicts =
                 Nothing ->
                     text <| toString template
         HtmlFuncall { function, args } ->
-            case Dict.get function dicts.functions of
-                Nothing ->
-                    text <| toString template
-                Just f ->
-                    f (processFuncallArgs args dicts) <| TheDicts dicts
+            renderHtmlTemplate (doFuncall function args dicts) dicts
         HtmlRecord { tag, attributes, body } ->
             case Dict.get tag tagTable of
                 Nothing ->
@@ -885,9 +1006,19 @@ renderHtmlTemplate template dicts =
                         b = List.map (\t -> renderHtmlTemplate t dicts) body
                     in
                         f attrs b
+        HtmlWrapper html ->
+            html
+
+doFuncall : String -> Atom msg -> TemplateDicts msg -> HtmlTemplate msg
+doFuncall function args dicts =
+    case Dict.get function dicts.functions of
+        Nothing ->
+            HtmlString <| "funcall " ++ function ++ (toString args)
+        Just f ->
+            f (processFuncallArgs args dicts) <| TheDicts dicts
 
 -- Should handle reference loops here
-processFuncallArgs : Atom -> TemplateDicts msg -> Atom
+processFuncallArgs : Atom msg -> TemplateDicts msg -> Atom msg
 processFuncallArgs atom dicts =
     case maybeLookupAtom atom dicts of
         Nothing ->
@@ -899,20 +1030,20 @@ processFuncallArgs atom dicts =
                 _ ->
                     atom
 
-renderHtmlAttributes : List (String, Atom) -> TemplateDicts msg -> List (Attribute msg)
+renderHtmlAttributes : List (String, Atom msg) -> TemplateDicts msg -> List (Attribute msg)
 renderHtmlAttributes attributes dicts =
     List.map (\pair -> renderAttributeAtom pair dicts) attributes
 
-badTypeTitle : String -> Atom -> Attribute msg
+badTypeTitle : String -> Atom msg -> Attribute msg
 badTypeTitle name atom =
     Attributes.title
         <| "Bad arg for attribute: " ++ name ++ ": " ++ (toString atom)
 
-renderAtom : Atom -> Dicts msg -> Html msg
+renderAtom : Atom msg -> Dicts msg -> Html msg
 renderAtom atom (TheDicts dicts) =
     renderHtmlAtom atom dicts
 
-renderHtmlAtom : Atom -> TemplateDicts msg -> Html msg
+renderHtmlAtom : Atom msg -> TemplateDicts msg -> Html msg
 renderHtmlAtom atom dicts =
     case maybeLookupAtom atom dicts of
         Nothing ->
@@ -970,7 +1101,7 @@ type alias LoadersRecord msg x =
     , pageLoader : String -> Loaders msg x -> Cmd msg
     , pagesToLoad : Set String
     , dicts : TemplateDicts msg
-    , pageProcessors : Dict String (String -> Atom -> Loaders msg x -> (Loaders msg x, Bool))
+    , pageProcessors : Dict String (String -> Atom msg -> Loaders msg x -> (Loaders msg x, Bool))
     , extra : x
     }
 
@@ -998,11 +1129,11 @@ getDicts : Loaders msg x -> Dicts msg
 getDicts (TheLoaders loaders) =
     TheDicts loaders.dicts
 
-getTemplate : String -> Loaders msg x -> Maybe HtmlTemplate
+getTemplate : String -> Loaders msg x -> Maybe (HtmlTemplate msg)
 getTemplate name (TheLoaders loaders) =
     Dict.get name loaders.dicts.templates
 
-getPage : String -> Loaders msg x -> Maybe Atom
+getPage : String -> Loaders msg x -> Maybe (Atom msg)
 getPage name (TheLoaders loaders) =
     Dict.get name loaders.dicts.pages
 
@@ -1013,20 +1144,20 @@ removePage name (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | pages = pages } }
 
-setPages : List (String, Atom) -> Loaders msg x -> Loaders msg x
+setPages : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 setPages pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         pages = List.foldl insertPair dicts.pages pairs
     in
         TheLoaders { loaders | dicts = { dicts | pages = pages } }
 
-addPageProcessors : List (String, String -> Atom -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
+addPageProcessors : List (String, String -> Atom msg -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
 addPageProcessors pairs (TheLoaders loaders) =
     let pp = List.foldl insertPair loaders.pageProcessors pairs
     in
         TheLoaders { loaders | pageProcessors = pp }        
 
-addPageProperties : String -> List (String, Atom) -> Loaders msg x -> Loaders msg x
+addPageProperties : String -> List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 addPageProperties pageName properties (TheLoaders loaders) =
     let dicts = loaders.dicts
         pages = dicts.pages
@@ -1048,11 +1179,11 @@ addPageProperties pageName properties (TheLoaders loaders) =
                     _ ->
                         TheLoaders loaders
 
-getAtom : String -> Loaders msg x -> Maybe Atom
+getAtom : String -> Loaders msg x -> Maybe (Atom msg)
 getAtom name (TheLoaders loaders) =
     Dict.get name loaders.dicts.atoms
 
-setAtoms : List (String, Atom) -> Loaders msg x -> Loaders msg x
+setAtoms : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 setAtoms pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         atoms = List.foldl insertPair dicts.atoms pairs
@@ -1063,7 +1194,7 @@ insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
 insertPair (k, v) dict =
     Dict.insert k v dict
 
-insertFunctions : List (String, (Atom -> Dicts msg -> Html msg)) -> Loaders msg x -> Loaders msg x
+insertFunctions : List (String, (Atom msg -> Dicts msg -> HtmlTemplate msg)) -> Loaders msg x -> Loaders msg x
 insertFunctions pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         functions = List.foldl insertPair dicts.functions pairs
@@ -1071,7 +1202,7 @@ insertFunctions pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | functions = functions } }
 
-insertMessages : List (String, (Atom -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
+insertMessages : List (String, (Atom msg -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
 insertMessages pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         messages = List.foldl insertPair dicts.messages pairs
@@ -1142,7 +1273,7 @@ receivePage name json (TheLoaders loaders) =
             in
                 Ok loaders3
 
-runPageProcessors : String -> Atom -> Loaders msg x -> Loaders msg x
+runPageProcessors : String -> Atom msg -> Loaders msg x -> Loaders msg x
 runPageProcessors name page (TheLoaders loaders) =
     let dict = loaders.pageProcessors
     in
@@ -1156,7 +1287,7 @@ runPageProcessors name page (TheLoaders loaders) =
                     Nothing ->
                         TheLoaders loaders
 
-runPageProcessor : String -> Atom -> (String -> Atom -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
+runPageProcessor : String -> Atom msg -> (String -> Atom msg -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
 runPageProcessor name page processor loaders =
     let (res, delete) = processor name page loaders
     in
