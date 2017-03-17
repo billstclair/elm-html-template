@@ -1,5 +1,10 @@
 {"title":"About",
- "ps":["This site is an example of using the HtmlTemplate module to create a web site.",
+ "ps":[["This site is an example of using the ",
+        ["a",{"href":"http://package.elm-lang.org/packages/billstclair/elm-html-tempate/latest"},
+         ["HtmlTemplate module"]
+         ],
+        " to create a web site."
+       ],
        "The \"index\" link in the sidebar goes to the index page, as does clicking on the site name at the top of the page.",
        "The \"attributes\" link in the sidebar goes to a page for testing non-standard attributes.",
        " The \"templates\", \"pages\", \"settings\", and \"stylesheets\" links in the sidebar can be used to inspect the JSON and CSS that define the site.",

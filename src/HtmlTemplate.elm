@@ -66,7 +66,7 @@ type Atom msg
     | LookupAtom String
     | LookupPageAtom String
     | LookupTemplateAtom String
-    | MsgAtom (HtmlTemplateFuncall msg)
+    | FuncallAtom (HtmlTemplateFuncall msg)
     | ListAtom (List (Atom msg))
     | PListAtom (List (String, Atom msg))
     | RecordAtom (HtmlTemplateRecord msg)
@@ -152,7 +152,7 @@ templateReferencesLoop template res =
             List.foldl templateReferencesLoop res list
         RecordAtom { body } ->
             List.foldl templateReferencesLoop res body
-        MsgAtom { args } ->
+        FuncallAtom { args } ->
             templateReferences args
         _ ->
             res
@@ -173,7 +173,7 @@ atomReferencesLoop atom res =
             List.foldl atomReferencesLoop res atoms
         RecordAtom { body } ->
             List.foldl atomReferencesLoop res body
-        -- Can't go into a MsgAtom, as it may bind some variables
+        -- Can't go into a FuncallAtom, as it may bind some variables
         _ ->
             res
 
@@ -193,7 +193,7 @@ pageReferencesLoop atom res =
             List.foldl pageReferencesLoop res atoms
         RecordAtom { body } ->
             List.foldl pageReferencesLoop res body
-        MsgAtom { args } ->
+        FuncallAtom { args } ->
             pageReferences args
         _ ->
             res
@@ -377,7 +377,7 @@ atomDecoder =
         [ JD.map LookupAtom htmlAtomLookupStringDecoder
         , JD.map LookupPageAtom htmlPageLookupStringDecoder
         , JD.map LookupTemplateAtom htmlLookupStringDecoder
-        , JD.map MsgAtom <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
+        , JD.map FuncallAtom <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
         , JD.map StringAtom stripQuoteDecoder
         , JD.map IntAtom JD.int
         , JD.map FloatAtom JD.float
@@ -437,7 +437,7 @@ renderAttributeAtom (name, atomOrLookup) dicts =
             -- This abomination makes simple function calls work,
             -- e.g. "/concat". Needs generalization.
             case atomOrLookup of
-                MsgAtom { function, args } ->
+                FuncallAtom { function, args } ->
                     case attributeFunction of
                         MsgAttributeFunction _ ->
                             renderAttributeAtomInternal
@@ -493,7 +493,7 @@ renderAttributeAtomInternal name atomOrLookup function dicts =
 handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleMsgAttribute attributeName attributeWrapper atom dicts =
     case atom of
-        MsgAtom { function, args } ->
+        FuncallAtom { function, args } ->
             case Dict.get function dicts.messages of
                 Nothing ->
                     Attributes.title
@@ -835,7 +835,7 @@ atomToBody : Atom msg -> (List (Atom msg) -> Atom msg) -> List (Atom msg)
 atomToBody atom wrapper =
     case atom of
         ListAtom atoms ->
-            List.map (\a -> wrapper <| [ a ]) atoms
+            List.map (\a -> wrapper [ a ]) atoms
         _ ->
             [ wrapper [ atom ] ]
 
@@ -888,7 +888,7 @@ renderHtmlAtom template dicts =
                     renderHtmlAtom atom dicts
                 Nothing ->
                     text <| toBracketedString template
-        MsgAtom { function, args } ->
+        FuncallAtom { function, args } ->
             renderHtmlAtom (doFuncall function args dicts) dicts
         RecordAtom { tag, attributes, body } ->
             case getTagFunction tag of

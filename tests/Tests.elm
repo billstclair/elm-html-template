@@ -4,9 +4,7 @@ import Test exposing (..)
 import Expect exposing ( Expectation )
 import List
 
-import HtmlTemplate exposing ( Atom(..), HtmlTemplate(..)
-                             , HtmlTemplateFuncall, HtmlTemplateRecord
-                             , decodeHtmlTemplate, decodeAtom
+import HtmlTemplate exposing ( Atom(..), decodeAtom
                              )
 
 log = Debug.log
@@ -45,7 +43,7 @@ expectResult sb was =
                 Ok sbv ->
                     Expect.equal sbv wasv
 
-atomTest : ( String, Result String Atom ) -> Test
+atomTest : ( String, Result String (Atom msg) ) -> Test
 atomTest ( json, expected ) =
     test ("atomTest \"" ++ json ++ "\"")
         (\_ ->
@@ -53,7 +51,7 @@ atomTest ( json, expected ) =
                <| decodeAtom (maybeLog "atomJson" json)
         )
 
-atomData : List ( String, Result String Atom )
+atomData : List ( String, Result String (Atom msg) )
 atomData =
     [ ( "\"foo\""
       , Ok <| StringAtom "foo"
@@ -77,10 +75,10 @@ atomData =
       , Ok <| LookupTemplateAtom "foo"
       )
     , ( "[\"/gotoPage\",[\"home\"]]"
-      , Ok <| MsgAtom
-            <| HtmlTemplateFuncall
-                "gotoPage"
-                <| ListAtom [ StringAtom "home" ]
+      , Ok <| FuncallAtom
+            { function = "gotoPage"
+            , args = ListAtom [ StringAtom "home" ]
+            }
       )
     , ( "[\"foo\",\"bar\"]"
       , Ok <| ListAtom [ StringAtom "foo", StringAtom "bar"]
@@ -111,68 +109,65 @@ atomData =
       )
     , ( "[\"a\",{\"href\":\"http://example.com/\"},[\"example.com\"]]"
       , Ok
-            <| TemplateAtom
-            <| HtmlRecord
+            <| RecordAtom
               { tag = "a"
               , attributes = [("href", StringAtom "http://example.com/")]
-              , body = [ HtmlString "example.com" ]
+              , body = [ StringAtom "example.com" ]
               }
       )
     ]
 
-templateTest : ( String, Result String HtmlTemplate ) -> Test
+templateTest : ( String, Result String (Atom msg) ) -> Test
 templateTest ( json, expected ) =
     test ("templateTest \"" ++ json ++ "\"")
         (\_ ->
              expectResult expected
-               <| decodeHtmlTemplate (maybeLog "htmlJson" json)
+               <| decodeAtom (maybeLog "htmlJson" json)
         )
 
-templateData : List ( String, Result String HtmlTemplate )
+templateData : List ( String, Result String (Atom msg) )
 templateData =
     [ ( "\"foo\""
-      , Ok <| HtmlString "foo"
+      , Ok <| StringAtom "foo"
       )
     , ( "\"?that\""
-      , Ok <| HtmlTemplateLookup "that"
+      , Ok <| LookupTemplateAtom "that"
       )
     , ( "\"$atom\""
-      , Ok <| HtmlAtomLookup "atom"
+      , Ok <| LookupAtom "atom"
       )
     , ( "[\"/loop\",[\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]]"
       , Ok
-            <| HtmlFuncall
-                <| HtmlTemplateFuncall
-                    "loop"
-                    <| ListAtom
-                        [ LookupAtom "p"
-                        , LookupAtom "ps"
-                        , TemplateAtom
-                            <| HtmlRecord
-                                { tag = "p"
-                                , attributes = []
-                                , body = [ HtmlAtomLookup "p" ]
-                                }
-                        ]
+            <| FuncallAtom
+                { function = "loop"
+                , args = ListAtom [ LookupAtom "p"
+                                  , LookupAtom "ps"
+                                  , RecordAtom
+                                        { tag = "p"
+                                        , attributes = []
+                                        , body = [ LookupAtom "p" ]
+                                        }
+                                  ]
+                }
       )
     , ( "[\"a\",{\"title\": \"foo\"},[\"bar\"]]"
-      , Ok <| HtmlRecord
+      , Ok <| RecordAtom
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
-                , body = [ HtmlString "bar" ]
+                , body = [ StringAtom "bar" ]
                 }
       )
     , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" \", \"$frob\"]]"
-      , Ok <| HtmlRecord
+      , Ok <| RecordAtom
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
-                , body = [ HtmlRecord
+                , body = [ RecordAtom
                              { tag = "i"
                              , attributes = []
-                             , body = [ HtmlString "bar" ]
+                             , body = [ StringAtom "bar" ]
                              }
-                         , HtmlString " "
-                         , HtmlAtomLookup "frob"
+                         , StringAtom " "
+                         , LookupAtom "frob"
                          ]
                 }
       )
