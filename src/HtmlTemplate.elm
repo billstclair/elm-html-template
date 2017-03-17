@@ -35,7 +35,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , templateReferences, atomReferences, pageReferences
                              , maybeLookupAtom, maybeLookupTemplateAtom
                              , lookupTemplateAtom, lookupPageAtom, lookupAtom
-                             , atomToBody
+                             , atomToBody, installBindings
                              )
 
 import Entities
@@ -112,7 +112,7 @@ emptyTemplateDicts =
 
 defaultTemplateDicts : TemplateDicts msg
 defaultTemplateDicts =
-    { atoms = Dict.empty
+    { atoms = defaultAtomsDict
     , templates = Dict.empty
     , pages = Dict.empty
     , functions = defaultFunctionsDict
@@ -709,6 +709,87 @@ br : Html msg
 br =
     Html.br [] []
 
+installBindings : Atom msg -> Dicts msg -> Atom msg
+installBindings atom (TheDicts dicts) =
+    installBindingsInternal dicts atom
+
+installBindingsInternal : TemplateDicts msg -> Atom msg -> Atom msg
+installBindingsInternal dicts atom =
+    case atom of
+        LookupAtom name ->
+            case lookupAtom name dicts of
+                Nothing ->
+                    atom
+                Just value ->
+                    installBindingsInternal dicts value
+        LookupPageAtom name ->
+            case lookupPageAtom name dicts of
+                Nothing ->
+                    atom
+                Just value ->
+                    installBindingsInternal dicts value
+        LookupTemplateAtom name ->
+            case lookupTemplateAtom name dicts of
+                Nothing ->
+                    atom
+                Just value ->
+                    installBindingsInternal dicts value
+        FuncallAtom { function, args } ->
+            installBindingsInternal dicts <| doFuncall function args dicts
+        ListAtom list ->
+            ListAtom
+            <| List.map (installBindingsInternal dicts) list
+        PListAtom plist ->
+            PListAtom
+            <| List.map (\pair ->
+                             let (name, value) = pair
+                             in
+                                 (name, installBindingsInternal dicts value)
+                        )
+                plist
+        RecordAtom { tag, attributes, body } ->
+            RecordAtom
+            <| { tag = tag
+               , attributes = List.map (installAttributeBindings dicts) attributes
+               , body = List.map (installBindingsInternal dicts) body
+               }
+        _ ->
+            atom
+
+isMsgAttributeFunction : AttributeFunction msg -> Bool
+isMsgAttributeFunction function =
+    case function of
+        MsgAttributeFunction _ -> True
+        MsgAttributeStringLookupFunction _ -> True
+        MsgAttributeBoolLookupFunction _ -> True
+        _ -> False
+
+installAttributeBindings : TemplateDicts msg -> (String, Atom msg) -> (String, Atom msg)
+installAttributeBindings dicts (name, atom) =
+    ( name
+    , case atom of
+          FuncallAtom { function, args } ->
+              let isMsgFuncall = case getAttributeFunction name of
+                                     Nothing -> False
+                                     Just f ->
+                                         isMsgAttributeFunction f
+              in
+                  if isMsgFuncall then
+                      FuncallAtom
+                      { function = function
+                      , args = installBindingsInternal dicts args
+                      }
+                  else
+                      installBindingsInternal dicts atom
+          _ ->
+              installBindingsInternal dicts atom
+    )
+
+-- If you give a non-list as the loopFunction values, should you get
+-- a non-list back? Probably.
+-- Still need a letFunction, to bind multiple vars to vals.
+-- Plus some arithmetic.
+
 loopFunction : Atom msg -> Dicts msg -> Atom msg
 loopFunction args (TheDicts dicts) =
     case args of
@@ -762,13 +843,12 @@ loopBody : String -> Atom msg -> TemplateDicts msg -> Atom msg -> (Atom msg)
 loopBody varName template dicts value =
     let atomsDict = dicts.atoms
     in
-        let ds = { dicts
-                     | atoms = Dict.insert varName value atomsDict
+        let val = installBindingsInternal dicts value
+            ds = { dicts
+                     | atoms = Dict.insert varName val atomsDict
                  }
         in
-            -- This should just descend and do funcalls.
-            -- Then it could return a regular Atom instead of rendering.
-            HtmlAtom <| renderHtmlAtom template ds
+            installBindingsInternal ds template
 
 brTemplate : Atom msg
 brTemplate =
