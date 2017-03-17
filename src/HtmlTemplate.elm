@@ -30,10 +30,11 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , defaultFunctionsDict, defaultAtomsDict
                              , toBracketedString
 
-                             , templateReferences, atomReferences, pageReferences
-                             , atomToHtmlTemplate, atomToBody
                              , decodeAtom, atomDecoder
-                             , maybeLookupAtom
+                             , templateReferences, atomReferences, pageReferences
+                             , maybeLookupAtom, maybeLookupTemplateAtom
+                             , lookupTemplateAtom, lookupPageAtom, lookupAtom
+                             , atomToBody
                              )
 
 import Entities
@@ -830,23 +831,13 @@ toBracketedString : a -> String
 toBracketedString thing =
     "<" ++ (toString thing) ++ ">"
 
-atomToHtmlTemplate : Atom msg -> Atom msg
-atomToHtmlTemplate atom =
-    case atom of
-        ListAtom atoms ->
-            tagWrap "span" [] <| List.map atomToHtmlTemplate atoms
-        PListAtom _ ->
-            StringAtom <| toBracketedString atom
-        _ ->
-            atom
-
 atomToBody : Atom msg -> (List (Atom msg) -> Atom msg) -> List (Atom msg)
 atomToBody atom wrapper =
     case atom of
         ListAtom atoms ->
-            List.map (\a -> wrapper <| [ atomToHtmlTemplate a ]) atoms
+            List.map (\a -> wrapper <| [ a ]) atoms
         _ ->
-            [ wrapper [ atomToHtmlTemplate atom ] ]
+            [ wrapper [ atom ] ]
 
 psFunction : Atom msg -> Dicts msg -> Atom msg
 psFunction atom (TheDicts dicts) =
