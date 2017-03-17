@@ -290,130 +290,6 @@ htmlTemplateRecordDecoderInternal =
         (JD.index 1 <| JD.lazy (\_ -> attributesDecoder))
         (JD.index 2 <| JD.list <| JD.lazy (\_ -> atomDecoder))
 
-tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
-tagTable =
-    -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html
-    Dict.fromList
-        [
-        -- Headers
-          ("h1", Html.h1)
-        , ("h2", Html.h2)
-        , ("h3", Html.h3)
-        , ("h4", Html.h4)
-        , ("h5", Html.h5)
-        , ("h6", Html.h6)
-        -- Grouping Content
-        , ("div", Html.div)
-        , ("p", Html.p)
-        , ("hr", Html.hr)
-        , ("pre", Html.pre)
-        , ("blockquote", Html.blockquote)
-        -- Text
-        , ("span", Html.span)
-        , ("a", Html.a)
-        , ("code", Html.code)
-        , ("em", Html.em)
-        , ("strong", Html.strong)
-        , ("i", Html.i)
-        , ("b", Html.b)
-        , ("u", Html.u)
-        , ("sub", Html.sub)
-        , ("sup", Html.sup)
-        , ("br", Html.br)
-        -- Lists
-        , ("ol", Html.ol)
-        , ("ul", Html.ul)
-        , ("li", Html.li)
-        , ("dl", Html.dl)
-        , ("dt", Html.dt)
-        , ("dd", Html.dd)
-        -- Embedded Content
-        , ("img", Html.img)
-        , ("iframe", Html.iframe)
-        , ("canvas", Html.canvas)
-        , ("math", Html.math)
-        -- Inputs
-        , ("form", Html.form)
-        , ("input", Html.input)
-        , ("textarea", Html.textarea)
-        , ("button", Html.button)
-        , ("select", Html.select)
-        , ("option", Html.option)
-        -- Sections
-        , ("section", Html.section)
-        , ("nav", Html.nav)
-        , ("article", Html.article)
-        , ("aside", Html.aside)
-        , ("header", Html.header)
-        , ("footer", Html.footer)
-        , ("address", Html.address)
-        , ("main", Html.main_)
-        , ("main_", Html.main_)
-        , ("body", Html.body)
-        -- Figures
-        , ("figure", Html.figure)
-        , ("figcaption", Html.figcaption)
-        -- Tables
-        , ("table", Html.table)
-        , ("caption", Html.caption)
-        , ("colgroup", Html.colgroup)
-        , ("col", Html.col)
-        , ("tbody", Html.tbody)
-        , ("thead", Html.thead)
-        , ("tfoot", Html.tfoot)
-        , ("tr", Html.tr)
-        , ("td", Html.td)
-        , ("th", Html.th)
-        -- Less Common Elements
-        , ("fieldset", Html.fieldset)
-        , ("legend", Html.legend)
-        , ("label", Html.label)
-        , ("datalist", Html.datalist)
-        , ("optgroup", Html.optgroup)
-        , ("keygen", Html.keygen)
-        , ("output", Html.output)
-        , ("progress", Html.progress)
-        , ("meter", Html.meter)
-        -- Audio and Video
-        , ("audio", Html.audio)
-        , ("video", Html.video)
-        , ("source", Html.source)
-        , ("track", Html.track)
-        -- Embedded Objects
-        , ("embed", Html.embed)
-        , ("object", Html.object)
-        , ("param", Html.param)
-        -- Text Edits
-        , ("ins", Html.ins)
-        , ("del", Html.del)
-        -- Semantic Text
-        , ("small", Html.small)
-        , ("cite", Html.cite)
-        , ("dfn", Html.dfn)
-        , ("abbr", Html.abbr)
-        , ("time", Html.time)
-        , ("var", Html.var)
-        , ("samp", Html.samp)
-        , ("kbd", Html.kbd)
-        , ("s", Html.s)
-        , ("q", Html.q)
-        -- Less Common Text Tags
-        , ("mark", Html.mark)
-        , ("ruby", Html.ruby)
-        , ("rt", Html.rt)
-        , ("rp", Html.rp)
-        , ("bdi", Html.bdi)
-        , ("bdo", Html.bdo)
-        , ("wbr", Html.wbr)
-        -- Interactive Elements
-        , ("details", Html.details)
-        , ("summary", Html.summary)
-        , ("menuitem", Html.menuitem)
-        , ("menu", Html.menu)
-        -- Not in Html module
-        , ("style", Html.node "style")
-        ]
-
 nodeMarker : String
 nodeMarker =
     "node:"
@@ -461,152 +337,6 @@ ensureAttributes keyValuePairs =
             let (key, _) = badPair
             in
                 JD.fail <| "Unknown attribute: " ++ key
-
--- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html-Attributes
-attributeTable : Dict String (AttributeFunction msg)
-attributeTable =
-    Dict.fromList
-        [
-         -- Primitives
-         -- use "attribute:<name>" for missing string attributes
-          ("style", StringPairListAttributeFunction Attributes.style)
-         -- Super Common Attributes
-        , ("class", StringAttributeFunction Attributes.class)
-            -- classlist not implemented
-        , ("id", StringAttributeFunction Attributes.id)
-        , ("title", StringAttributeFunction Attributes.title)
-        , ("hidden", BoolAttributeFunction Attributes.hidden)
-        -- Inputs
-        , ("type", StringAttributeFunction Attributes.type_)
-        , ("type_", StringAttributeFunction Attributes.type_)
-        , ("value", StringAttributeFunction Attributes.value)
-        , ("defaultValue", StringAttributeFunction Attributes.defaultValue)
-        , ("checked", BoolAttributeFunction Attributes.checked)
-        , ("placeholder", StringAttributeFunction Attributes.placeholder)
-        , ("selected", BoolAttributeFunction Attributes.selected)
-        -- Input Helpers
-        , ("accept", StringAttributeFunction Attributes.accept)
-        , ("acceptCharset", StringAttributeFunction Attributes.acceptCharset)
-        , ("action", StringAttributeFunction Attributes.action)
-        , ("autocomplete", BoolAttributeFunction Attributes.autocomplete)
-        , ("autofocus", BoolAttributeFunction Attributes.autofocus)
-        , ("disabled", BoolAttributeFunction Attributes.disabled)
-        , ("enctype", StringAttributeFunction Attributes.enctype)
-        , ("formaction", StringAttributeFunction Attributes.formaction)
-        , ("list", StringAttributeFunction Attributes.list)
-        , ("maxlength", IntAttributeFunction Attributes.maxlength)
-        , ("minlength", IntAttributeFunction Attributes.minlength)
-        , ("method", StringAttributeFunction Attributes.method)
-        , ("multiple", BoolAttributeFunction Attributes.multiple)
-        , ("name", StringAttributeFunction Attributes.name)
-        , ("novalidate", BoolAttributeFunction Attributes.novalidate)
-        , ("pattern", StringAttributeFunction Attributes.pattern)
-        , ("readonly", BoolAttributeFunction Attributes.readonly)
-        , ("required", BoolAttributeFunction Attributes.required)
-        , ("size", IntAttributeFunction Attributes.size)
-        , ("for", StringAttributeFunction Attributes.for)
-        , ("form", StringAttributeFunction Attributes.form)
-        -- Input Ranges
-        , ("max", StringAttributeFunction Attributes.max)
-        , ("min", StringAttributeFunction Attributes.min)
-        , ("step", StringAttributeFunction Attributes.step)
-        -- Input Text Areas
-        , ("cols", IntAttributeFunction Attributes.cols)
-        , ("rows", IntAttributeFunction Attributes.rows)
-        , ("wrap", StringAttributeFunction Attributes.wrap)
-        -- Links and Areas
-        , ("href", StringAttributeFunction Attributes.href)
-        , ("target", StringAttributeFunction Attributes.target)
-        , ("download", BoolAttributeFunction Attributes.download)
-        , ("downloadAs", StringAttributeFunction Attributes.downloadAs)
-        , ("hreflang", StringAttributeFunction Attributes.hreflang)
-        , ("media", StringAttributeFunction Attributes.media)
-        , ("ping", StringAttributeFunction Attributes.ping)
-        , ("rel", StringAttributeFunction Attributes.rel)
-        -- Maps
-        , ("ismap", BoolAttributeFunction Attributes.ismap)
-        , ("usemap", StringAttributeFunction Attributes.usemap)
-        , ("shape", StringAttributeFunction Attributes.shape)
-        , ("coords", StringAttributeFunction Attributes.coords)
-        -- Embedded Content
-        , ("src", StringAttributeFunction Attributes.src)
-        , ("height", IntAttributeFunction Attributes.height)
-        , ("width", IntAttributeFunction Attributes.width)
-        , ("alt", StringAttributeFunction Attributes.alt)
-        -- Audio and Video
-        , ("autoplay", BoolAttributeFunction Attributes.autoplay)
-        , ("controls", BoolAttributeFunction Attributes.controls)
-        , ("loop", BoolAttributeFunction Attributes.loop)
-        , ("preload", StringAttributeFunction Attributes.preload)
-        , ("poster", StringAttributeFunction Attributes.poster)
-        , ("default", BoolAttributeFunction Attributes.default)
-        , ("kind", StringAttributeFunction Attributes.kind)
-        , ("srclang", StringAttributeFunction Attributes.srclang)
-        -- iframes
-        , ("sandbox", StringAttributeFunction Attributes.sandbox)
-        , ("seamless", BoolAttributeFunction Attributes.seamless)
-        , ("srcdoc", StringAttributeFunction Attributes.srcdoc)
-        -- Ordered Lists
-        , ("reversed", BoolAttributeFunction Attributes.reversed)
-        , ("start", IntAttributeFunction Attributes.start)
-        -- Tables
-        , ("align", StringAttributeFunction Attributes.align)
-        , ("colspan", IntAttributeFunction Attributes.colspan)
-        , ("rowspan", IntAttributeFunction Attributes.rowspan)
-        , ("headers", StringAttributeFunction Attributes.headers)
-        , ("scope", StringAttributeFunction Attributes.scope)
-        -- Header Stuff
-        , ("async", BoolAttributeFunction Attributes.async)
-        , ("charset", StringAttributeFunction Attributes.charset)
-        , ("content", StringAttributeFunction Attributes.content)
-        , ("defer", BoolAttributeFunction Attributes.defer)
-        , ("httpEquiv", StringAttributeFunction Attributes.httpEquiv)
-        , ("language", StringAttributeFunction Attributes.language)
-        , ("scoped", BoolAttributeFunction Attributes.scoped)
-        -- Less Common Global Attributes
-        , ("accesskey", CharAttributeFunction Attributes.accesskey)
-        , ("contenteditable", BoolAttributeFunction Attributes.contenteditable)
-        , ("contextmenu", StringAttributeFunction Attributes.contextmenu)
-        , ("dir", StringAttributeFunction Attributes.dir)
-        , ("draggable", StringAttributeFunction Attributes.draggable)
-        , ("dropzone", StringAttributeFunction Attributes.dropzone)
-        , ("itemprop", StringAttributeFunction Attributes.itemprop)
-        , ("lang", StringAttributeFunction Attributes.lang)
-        , ("spellcheck", BoolAttributeFunction Attributes.spellcheck)
-        , ("tabindex", IntAttributeFunction Attributes.tabindex)
-        -- Key Generation
-        , ("challenge", StringAttributeFunction Attributes.challenge)
-        , ("keytype", StringAttributeFunction Attributes.keytype)
-        -- Miscellaneous
-        , ("cite", StringAttributeFunction Attributes.cite)
-        , ("datetime", StringAttributeFunction Attributes.datetime)
-        , ("pubdate", StringAttributeFunction Attributes.pubdate)
-        , ("manifest", StringAttributeFunction Attributes.manifest)
-
-        -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html-Events
-        -- Mouse Helpers
-        , ("onClick", MsgAttributeFunction Events.onClick)
-        , ("onDoubleClick", MsgAttributeFunction Events.onDoubleClick)
-        , ("onMouseDown", MsgAttributeFunction Events.onMouseDown)
-        , ("onMouseUp", MsgAttributeFunction Events.onMouseUp)
-        , ("onMouseEnter", MsgAttributeFunction Events.onMouseEnter)
-        , ("onMouseLeave", MsgAttributeFunction Events.onMouseLeave)
-        , ("onMouseOver", MsgAttributeFunction Events.onMouseOver)
-        , ("onMouseOut", MsgAttributeFunction Events.onMouseOut)
-        -- Form Helpers
-        -- onInput & onCheck always error.
-        -- I may never bother to implement them, since they
-        -- are either tightly coupled to Elm code, or require a scripting langage.
-        , ("onInput", MsgAttributeStringLookupFunction Events.onInput)
-        , ("onCheck", MsgAttributeBoolLookupFunction Events.onCheck)
-        , ("onSubmit", MsgAttributeFunction Events.onSubmit)
-        -- Focus Helpers
-        , ("onBlur", MsgAttributeFunction Events.onBlur)
-        , ("onFocus", MsgAttributeFunction Events.onFocus)
-        -- Custom Event Handlers
-        -- Custom Decoders
-        -- Both too hard for now
-        ]
 
 attributeMarker : String
 attributeMarker =
@@ -1486,3 +1216,274 @@ loadOutstandingPageOrTemplate loaders =
             Cmd.none
         Just cmd ->
             cmd
+
+-- Tag and attribute tables
+tagTable : Dict String (List (Attribute msg) -> List (Html msg) -> Html msg)
+tagTable =
+    -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html
+    Dict.fromList
+        [
+        -- Headers
+          ("h1", Html.h1)
+        , ("h2", Html.h2)
+        , ("h3", Html.h3)
+        , ("h4", Html.h4)
+        , ("h5", Html.h5)
+        , ("h6", Html.h6)
+        -- Grouping Content
+        , ("div", Html.div)
+        , ("p", Html.p)
+        , ("hr", Html.hr)
+        , ("pre", Html.pre)
+        , ("blockquote", Html.blockquote)
+        -- Text
+        , ("span", Html.span)
+        , ("a", Html.a)
+        , ("code", Html.code)
+        , ("em", Html.em)
+        , ("strong", Html.strong)
+        , ("i", Html.i)
+        , ("b", Html.b)
+        , ("u", Html.u)
+        , ("sub", Html.sub)
+        , ("sup", Html.sup)
+        , ("br", Html.br)
+        -- Lists
+        , ("ol", Html.ol)
+        , ("ul", Html.ul)
+        , ("li", Html.li)
+        , ("dl", Html.dl)
+        , ("dt", Html.dt)
+        , ("dd", Html.dd)
+        -- Embedded Content
+        , ("img", Html.img)
+        , ("iframe", Html.iframe)
+        , ("canvas", Html.canvas)
+        , ("math", Html.math)
+        -- Inputs
+        , ("form", Html.form)
+        , ("input", Html.input)
+        , ("textarea", Html.textarea)
+        , ("button", Html.button)
+        , ("select", Html.select)
+        , ("option", Html.option)
+        -- Sections
+        , ("section", Html.section)
+        , ("nav", Html.nav)
+        , ("article", Html.article)
+        , ("aside", Html.aside)
+        , ("header", Html.header)
+        , ("footer", Html.footer)
+        , ("address", Html.address)
+        , ("main", Html.main_)
+        , ("main_", Html.main_)
+        , ("body", Html.body)
+        -- Figures
+        , ("figure", Html.figure)
+        , ("figcaption", Html.figcaption)
+        -- Tables
+        , ("table", Html.table)
+        , ("caption", Html.caption)
+        , ("colgroup", Html.colgroup)
+        , ("col", Html.col)
+        , ("tbody", Html.tbody)
+        , ("thead", Html.thead)
+        , ("tfoot", Html.tfoot)
+        , ("tr", Html.tr)
+        , ("td", Html.td)
+        , ("th", Html.th)
+        -- Less Common Elements
+        , ("fieldset", Html.fieldset)
+        , ("legend", Html.legend)
+        , ("label", Html.label)
+        , ("datalist", Html.datalist)
+        , ("optgroup", Html.optgroup)
+        , ("keygen", Html.keygen)
+        , ("output", Html.output)
+        , ("progress", Html.progress)
+        , ("meter", Html.meter)
+        -- Audio and Video
+        , ("audio", Html.audio)
+        , ("video", Html.video)
+        , ("source", Html.source)
+        , ("track", Html.track)
+        -- Embedded Objects
+        , ("embed", Html.embed)
+        , ("object", Html.object)
+        , ("param", Html.param)
+        -- Text Edits
+        , ("ins", Html.ins)
+        , ("del", Html.del)
+        -- Semantic Text
+        , ("small", Html.small)
+        , ("cite", Html.cite)
+        , ("dfn", Html.dfn)
+        , ("abbr", Html.abbr)
+        , ("time", Html.time)
+        , ("var", Html.var)
+        , ("samp", Html.samp)
+        , ("kbd", Html.kbd)
+        , ("s", Html.s)
+        , ("q", Html.q)
+        -- Less Common Text Tags
+        , ("mark", Html.mark)
+        , ("ruby", Html.ruby)
+        , ("rt", Html.rt)
+        , ("rp", Html.rp)
+        , ("bdi", Html.bdi)
+        , ("bdo", Html.bdo)
+        , ("wbr", Html.wbr)
+        -- Interactive Elements
+        , ("details", Html.details)
+        , ("summary", Html.summary)
+        , ("menuitem", Html.menuitem)
+        , ("menu", Html.menu)
+        -- Not in Html module
+        , ("style", Html.node "style")
+        ]
+
+attributeTable : Dict String (AttributeFunction msg)
+attributeTable =
+    Dict.fromList
+        [
+         -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html-Attributes
+         -- Primitives
+         -- use "attribute:<name>" for missing string attributes
+          ("style", StringPairListAttributeFunction Attributes.style)
+         -- Super Common Attributes
+        , ("class", StringAttributeFunction Attributes.class)
+            -- classlist not implemented
+        , ("id", StringAttributeFunction Attributes.id)
+        , ("title", StringAttributeFunction Attributes.title)
+        , ("hidden", BoolAttributeFunction Attributes.hidden)
+        -- Inputs
+        , ("type", StringAttributeFunction Attributes.type_)
+        , ("type_", StringAttributeFunction Attributes.type_)
+        , ("value", StringAttributeFunction Attributes.value)
+        , ("defaultValue", StringAttributeFunction Attributes.defaultValue)
+        , ("checked", BoolAttributeFunction Attributes.checked)
+        , ("placeholder", StringAttributeFunction Attributes.placeholder)
+        , ("selected", BoolAttributeFunction Attributes.selected)
+        -- Input Helpers
+        , ("accept", StringAttributeFunction Attributes.accept)
+        , ("acceptCharset", StringAttributeFunction Attributes.acceptCharset)
+        , ("action", StringAttributeFunction Attributes.action)
+        , ("autocomplete", BoolAttributeFunction Attributes.autocomplete)
+        , ("autofocus", BoolAttributeFunction Attributes.autofocus)
+        , ("disabled", BoolAttributeFunction Attributes.disabled)
+        , ("enctype", StringAttributeFunction Attributes.enctype)
+        , ("formaction", StringAttributeFunction Attributes.formaction)
+        , ("list", StringAttributeFunction Attributes.list)
+        , ("maxlength", IntAttributeFunction Attributes.maxlength)
+        , ("minlength", IntAttributeFunction Attributes.minlength)
+        , ("method", StringAttributeFunction Attributes.method)
+        , ("multiple", BoolAttributeFunction Attributes.multiple)
+        , ("name", StringAttributeFunction Attributes.name)
+        , ("novalidate", BoolAttributeFunction Attributes.novalidate)
+        , ("pattern", StringAttributeFunction Attributes.pattern)
+        , ("readonly", BoolAttributeFunction Attributes.readonly)
+        , ("required", BoolAttributeFunction Attributes.required)
+        , ("size", IntAttributeFunction Attributes.size)
+        , ("for", StringAttributeFunction Attributes.for)
+        , ("form", StringAttributeFunction Attributes.form)
+        -- Input Ranges
+        , ("max", StringAttributeFunction Attributes.max)
+        , ("min", StringAttributeFunction Attributes.min)
+        , ("step", StringAttributeFunction Attributes.step)
+        -- Input Text Areas
+        , ("cols", IntAttributeFunction Attributes.cols)
+        , ("rows", IntAttributeFunction Attributes.rows)
+        , ("wrap", StringAttributeFunction Attributes.wrap)
+        -- Links and Areas
+        , ("href", StringAttributeFunction Attributes.href)
+        , ("target", StringAttributeFunction Attributes.target)
+        , ("download", BoolAttributeFunction Attributes.download)
+        , ("downloadAs", StringAttributeFunction Attributes.downloadAs)
+        , ("hreflang", StringAttributeFunction Attributes.hreflang)
+        , ("media", StringAttributeFunction Attributes.media)
+        , ("ping", StringAttributeFunction Attributes.ping)
+        , ("rel", StringAttributeFunction Attributes.rel)
+        -- Maps
+        , ("ismap", BoolAttributeFunction Attributes.ismap)
+        , ("usemap", StringAttributeFunction Attributes.usemap)
+        , ("shape", StringAttributeFunction Attributes.shape)
+        , ("coords", StringAttributeFunction Attributes.coords)
+        -- Embedded Content
+        , ("src", StringAttributeFunction Attributes.src)
+        , ("height", IntAttributeFunction Attributes.height)
+        , ("width", IntAttributeFunction Attributes.width)
+        , ("alt", StringAttributeFunction Attributes.alt)
+        -- Audio and Video
+        , ("autoplay", BoolAttributeFunction Attributes.autoplay)
+        , ("controls", BoolAttributeFunction Attributes.controls)
+        , ("loop", BoolAttributeFunction Attributes.loop)
+        , ("preload", StringAttributeFunction Attributes.preload)
+        , ("poster", StringAttributeFunction Attributes.poster)
+        , ("default", BoolAttributeFunction Attributes.default)
+        , ("kind", StringAttributeFunction Attributes.kind)
+        , ("srclang", StringAttributeFunction Attributes.srclang)
+        -- iframes
+        , ("sandbox", StringAttributeFunction Attributes.sandbox)
+        , ("seamless", BoolAttributeFunction Attributes.seamless)
+        , ("srcdoc", StringAttributeFunction Attributes.srcdoc)
+        -- Ordered Lists
+        , ("reversed", BoolAttributeFunction Attributes.reversed)
+        , ("start", IntAttributeFunction Attributes.start)
+        -- Tables
+        , ("align", StringAttributeFunction Attributes.align)
+        , ("colspan", IntAttributeFunction Attributes.colspan)
+        , ("rowspan", IntAttributeFunction Attributes.rowspan)
+        , ("headers", StringAttributeFunction Attributes.headers)
+        , ("scope", StringAttributeFunction Attributes.scope)
+        -- Header Stuff
+        , ("async", BoolAttributeFunction Attributes.async)
+        , ("charset", StringAttributeFunction Attributes.charset)
+        , ("content", StringAttributeFunction Attributes.content)
+        , ("defer", BoolAttributeFunction Attributes.defer)
+        , ("httpEquiv", StringAttributeFunction Attributes.httpEquiv)
+        , ("language", StringAttributeFunction Attributes.language)
+        , ("scoped", BoolAttributeFunction Attributes.scoped)
+        -- Less Common Global Attributes
+        , ("accesskey", CharAttributeFunction Attributes.accesskey)
+        , ("contenteditable", BoolAttributeFunction Attributes.contenteditable)
+        , ("contextmenu", StringAttributeFunction Attributes.contextmenu)
+        , ("dir", StringAttributeFunction Attributes.dir)
+        , ("draggable", StringAttributeFunction Attributes.draggable)
+        , ("dropzone", StringAttributeFunction Attributes.dropzone)
+        , ("itemprop", StringAttributeFunction Attributes.itemprop)
+        , ("lang", StringAttributeFunction Attributes.lang)
+        , ("spellcheck", BoolAttributeFunction Attributes.spellcheck)
+        , ("tabindex", IntAttributeFunction Attributes.tabindex)
+        -- Key Generation
+        , ("challenge", StringAttributeFunction Attributes.challenge)
+        , ("keytype", StringAttributeFunction Attributes.keytype)
+        -- Miscellaneous
+        , ("cite", StringAttributeFunction Attributes.cite)
+        , ("datetime", StringAttributeFunction Attributes.datetime)
+        , ("pubdate", StringAttributeFunction Attributes.pubdate)
+        , ("manifest", StringAttributeFunction Attributes.manifest)
+
+        -- From http://package.elm-lang.org/packages/elm-lang/html/2.0.0/Html-Events
+        -- Mouse Helpers
+        , ("onClick", MsgAttributeFunction Events.onClick)
+        , ("onDoubleClick", MsgAttributeFunction Events.onDoubleClick)
+        , ("onMouseDown", MsgAttributeFunction Events.onMouseDown)
+        , ("onMouseUp", MsgAttributeFunction Events.onMouseUp)
+        , ("onMouseEnter", MsgAttributeFunction Events.onMouseEnter)
+        , ("onMouseLeave", MsgAttributeFunction Events.onMouseLeave)
+        , ("onMouseOver", MsgAttributeFunction Events.onMouseOver)
+        , ("onMouseOut", MsgAttributeFunction Events.onMouseOut)
+        -- Form Helpers
+        -- onInput & onCheck always error.
+        -- I may never bother to implement them, since they
+        -- are either tightly coupled to Elm code, or require a scripting langage.
+        , ("onInput", MsgAttributeStringLookupFunction Events.onInput)
+        , ("onCheck", MsgAttributeBoolLookupFunction Events.onCheck)
+        , ("onSubmit", MsgAttributeFunction Events.onSubmit)
+        -- Focus Helpers
+        , ("onBlur", MsgAttributeFunction Events.onBlur)
+        , ("onFocus", MsgAttributeFunction Events.onFocus)
+        -- Custom Event Handlers
+        -- Custom Decoders
+        -- Both too hard for now
+        ]
