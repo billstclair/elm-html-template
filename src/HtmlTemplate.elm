@@ -1033,6 +1033,8 @@ loopBody varName template dicts value =
                      | atoms = Dict.insert varName value atomsDict
                  }
         in
+            -- This should just descend and do funcalls.
+            -- Then it could return a regular Atom instead of rendering.
             HtmlAtom <| renderHtmlAtom template ds
 
 brTemplate : Atom msg
@@ -1129,7 +1131,7 @@ ifFunction args (TheDicts dicts) =
                             ifHelp args
                         Just f ->
                             if f c1 c2 then
-                                HtmlAtom <| renderHtmlAtom body dicts
+                                body
                             else
                                 StringAtom ""
                 _ ->
