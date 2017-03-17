@@ -115,6 +115,15 @@ atomData =
               , body = [ StringAtom "example.com" ]
               }
       )
+    , ( "[\"p\",{},1]"
+      , Ok <| RecordAtom { tag = "p"
+                         , attributes = []
+                         , body = [ IntAtom 1 ]
+                         }
+      )
+    , ( "[\"p\",{},1,2]"
+      , Ok <| ListAtom [ StringAtom "p", PListAtom [], IntAtom 1, IntAtom 2 ]
+      )
     ]
 
 templateTest : ( String, Result String (Atom msg) ) -> Test

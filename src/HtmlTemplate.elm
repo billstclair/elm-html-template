@@ -290,7 +290,15 @@ htmlTemplateRecordDecoderInternal =
         )
         (JD.andThen ensureTag (JD.index 0 JD.string))
         (JD.index 1 <| JD.lazy (\_ -> attributesDecoder))
-        (JD.index 2 <| JD.list <| JD.lazy (\_ -> atomDecoder))
+        (JD.index 2
+             <| JD.andThen
+                 (\a -> JD.succeed
+                        <| case a of
+                               ListAtom l -> l
+                               _ -> [a]
+                 )
+                 <| JD.lazy (\_ -> atomDecoder)
+        )
 
 nodeMarker : String
 nodeMarker =
