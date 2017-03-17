@@ -17,6 +17,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , setPages, removePage
                              , setAtoms, removeAtom
                              , insertFunctions, insertMessages, addPageProcessors
+                             , insertBindingsFunctions
                              , addPageProperties, runPageProcessor
                              , clearTemplates, clearPages, clearAtoms
                              , addOutstandingPagesAndTemplates
@@ -77,6 +78,7 @@ type alias TemplateDicts msg =
     , templates : Dict String (Atom msg)
     , pages : Dict String (Atom msg)
     , functions : Dict String (Atom msg -> Dicts msg -> (Atom msg) )
+    , bindingsFunctions : Dict String (Atom msg -> Dicts msg -> List String)
     , messages : Dict String (Atom msg -> Dicts msg -> msg)
     }
 
@@ -100,12 +102,23 @@ defaultAtomsDict =
 
 emptyTemplateDicts : TemplateDicts msg
 emptyTemplateDicts =
-    TemplateDicts Dict.empty Dict.empty Dict.empty Dict.empty Dict.empty
+    { atoms = Dict.empty
+    , templates = Dict.empty
+    , pages = Dict.empty
+    , functions = Dict.empty
+    , bindingsFunctions = Dict.empty
+    , messages = Dict.empty
+    }
 
 defaultTemplateDicts : TemplateDicts msg
 defaultTemplateDicts =
-    TemplateDicts
-        defaultAtomsDict Dict.empty Dict.empty defaultFunctionsDict Dict.empty
+    { atoms = Dict.empty
+    , templates = Dict.empty
+    , pages = Dict.empty
+    , functions = defaultFunctionsDict
+    , bindingsFunctions = Dict.empty
+    , messages = Dict.empty
+    }
 
 decodeAtom : String -> Result String (Atom msg)
 decodeAtom json =
@@ -150,6 +163,10 @@ templateReferencesLoop template res =
                 name :: res
         ListAtom list ->
             List.foldl templateReferencesLoop res list
+        PListAtom plist ->
+            let values = List.map Tuple.second plist
+            in
+                List.foldl templateReferencesLoop res values
         RecordAtom { body } ->
             List.foldl templateReferencesLoop res body
         FuncallAtom { args } ->
@@ -157,23 +174,40 @@ templateReferencesLoop template res =
         _ ->
             res
 
-atomReferences : Atom msg -> List String
-atomReferences atom =
-    atomReferencesLoop atom []
+withFuncallBindings : HtmlTemplateFuncall msg -> Dicts msg -> (List String -> x) -> x
+withFuncallBindings {function, args} (TheDicts dicts) f =
+    case Dict.get function dicts.bindingsFunctions of
+        Nothing ->
+            f []
+        Just bindingsFunction ->
+            f <| bindingsFunction args (TheDicts dicts)
 
-atomReferencesLoop : Atom msg -> List String -> List String
-atomReferencesLoop atom res =
+atomReferences : Atom msg -> Dicts msg -> List String
+atomReferences atom dicts =
+    atomReferencesLoop [] dicts atom []
+
+atomReferencesLoop : List String -> Dicts msg -> Atom msg -> List String -> List String
+atomReferencesLoop boundNames dicts atom res =
     case atom of
         LookupAtom name ->
-            if List.member name res then
+            if (List.member name res) || (List.member name boundNames) then
                 res
             else
                 name :: res
         ListAtom atoms ->
-            List.foldl atomReferencesLoop res atoms
+            List.foldl (atomReferencesLoop boundNames dicts) res atoms
+        PListAtom plist ->
+            let values = List.map Tuple.second plist
+            in
+                List.foldl (atomReferencesLoop boundNames dicts) res values
         RecordAtom { body } ->
-            List.foldl atomReferencesLoop res body
-        -- Can't go into a FuncallAtom, as it may bind some variables
+            List.foldl (atomReferencesLoop boundNames dicts) res body
+        FuncallAtom funcallRecord ->
+            withFuncallBindings funcallRecord dicts
+                <| (\bindings ->
+                        atomReferencesLoop (List.append bindings boundNames)
+                            dicts funcallRecord.args res
+                   )
         _ ->
             res
 
@@ -191,6 +225,10 @@ pageReferencesLoop atom res =
                 name :: res
         ListAtom atoms ->
             List.foldl pageReferencesLoop res atoms
+        PListAtom plist ->
+            let values = List.map Tuple.second plist
+            in
+                List.foldl pageReferencesLoop res values
         RecordAtom { body } ->
             List.foldl pageReferencesLoop res body
         FuncallAtom { args } ->
@@ -692,6 +730,22 @@ loopFunction args (TheDicts dicts) =
                              <| "Args not a ListAtom: " ++ (toString args)
                            ]
 
+loopBindingsFunction : Atom msg -> Dicts msg -> List String
+loopBindingsFunction args (TheDicts dicts) =
+    case args of
+        ListAtom atoms ->
+            case atoms of
+                [ var, values, template ] ->
+                    case loopArgs var values template dicts of
+                        Nothing ->
+                            []
+                        Just (varName, _, _) ->
+                            [ varName ]
+                _ ->
+                    []
+        _ ->
+            []
+
 loopArgs : Atom msg -> Atom msg -> Atom msg -> TemplateDicts msg -> Maybe (String, List (Atom msg), Atom msg)
 loopArgs var vals template dicts =
     case var of
@@ -859,6 +913,11 @@ defaultFunctionsDict =
                   , ( "ps", psFunction )
                   , ( "if", ifFunction )
                   , ( "concat", concatFunction )
+                  ]
+
+defaultBindingsFunctionsDict : Dict String (Atom msg -> Dicts msg -> (List String))
+defaultBindingsFunctionsDict =
+    Dict.fromList [ ( "loop", loopBindingsFunction)
                   ]
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
@@ -1111,6 +1170,14 @@ insertMessages pairs (TheLoaders loaders) =
     in
         TheLoaders
             { loaders | dicts = { dicts | messages = messages } }
+
+insertBindingsFunctions : List (String, (Atom msg -> Dicts msg -> List String)) -> Loaders msg x -> Loaders msg x
+insertBindingsFunctions pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        functions = List.foldl insertPair dicts.bindingsFunctions pairs
+    in
+        TheLoaders
+            { loaders | dicts = { dicts | bindingsFunctions = functions } }
 
 clearTemplates : Loaders msg x -> Loaders msg x
 clearTemplates (TheLoaders loaders) =
