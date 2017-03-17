@@ -9,30 +9,31 @@
 --
 ----------------------------------------------------------------------
 
-module HtmlTemplate exposing ( Atom(..)
-                             , TemplateDicts, Dicts
-                             , HtmlTemplateFuncall, HtmlTemplateRecord
-                             , emptyTemplateDicts, defaultTemplateDicts
-                             , templateReferences
-                             , atomReferences, atomPageReferences
-                             , renderAtom, toBracketedString
-                             , atomToHtmlTemplate, atomToBody
-                             , decodeAtom, tagWrap
-                             , loopFunction, psFunction
-                             , defaultFunctionsDict, defaultAtomsDict
-                             , maybeLookupAtom
-                             , Loaders
+module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
+                             , renderAtom
                              , makeLoaders, getExtra, getDicts
-                             , getTemplate, getPage, setPages, removePage
-                             , getAtom, setAtoms
+                             , getTemplate, getPage, getAtom
+                             , setTemplates, removeTemplate
+                             , setPages, removePage
+                             , setAtoms, removeAtom
                              , insertFunctions, insertMessages, addPageProcessors
                              , addPageProperties, runPageProcessor
-                             , clearTemplates, clearPages
+                             , clearTemplates, clearPages, clearAtoms
                              , addOutstandingPagesAndTemplates
                              , loadTemplate, receiveTemplate
                              , loadPage, receivePage
                              , loadOutstandingPageOrTemplate
                              , maybeLoadOutstandingPageOrTemplate
+
+                             , emptyTemplateDicts, defaultTemplateDicts
+                             , loopFunction, psFunction, ifFunction, tagWrap
+                             , defaultFunctionsDict, defaultAtomsDict
+                             , toBracketedString
+
+                             , templateReferences, atomReferences, pageReferences
+                             , atomToHtmlTemplate, atomToBody
+                             , decodeAtom, atomDecoder
+                             , maybeLookupAtom
                              )
 
 import Entities
@@ -175,12 +176,12 @@ atomReferencesLoop atom res =
         _ ->
             res
 
-atomPageReferences : Atom msg -> List String
-atomPageReferences atom =
-    atomPageReferencesLoop atom []
+pageReferences : Atom msg -> List String
+pageReferences atom =
+    pageReferencesLoop atom []
 
-atomPageReferencesLoop : Atom msg -> List String -> List String
-atomPageReferencesLoop atom res =
+pageReferencesLoop : Atom msg -> List String -> List String
+pageReferencesLoop atom res =
     case atom of
         LookupPageAtom name ->
             if List.member name res then
@@ -188,11 +189,11 @@ atomPageReferencesLoop atom res =
             else
                 name :: res
         ListAtom atoms ->
-            List.foldl atomPageReferencesLoop res atoms
+            List.foldl pageReferencesLoop res atoms
         RecordAtom { body } ->
-            List.foldl atomPageReferencesLoop res body
+            List.foldl pageReferencesLoop res body
         MsgAtom { args } ->
-            atomPageReferences args
+            pageReferences args
         _ ->
             res
 
@@ -1014,6 +1015,20 @@ getTemplate : String -> Loaders msg x -> Maybe (Atom msg)
 getTemplate name (TheLoaders loaders) =
     Dict.get name loaders.dicts.templates
 
+removeTemplate : String -> Loaders msg x -> Loaders msg x
+removeTemplate name (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        templates = Dict.remove name dicts.templates
+    in
+        TheLoaders { loaders | dicts = { dicts | templates = templates } }
+
+setTemplates : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
+setTemplates pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        templates = List.foldl insertPair dicts.templates pairs
+    in
+        TheLoaders { loaders | dicts = { dicts | templates = templates } }
+
 getPage : String -> Loaders msg x -> Maybe (Atom msg)
 getPage name (TheLoaders loaders) =
     Dict.get name loaders.dicts.pages
@@ -1071,6 +1086,13 @@ setAtoms pairs (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | atoms = atoms } }
 
+removeAtom : String -> Loaders msg x -> Loaders msg x
+removeAtom name (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        atoms = Dict.remove name dicts.atoms
+    in
+        TheLoaders { loaders | dicts = { dicts | atoms = atoms } }
+
 insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
 insertPair (k, v) dict =
     Dict.insert k v dict
@@ -1107,6 +1129,14 @@ clearPages (TheLoaders loaders) =
                          dicts = { dicts | pages = Dict.empty }
                    }
 
+clearAtoms : Loaders msg x -> Loaders msg x
+clearAtoms (TheLoaders loaders) =
+    let dicts = loaders.dicts
+    in
+        TheLoaders { loaders |
+                         dicts = { dicts | atoms = Dict.empty }
+                   }
+
 loadTemplate : String -> Loaders msg x -> Cmd msg
 loadTemplate name (TheLoaders loaders) =
     loaders.templateLoader name <| TheLoaders loaders
@@ -1141,7 +1171,7 @@ receivePage name json (TheLoaders loaders) =
             Err msg
         Ok page ->
             let templates = templateReferences page
-                pages = atomPageReferences page
+                pages = pageReferences page
                 dicts = loaders.dicts
                 lo = { loaders |
                        dicts = { dicts |
