@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( Loaders, Atom(..), HtmlTemplate(..)
+import HtmlTemplate exposing ( Loaders, Atom(..)
                              , makeLoaders, insertFunctions, insertMessages
                              , addPageProcessors
                              , getExtra, getDicts
@@ -11,7 +11,7 @@ import HtmlTemplate exposing ( Loaders, Atom(..), HtmlTemplate(..)
                              , getPage, addPageProperties, getTemplate
                              , getAtom, setAtoms
                              , clearPages
-                             , renderTemplate
+                             , renderAtom, toBracketedString
                              )
 
 import Html exposing ( Html, Attribute
@@ -99,17 +99,17 @@ messages =
     [ ( "gotoPage", gotoPageFunction )
     ]
 
-pageLinkFunction : Atom Msg -> x -> HtmlTemplate Msg
+pageLinkFunction : Atom Msg -> x -> Atom Msg
 pageLinkFunction atom _ =
     case normalizePageLinkArgs atom of
         Just ( page, title ) ->
-            HtmlWrapper
+            HtmlAtom
             <| a [ href "#"
                  , onClick <| GotoPage page
                  ]
                 [ text title ]
         _ ->
-            HtmlString <| "Bad link: " ++ (toString atom)
+            StringAtom <| "Bad link: " ++ (toBracketedString atom)
 
 normalizePageLinkArgs : Atom Msg -> Maybe (String, String)
 normalizePageLinkArgs atom =
@@ -129,7 +129,7 @@ normalizePageLinkArgs atom =
         _ ->
             Nothing
 
-functions : List (String, Atom Msg -> x -> HtmlTemplate Msg)
+functions : List (String, Atom Msg -> x -> Atom Msg)
 functions =
     [ ( "pageLink", pageLinkFunction )
     ]
@@ -365,7 +365,7 @@ view model =
                                                 ]
                                                 loaders
                                       in
-                                          renderTemplate tmpl <| getDicts lds
+                                          renderAtom tmpl <| getDicts lds
         ]
 
 dictsDiv : String -> String -> Loaders Msg Extra -> Html Msg
