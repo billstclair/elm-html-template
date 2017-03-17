@@ -70,67 +70,6 @@ type Atom msg
     | RecordAtom (HtmlTemplateRecord msg)
     | HtmlAtom (Html msg)       --I plan to eliminate this
 
-isStringAtom : Atom msg -> Bool
-isStringAtom atom =
-    case atom of
-        StringAtom _ -> True
-        LookupAtom _ -> True
-        _ -> False
-
-isIntAtom : Atom msg -> Bool
-isIntAtom atom =
-    case atom of
-        IntAtom _ -> True
-        _ -> False
-
-isFloatAtom : Atom msg -> Bool
-isFloatAtom atom =
-    case atom of
-        FloatAtom _ -> True
-        _ -> False
-
-isBoolAtom : Atom msg -> Bool
-isBoolAtom atom =
-    case atom of
-        BoolAtom _ -> True
-        _ -> False
-
-isLookupAtom : Atom msg -> Bool
-isLookupAtom atom =
-    case atom of
-        LookupAtom _ -> True
-        _ -> False
-
-isLookupPageAtom : Atom msg -> Bool
-isLookupPageAtom atom =
-    case atom of
-        LookupPageAtom _ -> True
-        _ -> False
-
-isLookupTemplateAtom : Atom msg -> Bool
-isLookupTemplateAtom atom =
-    case atom of
-        LookupTemplateAtom _ -> True
-        _ -> False
-
-isMsgAtom : Atom msg -> Bool
-isMsgAtom atom =
-    case atom of
-        MsgAtom _ -> True
-        _ -> False
-
-isListAtom : Atom msg -> Bool
-isListAtom atom =
-    case atom of
-        ListAtom _ -> True
-        _ -> False
-
-isPListAtom : Atom msg -> Bool
-isPListAtom atom =
-    case atom of
-        PListAtom _ -> True
-        _ -> False
-
 type alias TemplateDicts msg =
     { atoms : Dict String (Atom msg)
     , templates : Dict String (Atom msg)
