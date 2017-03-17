@@ -71,7 +71,7 @@ type Atom msg
     | ListAtom (List (Atom msg))
     | PListAtom (List (String, Atom msg))
     | RecordAtom (HtmlTemplateRecord msg)
-    | HtmlAtom (Html msg)       --I plan to eliminate this
+    | HtmlAtom (Html msg)
 
 type alias TemplateDicts msg =
     { atoms : Dict String (Atom msg)
@@ -266,17 +266,27 @@ stripQuoteDecoder : Decoder String
 stripQuoteDecoder =
     JD.andThen maybeStripQuote JD.string
 
-ensureLookupString : String -> String -> String -> Decoder String
-ensureLookupString prefix name string =
+extractLookupString : String -> String -> Maybe String
+extractLookupString prefix string =
     if String.startsWith prefix string then
         let lookup = String.dropLeft 1 string
         in
             if String.startsWith prefix lookup then
-                JD.fail <| "Double " ++ prefix ++ " denotes quote."
+                Nothing
             else
-                JD.succeed <| lookup
+                Just lookup
     else
-        JD.fail <| "Does not begin with " ++ name ++ ": " ++ string
+        Nothing    
+
+ensureLookupString : String -> String -> String -> Decoder String
+ensureLookupString prefix name string =
+    case extractLookupString prefix string of
+        Just lookup ->
+            JD.succeed lookup
+        Nothing ->
+            JD.fail
+                <| "\"" ++ string ++ "\" is not a lookup string beginning with "
+                    ++ name
 
 htmlAtomLookupStringDecoder : Decoder String
 htmlAtomLookupStringDecoder =
@@ -286,11 +296,29 @@ htmlPageLookupStringDecoder : Decoder String
 htmlPageLookupStringDecoder =
     JD.andThen (ensureLookupString "@" "an atsign")  JD.string
 
+ensureFuncallList : List (Atom msg) -> Decoder (HtmlTemplateFuncall msg)
+ensureFuncallList atoms =
+    case atoms of
+        f :: args ->
+            case f of
+                StringAtom s ->
+                    case extractLookupString "/" s of
+                        Just name ->
+                            JD.succeed
+                                { function = name
+                                , args = ListAtom args
+                                }
+                        Nothing ->
+                            JD.fail <| "Not a function operator: " ++ s
+                _ ->
+                    JD.fail <| "Not a string: " ++ (toString f)
+        _ ->
+            JD.fail <| "Not a function invocation: []"
+
 htmlTemplateFuncallDecoder : Decoder (HtmlTemplateFuncall msg)
 htmlTemplateFuncallDecoder =
-    JD.map2 HtmlTemplateFuncall
-        (JD.index 0 htmlFuncallStringDecoder)
-        (JD.index 1 <| JD.lazy (\_ -> atomDecoder))
+    JD.andThen ensureFuncallList
+        <| JD.lazy (\_ -> atomListDecoder)
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
@@ -933,6 +961,133 @@ atomGreaterEqualp a1 a2 =
         Just EQ -> True
         _ -> False
 
+intOperators : Dict String (Int -> Int -> Int)
+intOperators =
+    Dict.fromList
+        [ ("+", (+))
+        , ("-", (-))
+        , ("*", (*))
+        , ("//", (//))
+        ]
+
+floatOperators : Dict String (Float -> Float -> Float)
+floatOperators =
+    Dict.fromList
+        [ ("+", (+))
+        , ("-", (-))
+        , ("*", (*))
+        , ("/", (/))
+        ]
+
+alwaysFloatOperators : Dict String (Float -> Float -> Float)
+alwaysFloatOperators =
+    Dict.fromList
+        [ ("/", (/))
+        ]
+
+arith : String -> Atom msg -> Atom msg -> Maybe (Atom msg)
+arith operator a1 a2 =
+    case Dict.get operator alwaysFloatOperators of
+        Just f ->
+            let bad = (0.0, False)
+                (f1, isNumeric) =
+                    case a1 of
+                        IntAtom i1 -> (toFloat i1, True)
+                        FloatAtom f1 -> (f1, True)
+                        _ -> bad
+                (f2, isReallyNumeric) =
+                    if isNumeric then
+                        case a2 of
+                            IntAtom i1 -> (toFloat i1, True)
+                            FloatAtom f2 -> (f2, True)
+                            _ -> bad
+                    else
+                        bad
+            in
+                if isReallyNumeric then
+                    Just <| FloatAtom <| f f1 f2
+                else
+                    Nothing
+        Nothing ->
+            let bad = (0, 0, 0.0, 0.0, "")
+                (i1, i2, f1, f2, argType) =
+                    case a1 of
+                        IntAtom i1 ->
+                            case a2 of
+                                IntAtom i2 ->
+                                    (i1, i2, 0.0, 0.0, "int")
+                                FloatAtom f2 ->
+                                    (0, 0, toFloat i1, f2, "float")
+                                _ ->
+                                    bad
+                        FloatAtom f1 ->
+                            case a2 of
+                                IntAtom i2 ->
+                                    (0, 0, f1, toFloat i2, "float")
+                                FloatAtom f2 ->
+                                    (0, 0, f1, f2, "float")
+                                _ ->
+                                    bad
+                        _ ->
+                            bad
+            in
+                case argType of
+                    "int" ->
+                        case Dict.get operator intOperators of
+                            Nothing -> Nothing
+                            Just f ->
+                                Just <| IntAtom <| f i1 i2
+                    "float" ->
+                        case Dict.get operator floatOperators of
+                            Nothing -> Nothing
+                            Just f ->
+                                Just <| FloatAtom <| f f1 f2
+                    _ ->
+                        Nothing
+
+firstArgTable : Dict String (Atom msg)
+firstArgTable =
+    Dict.fromList
+        [ ("+", IntAtom 0)
+        , ("-", IntAtom 0)
+        , ("*", IntAtom 1)
+        , ("/", FloatAtom 1.0)
+        , ("//", IntAtom 1)
+        ]
+
+argArith : String -> List (Atom msg) -> Maybe (Atom msg)
+argArith operator atoms =
+    let f = (\a b ->
+                 case b of
+                     Nothing -> Nothing
+                     Just x ->
+                       arith operator x a
+            )
+    in
+        case Dict.get operator firstArgTable of
+            Nothing -> Nothing
+            firstArg ->
+                List.foldl f firstArg atoms
+
+arithFunction : String -> Atom msg -> Dicts msg -> Atom msg
+arithFunction operator args dicts =
+    let realArgs = installBindings args dicts
+        list = case realArgs of
+                   ListAtom l -> l
+                   _ -> [realArgs]
+    in
+        case argArith operator list of
+            Nothing ->
+                argsHelp ("/" ++ operator) args
+            Just res ->
+                res
+
+plusFunction = arithFunction "+"
+minusFunction = arithFunction "-"
+timesFunction = arithFunction "*"
+divideFunction = arithFunction "/"
+intDivideFunction = arithFunction "//"
+
 ifFunction : Atom msg -> Dicts msg -> Atom msg
 ifFunction args (TheDicts dicts) =
     case args of
@@ -941,20 +1096,20 @@ ifFunction args (TheDicts dicts) =
                 StringAtom op ->
                     case Dict.get op ifOperatorDict of
                         Nothing ->
-                            ifHelp args
+                            argsHelp "/if" args
                         Just f ->
                             if f c1 c2 then
                                 body
                             else
                                 StringAtom ""
                 _ ->
-                    ifHelp args
+                    argsHelp "/if" args
         _ ->
-            ifHelp args
+            argsHelp "/if" args
 
-ifHelp : Atom msg -> Atom msg
-ifHelp args =
-    StringAtom <| "[/if," ++ (toBracketedString args) ++ "]"
+argsHelp : String -> Atom msg -> Atom msg
+argsHelp function args =
+    StringAtom <| "[" ++ function ++ ", " ++ (toBracketedString args) ++ "]"
 
 concatFunction : Atom msg -> x -> Atom msg
 concatFunction atom _ =
@@ -963,6 +1118,46 @@ concatFunction atom _ =
             StringAtom <| String.concat <| List.map atomToString list
         _ ->
             StringAtom <| atomToString atom
+
+cantApply : Atom msg -> List (Atom msg) -> Atom msg
+cantApply function args =
+    StringAtom
+    <| "Can't apply " ++ (toString function) ++ " to " ++ (toString args)
+
+applyFunction : Atom msg -> x -> Atom msg
+applyFunction atom _ =
+    case atom of
+        ListAtom (function :: args) ->
+            case function of
+                StringAtom s ->
+                    case extractLookupString "/" s of
+                        Nothing ->
+                            cantApply function args
+                        Just f ->
+                            FuncallAtom
+                                { function = f
+                                , args = flattenApplyArgs args []
+                                }
+                _ ->
+                    cantApply function args
+        _ ->
+            StringAtom
+            <| "Can't happen. Non-list to function: " ++ (toString atom)
+
+flattenApplyArgs : List (Atom msg) -> List (Atom msg) -> (Atom msg)
+flattenApplyArgs args res =
+    case args of
+        [] ->
+            ListAtom []
+        [last] ->
+            ListAtom
+            <| List.append
+                (List.reverse res)
+                <| case last of
+                       ListAtom l -> l
+                       _ -> [last]
+        car :: cdr ->
+            flattenApplyArgs cdr <| car :: res
 
 tagWrap : String -> List (String, Atom msg) -> List (Atom msg) -> Atom msg
 tagWrap tag attributes body =
@@ -993,6 +1188,12 @@ defaultFunctionsDict =
                   , ( "ps", psFunction )
                   , ( "if", ifFunction )
                   , ( "concat", concatFunction )
+                  , ( "apply", applyFunction )
+                  , ( "+", plusFunction )
+                  , ( "-", minusFunction )
+                  , ( "*", timesFunction )
+                  , ( "/", divideFunction )
+                  , ( "//", intDivideFunction )
                   ]
 
 defaultBindingsFunctionsDict : Dict String (Atom msg -> Dicts msg -> (List String))

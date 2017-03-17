@@ -74,7 +74,13 @@ atomData =
     , ( "\"?foo\""
       , Ok <| LookupTemplateAtom "foo"
       )
-    , ( "[\"/gotoPage\",[\"home\"]]"
+    , ( "[\"/gotoPage\",\"home\"]"
+      , Ok <| FuncallAtom
+            { function = "gotoPage"
+            , args = ListAtom [ StringAtom "home" ]
+            }
+      )
+    , ( "[\"/apply\",\"/gotoPage\",[\"home\"]]"
       , Ok <| FuncallAtom
             { function = "gotoPage"
             , args = ListAtom [ StringAtom "home" ]
@@ -145,7 +151,7 @@ templateData =
     , ( "\"$atom\""
       , Ok <| LookupAtom "atom"
       )
-    , ( "[\"/loop\",[\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]]"
+    , ( "[\"/loop\",\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]"
       , Ok
             <| FuncallAtom
                 { function = "loop"

@@ -114,8 +114,12 @@ pageLinkFunction atom _ =
 normalizePageLinkArgs : Atom Msg -> Maybe (String, String)
 normalizePageLinkArgs atom =
     case atom of
-        StringAtom page ->
-            Just (page, page)
+        ListAtom [ pageAtom ] ->
+            case pageAtom of
+                StringAtom page ->
+                    Just (page, page)
+                _ ->
+                    Nothing
         ListAtom [ pageAtom, titleAtom ] ->
             case pageAtom of
                 StringAtom page ->
