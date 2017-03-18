@@ -920,7 +920,7 @@ ifOperatorDict : Dict String (Atom msg -> Atom msg -> Bool)
 ifOperatorDict =
     Dict.fromList
         [ ( "==", atomsEqual )
-        , ( "/=", atomsNotEqual )
+        , ( "<>", atomsNotEqual )
         , ( "<", atomLessp )
         , ( ">", atomGreaterp )
         , ( "<=", atomLessEqualp )
@@ -943,7 +943,7 @@ compareAtoms a1 a2 =
         (IntAtom i1, IntAtom i2) ->
             Just <| compare i1 i2
         (FloatAtom f1, FloatAtom f2) ->
-            Just <| compare f2 f2
+            Just <| compare f1 f2
         _ ->
             Nothing
 
@@ -1074,24 +1074,50 @@ arithFunction operator args dicts =
         Just res ->
             res
 
-plusFunction = arithFunction "+"
-minusFunction = arithFunction "-"
-timesFunction = arithFunction "*"
-divideFunction = arithFunction "/"
-intDivideFunction = arithFunction "//"
+boolFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
+boolFunction op args _ =
+    let (op2, negate) =
+            if op == "<>" then
+                ("==", True)
+            else
+                (op, False)
+    in
+        case Dict.get op2 ifOperatorDict of
+            Nothing ->
+                argsHelp ("/" ++ op) args
+            Just f ->
+                let res = case args of
+                              [] -> True
+                              [_] -> True
+                              a :: rest ->
+                                  boolLoop f a rest
+                in
+                    BoolAtom <| if negate then not res else res
+
+boolLoop : (Atom msg -> Atom msg -> Bool) -> Atom msg -> List (Atom msg) -> Bool
+boolLoop f a rest =
+    case rest of
+        [] -> True
+        b :: tail ->
+            if f a b then
+                boolLoop f b tail
+            else
+                False
+
 
 ifFunction : List (Atom msg) -> Dicts msg -> Atom msg
 ifFunction args (TheDicts dicts) =
     case args of
-        [ StringAtom op, c1, c2, body ] ->
-            case Dict.get op ifOperatorDict of
-                Nothing ->
-                    argsHelp "/if" args
-                Just f ->
-                    if f c1 c2 then
-                        body
-                    else
-                        StringAtom ""
+        [ BoolAtom bool, consequent ] ->
+            if bool then
+                consequent
+            else
+                StringAtom ""
+        [ BoolAtom bool, consequent, alternative ] ->
+            if bool then
+                consequent
+            else
+                alternative
         _ ->
             argsHelp "/if" args
 
@@ -1199,6 +1225,14 @@ logFunction args _ =
         label :: (val :: _) ->
             log (atomToString label) val
 
+boolOpPair : String -> (String, List (Atom msg) -> Dicts msg -> Atom msg)
+boolOpPair op =
+    (op, boolFunction op)
+
+arithOpPair : String -> (String, List (Atom msg) -> Dicts msg -> Atom msg)
+arithOpPair op =
+    (op, arithFunction op)
+
 defaultFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> Atom msg)
 defaultFunctionsDict =
     Dict.fromList [ ( "loop", loopFunction)
@@ -1207,11 +1241,17 @@ defaultFunctionsDict =
                   , ( "if", ifFunction )
                   , ( "append", appendFunction )
                   , ( "apply", applyFunction )
-                  , ( "+", plusFunction )
-                  , ( "-", minusFunction )
-                  , ( "*", timesFunction )
-                  , ( "/", divideFunction )
-                  , ( "//", intDivideFunction )
+                  , boolOpPair "=="
+                  , boolOpPair "<>"
+                  , boolOpPair "<"
+                  , boolOpPair ">"
+                  , boolOpPair "<="
+                  , boolOpPair ">="
+                  , arithOpPair "+"
+                  , arithOpPair "-"
+                  , arithOpPair "*"
+                  , arithOpPair "/"
+                  , arithOpPair "//"
                   , ( "log", logFunction )
                   ]
 

@@ -4,6 +4,6 @@
      ]
    ],
    [ "/apply","/ps","$node.ps" ],
-   ["/if","==","$page","$node.page","?refererlink"]
+   ["/if",["/==","$page","$node.page"],"?refererlink"]
   ]
 ]
