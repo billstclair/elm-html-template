@@ -171,6 +171,7 @@ functionData =
     , ( "[\"/let\",{\"x\":[1,2,3]},[\"/loop\",\"x\",\"$x\",[\"/let\",{\"x\":[\"/+\",\"$x\",[\"/*\",\"$x\",3]],\"y\":1},[\"/+\",\"$x\",\"$y\"]]]]"
       , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
       )
+    -- if & logical predicates
     , ( "[\"/if\", true, 1]"
       , Ok <| IntAtom 1
       )
@@ -234,6 +235,34 @@ functionData =
     , ( "[\"/if\", [\"/<\",2.3,1.2], 1, 2]"
       , Ok <| IntAtom 2
       )
+    -- Logical operators
+    , ( "[\"/if\",[\"/&&\"],1,2]"
+      , Ok <| IntAtom 1
+      )
+    , ( "[\"/if\",[\"/&&\",true,true,true],1,2]"
+      , Ok <| IntAtom 1
+      )
+    , ( "[\"/if\",[\"/&&\",true,false,[\"/log\",\"shortcut bug\",true]],1,2]"
+      , Ok <| IntAtom 2
+      )
+    , ( "[\"/if\",[\"/||\"],1,2]"
+      , Ok <| IntAtom 2
+      )
+    , ( "[\"/if\",[\"/||\",false,false,true],1,2]"
+      , Ok <| IntAtom 1
+      )
+    , ( "[\"/if\",[\"/||\",false,true,[\"/log\",\"shortcut bug\",false]],1,2]"
+      , Ok <| IntAtom 1
+      )
+    , ( "[\"/if\",[\"/xor\"],1,2]"
+      , Ok <| IntAtom 2
+      )
+    , ( "[\"/if\",[\"/xor\",false,false,true],1,2]"
+      , Ok <| IntAtom 1
+      )
+    , ( "[\"/if\",[\"/xor\",false,true,true],1,2]"
+      , Ok <| IntAtom 2
+      )
     -- These error strings are likely to change to encoded JSON
     , ( "[\"/if\", 1, 2]"
       , Ok <| StringAtom "[\"/if\", <IntAtom 1> <IntAtom 2>]"
@@ -241,6 +270,8 @@ functionData =
     , ( "[\"/frobulate\"]"
       , Ok <| StringAtom "funcall frobulate <[]>"
       )
+    -- If you see "shortcut bug" in the output when running elm-test,
+    -- that means too much is being evaluated.
     , ( "[\"/if\", [\"/<\",2,1,[\"/log\",\"shortcut bug\",3]], 1, 2]"
       , Ok <| IntAtom 2
       )

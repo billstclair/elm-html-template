@@ -980,6 +980,11 @@ intOperators =
         , ("-", (-))
         , ("*", (*))
         , ("//", (//))
+        , ("max", max)
+        , ("min", min)
+        , ("^", (^))
+        , ("rem", rem)
+        , ("%", (%))
         ]
 
 floatOperators : Dict String (Float -> Float -> Float)
@@ -989,12 +994,16 @@ floatOperators =
         , ("-", (-))
         , ("*", (*))
         , ("/", (/))
+        , ("max", max)
+        , ("min", min)
+        , ("^", (^))
         ]
 
 alwaysFloatOperators : Dict String (Float -> Float -> Float)
 alwaysFloatOperators =
     Dict.fromList
         [ ("/", (/))
+        , ("atan2", atan2)
         ]
 
 atomsToFloats : List (Atom msg) -> Maybe (List Float)
@@ -1074,13 +1083,62 @@ arithFunction operator args dicts =
         Just res ->
             res
 
-boolBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
-boolBindingsFunction args _ =
+argLogical : (Bool -> Bool -> Bool) -> Bool -> Bool -> List (Atom msg) -> Dicts msg -> Maybe Bool
+argLogical function firstArg suddenStop atoms dicts =
+    let loop = (\args res ->
+                    case args of
+                        [] ->
+                            Just res
+                        a :: tail ->
+                            case installBindings a dicts of
+                                BoolAtom y ->
+                                    let res2 = function res y
+                                    in
+                                        if (firstArg == res2) ||
+                                            (not suddenStop)
+                                        then
+                                            loop tail res2
+                                        else
+                                            Just res2
+                                _ ->
+                                    Nothing
+                   )
+    in
+        loop atoms firstArg
+
+delayedBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
+delayedBindingsFunction args _ =
     ( ["ignored"]
     , []
     , ListAtom args
     )
 
+-- Needs to use delayedBindingsFunction
+logicalFunction : String -> (Bool -> Bool -> Bool) -> Bool -> Bool -> List (Atom msg) -> Dicts msg -> Atom msg
+logicalFunction op function firstArg suddenStop args1 dicts =
+    case args1 of
+        [_, _, ListAtom args] ->
+            logicalFunctionInternal op function firstArg suddenStop args dicts
+        _ ->
+            argsHelp op args1
+
+logicalFunctionInternal : String -> (Bool -> Bool -> Bool) -> Bool -> Bool -> List (Atom msg) -> Dicts msg -> Atom msg
+logicalFunctionInternal op function firstArg suddenStop args dicts =
+    case argLogical function firstArg suddenStop args dicts of
+        Nothing ->
+            argsHelp op args
+        Just res ->
+            BoolAtom res
+
+notFunction : List (Atom msg) -> Dicts msg -> Atom msg
+notFunction args _ =
+    case args of
+        [ BoolAtom b ] ->
+            BoolAtom <| not b
+        _ ->
+            argsHelp "not" args
+
+-- Needs to use delayedBindingsFunction
 boolFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
 boolFunction op args1 dicts =
     case args1 of
@@ -1292,25 +1350,31 @@ defaultFunctionsDict =
                   , arithOpPair "*"
                   , arithOpPair "/"
                   , arithOpPair "//"
+                  , ("&&", logicalFunction "&&" (&&) True True)
+                  , ("||", logicalFunction "||" (||) False True)
+                  , ("xor", logicalFunction "||" (xor) False False)
+                  , ( "not", notFunction )
                   , ( "log", logFunction )
                   ]
 
-boolOpBindingsPair : String -> (String, List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
-boolOpBindingsPair op =
-    (op, boolBindingsFunction)
-
+delayedOpBindingsPair : String -> (String, List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
+delayedOpBindingsPair op =
+    (op, delayedBindingsFunction)
 
 defaultBindingsFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
 defaultBindingsFunctionsDict =
     Dict.fromList [ ( "loop", loopBindingsFunction)
                   , ( "let", letBindingsFunction )
                   , ( "if", ifBindingsFunction )
-                  , boolOpBindingsPair "=="
-                  , boolOpBindingsPair "<>"
-                  , boolOpBindingsPair "<"
-                  , boolOpBindingsPair ">"
-                  , boolOpBindingsPair "<="
-                  , boolOpBindingsPair ">="
+                  , delayedOpBindingsPair "=="
+                  , delayedOpBindingsPair "<>"
+                  , delayedOpBindingsPair "<"
+                  , delayedOpBindingsPair ">"
+                  , delayedOpBindingsPair "<="
+                  , delayedOpBindingsPair ">="
+                  , delayedOpBindingsPair "&&"
+                  , delayedOpBindingsPair "||"
+                  , delayedOpBindingsPair "xor"
                   ]
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
