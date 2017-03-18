@@ -625,25 +625,10 @@ atomsToStringPairs atoms res =
     case atoms of
         [] ->
             Just <| List.reverse res
-        head :: tail ->
-            case head of
-                ListAtom list ->
-                    case list of
-                        [a, b] ->
-                            case a of
-                                StringAtom sa ->
-                                    case b of
-                                        StringAtom sb ->
-                                            atomsToStringPairs
-                                                tail ((sa, sb) :: res)
-                                        _ ->
-                                            Nothing
-                                _ ->
-                                    Nothing
-                        _ ->
-                            Nothing
-                _ ->
-                    Nothing
+        (ListAtom [StringAtom sa, StringAtom sb]) :: tail ->
+            atomsToStringPairs tail ((sa, sb) :: res)
+        _ ->
+            Nothing
 
 handleCharAttribute : String -> (Char -> Attribute msg) -> Atom msg -> Attribute msg
 handleCharAttribute attributeName attributeWrapper atom =
@@ -896,9 +881,9 @@ letBindingsFunction args _ =
                     , body
                     )
                 _ ->
-                    ( [], [badArgs "let" args], IntAtom 0 )
+                    ( [], [argsHelp "let" args], IntAtom 0 )
         _ ->
-            ( [], [badArgs "let" args], IntAtom 0 )
+            ( [], [argsHelp "let" args], IntAtom 0 )
 
 addAtomBindings : List String -> List (Atom msg) -> TemplateDicts msg -> TemplateDicts msg
 addAtomBindings vars vals dicts =
@@ -917,7 +902,7 @@ letFunction args (TheDicts dicts) =
             in
                 installBindingsInternal dicts2 body                
         _ ->
-            badArgs "let" args
+            argsHelp "let" args
 
 brTemplate : Atom msg
 brTemplate =
@@ -952,25 +937,13 @@ atomsNotEqual a1 a2 =
 
 compareAtoms : Atom msg -> Atom msg -> Maybe Order
 compareAtoms a1 a2 =
-    case a1 of
-        StringAtom s1 ->
-            case a2 of
-                StringAtom s2 ->
-                    Just <| compare s1 s2
-                _ ->
-                    Nothing
-        IntAtom i1 ->
-            case a2 of
-                IntAtom i2 ->
-                    Just <| compare i1 i2
-                _ ->
-                    Nothing
-        FloatAtom f1 ->
-            case a2 of
-                FloatAtom f2 ->
-                    Just <| compare f1 f2
-                _ ->
-                    Nothing
+    case (a1, a2) of
+        (StringAtom s1, StringAtom s2) ->
+            Just <| compare s1 s2
+        (IntAtom i1, IntAtom i2) ->
+            Just <| compare i1 i2
+        (FloatAtom f1, FloatAtom f2) ->
+            Just <| compare f2 f2
         _ ->
             Nothing
 
@@ -1024,65 +997,50 @@ alwaysFloatOperators =
         [ ("/", (/))
         ]
 
+atomsToFloats : List (Atom msg) -> Maybe (List Float)
+atomsToFloats atoms =
+    atomsToFloatsLoop atoms []
+
+atomsToFloatsLoop : List (Atom msg) -> List Float -> Maybe (List Float)
+atomsToFloatsLoop atoms res =
+    case atoms of
+        [] ->
+            Just <| List.reverse res
+        atom :: rest ->
+            case atom of
+                FloatAtom f ->
+                    atomsToFloatsLoop rest <| f :: res
+                IntAtom i ->
+                    atomsToFloatsLoop rest <| (toFloat i) :: res
+                _ ->
+                    Nothing
+
 arith : String -> Atom msg -> Atom msg -> Maybe (Atom msg)
 arith operator a1 a2 =
     case Dict.get operator alwaysFloatOperators of
         Just f ->
-            let bad = (0.0, False)
-                (f1, isNumeric) =
-                    case a1 of
-                        IntAtom i1 -> (toFloat i1, True)
-                        FloatAtom f1 -> (f1, True)
-                        _ -> bad
-                (f2, isReallyNumeric) =
-                    if isNumeric then
-                        case a2 of
-                            IntAtom i1 -> (toFloat i1, True)
-                            FloatAtom f2 -> (f2, True)
-                            _ -> bad
-                    else
-                        bad
-            in
-                if isReallyNumeric then
+            case atomsToFloats [a1, a2] of
+                Just [f1, f2] ->
                     Just <| FloatAtom <| f f1 f2
-                else
+                _ ->
                     Nothing
         Nothing ->
-            let bad = (0, 0, 0.0, 0.0, "")
-                (i1, i2, f1, f2, argType) =
-                    case a1 of
-                        IntAtom i1 ->
-                            case a2 of
-                                IntAtom i2 ->
-                                    (i1, i2, 0.0, 0.0, "int")
-                                FloatAtom f2 ->
-                                    (0, 0, toFloat i1, f2, "float")
+            case (a1, a2) of
+                (IntAtom i1, IntAtom i2) ->
+                    case Dict.get operator intOperators of
+                        Nothing -> Nothing
+                        Just f ->
+                            Just <| IntAtom <| f i1 i2
+
+                _ ->
+                    case Dict.get operator floatOperators of
+                        Nothing -> Nothing
+                        Just f ->
+                            case atomsToFloats [a1, a2] of
+                                Just [f1, f2] ->
+                                    Just <| FloatAtom <| f f1 f2
                                 _ ->
-                                    bad
-                        FloatAtom f1 ->
-                            case a2 of
-                                IntAtom i2 ->
-                                    (0, 0, f1, toFloat i2, "float")
-                                FloatAtom f2 ->
-                                    (0, 0, f1, f2, "float")
-                                _ ->
-                                    bad
-                        _ ->
-                            bad
-            in
-                case argType of
-                    "int" ->
-                        case Dict.get operator intOperators of
-                            Nothing -> Nothing
-                            Just f ->
-                                Just <| IntAtom <| f i1 i2
-                    "float" ->
-                        case Dict.get operator floatOperators of
-                            Nothing -> Nothing
-                            Just f ->
-                                Just <| FloatAtom <| f f1 f2
-                    _ ->
-                        Nothing
+                                    Nothing
 
 firstArgTable : Dict String (Atom msg)
 firstArgTable =
@@ -1125,19 +1083,15 @@ intDivideFunction = arithFunction "//"
 ifFunction : List (Atom msg) -> Dicts msg -> Atom msg
 ifFunction args (TheDicts dicts) =
     case args of
-        [ operator, c1, c2, body ] ->
-            case operator of
-                StringAtom op ->
-                    case Dict.get op ifOperatorDict of
-                        Nothing ->
-                            argsHelp "/if" args
-                        Just f ->
-                            if f c1 c2 then
-                                body
-                            else
-                                StringAtom ""
-                _ ->
+        [ StringAtom op, c1, c2, body ] ->
+            case Dict.get op ifOperatorDict of
+                Nothing ->
                     argsHelp "/if" args
+                Just f ->
+                    if f c1 c2 then
+                        body
+                    else
+                        StringAtom ""
         _ ->
             argsHelp "/if" args
 
@@ -1196,11 +1150,7 @@ applyFunction args (TheDicts dicts) =
                 _ ->
                     cantApply function args
         _ ->
-            badArgs "apply" args
-
-badArgs : String -> List (Atom msg) -> Atom msg
-badArgs name args =
-    StringAtom <| "Bad args to " ++ name ++ ": " ++ (toString args)
+            argsHelp "apply" args
 
 flattenApplyArgs : List (Atom msg) -> List (Atom msg) -> List (Atom msg)
 flattenApplyArgs args res =
