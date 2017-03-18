@@ -5,6 +5,7 @@ import Expect exposing ( Expectation )
 import List
 
 import HtmlTemplate exposing ( Atom(..), decodeAtom
+                             , defaultDicts, installBindings
                              )
 
 log = Debug.log
@@ -23,11 +24,25 @@ maybeLog label value =
 all : Test
 all =
     Test.concat <|
-        List.append
-            (List.map atomTest atomData)
-            (List.map templateTest templateData)
+        List.concat
+            [ (List.map atomTest atomData)
+            , (List.map templateTest templateData)
+            , (List.map functionTest functionData)
+            ]
 
-expectResult : Result String x -> Result String x -> Expectation
+expectAlmostEqual : Atom msg -> Atom msg -> Expectation
+expectAlmostEqual a1 a2 =
+    case a1 of
+        FloatAtom f1 ->
+            case a2 of
+                FloatAtom f2 ->
+                    Expect.true "expectAlmostEqual" <| (abs (f1 - f2)) < 0.0001
+                _ ->
+                    Expect.equal a1 a2
+        _ ->
+            Expect.equal a1 a2
+
+expectResult : Result String (Atom msg) -> Result String (Atom msg) -> Expectation
 expectResult sb was =
     case (maybeLog "  result" was) of
         Err msg ->
@@ -41,7 +56,7 @@ expectResult sb was =
                 Err _ ->
                     Expect.false "Expected an error but didn't get one." True
                 Ok sbv ->
-                    Expect.equal sbv wasv
+                    expectAlmostEqual sbv wasv
 
 atomTest : ( String, Result String (Atom msg) ) -> Test
 atomTest ( json, expected ) =
@@ -75,12 +90,6 @@ atomData =
       , Ok <| LookupTemplateAtom "foo"
       )
     , ( "[\"/gotoPage\",\"home\"]"
-      , Ok <| FuncallAtom
-            { function = "gotoPage"
-            , args = ListAtom [ StringAtom "home" ]
-            }
-      )
-    , ( "[\"/apply\",\"/gotoPage\",[\"home\"]]"
       , Ok <| FuncallAtom
             { function = "gotoPage"
             , args = ListAtom [ StringAtom "home" ]
@@ -129,6 +138,38 @@ atomData =
       )
     , ( "[\"p\",{},1,2]"
       , Ok <| ListAtom [ StringAtom "p", PListAtom [], IntAtom 1, IntAtom 2 ]
+      )
+    ]
+
+eval : Atom msg -> Atom msg
+eval atom =
+    installBindings atom defaultDicts
+
+functionTest : ( String, Result String (Atom msg) ) -> Test
+functionTest ( json, expected ) =
+    test ("functionTest \"" ++ json ++ "\"")
+        (\_ ->
+             expectResult expected
+               <| case decodeAtom (maybeLog "atomJson" json) of
+                      Ok atom ->
+                        Ok <| eval atom
+                      err ->
+                        err
+        )
+
+functionData : List ( String, Result String (Atom msg) )
+functionData =
+    [ ( "[\"/+\",1, 2]"
+      , Ok <| IntAtom 3
+      )
+    , ( "[\"/*\",3,[\"/+\",1.2, 2]]"
+      , Ok <| FloatAtom 9.6
+      )
+    , ( "[\"/apply\",\"/+\",[1, 2]]"
+      , Ok <| IntAtom 3
+      )
+    , ( "[\"/concat\",[\"/loop\",\"x\",[1,2,3],[\"/loop\",\"x\",[\"/+\",\"$x\",[\"/*\",\"$x\",3]],[\"/+\",\"$x\",1]]]]"
+      , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
       )
     ]
 
