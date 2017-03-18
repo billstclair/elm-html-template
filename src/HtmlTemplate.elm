@@ -77,9 +77,9 @@ type alias TemplateDicts msg =
     { atoms : Dict String (Atom msg)
     , templates : Dict String (Atom msg)
     , pages : Dict String (Atom msg)
-    , functions : Dict String (Atom msg -> Dicts msg -> (Atom msg) )
-    , bindingsFunctions : Dict String (Atom msg -> Dicts msg -> (List String, Atom msg, Atom msg))
-    , messages : Dict String (Atom msg -> Dicts msg -> msg)
+    , functions : Dict String (List (Atom msg) -> Dicts msg -> (Atom msg) )
+    , bindingsFunctions : Dict String (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
+    , messages : Dict String (List (Atom msg) -> Dicts msg -> msg)
     }
 
 -- Have to tag this for recursive use
@@ -150,7 +150,7 @@ type alias HtmlTemplateRecord msg =
 --       ]
 type alias HtmlTemplateFuncall msg =
     { function : String
-    , args : Atom msg
+    , args : List (Atom msg)
     }
 
 templateReferences : Atom msg -> List String
@@ -174,23 +174,25 @@ templateReferencesLoop template res =
         RecordAtom { body } ->
             List.foldl templateReferencesLoop res body
         FuncallAtom { args } ->
-            templateReferences args
+            List.concatMap templateReferences args
         _ ->
             res
 
-withFuncallBindings : HtmlTemplateFuncall msg -> Dicts msg -> ((List String, Atom msg, Atom msg) -> x) -> x
-withFuncallBindings {function, args} (TheDicts dicts) f =
+withFuncallBindings : HtmlTemplateFuncall msg -> TemplateDicts msg -> ((List String, List (Atom msg), Atom msg) -> x) -> x
+withFuncallBindings {function, args} dicts f =
     case Dict.get function dicts.bindingsFunctions of
         Nothing ->
             f ([], args, IntAtom 1)
         Just bindingsFunction ->
             f <| bindingsFunction args (TheDicts dicts)
 
+-- This isn't currently used. I included it only to mirror
+-- pageReferences and templateReferences
 atomReferences : Atom msg -> Dicts msg -> List String
-atomReferences atom dicts =
+atomReferences atom (TheDicts dicts) =
     atomReferencesLoop [] dicts atom []
 
-atomReferencesLoop : List String -> Dicts msg -> Atom msg -> List String -> List String
+atomReferencesLoop : List String -> TemplateDicts msg -> Atom msg -> List String -> List String
 atomReferencesLoop boundNames dicts atom res =
     case atom of
         LookupAtom name ->
@@ -209,9 +211,13 @@ atomReferencesLoop boundNames dicts atom res =
         FuncallAtom funcallRecord ->
             withFuncallBindings funcallRecord dicts
                 <| (\(bindings, bare, bound) ->
+                    let bare2 = List.map (\a -> atomReferencesLoop boundNames dicts a [])
+                                bare
+                        res2 = List.append (List.concat bare2) res
+                    in
                         atomReferencesLoop (List.append bindings boundNames)
                             dicts bound
-                            <| atomReferencesLoop boundNames dicts bare res
+                            <| atomReferencesLoop boundNames dicts bound res2
                    )
         _ ->
             res
@@ -237,7 +243,7 @@ pageReferencesLoop atom res =
         RecordAtom { body } ->
             List.foldl pageReferencesLoop res body
         FuncallAtom { args } ->
-            pageReferences args
+            List.concatMap pageReferences args
         _ ->
             res
 
@@ -251,7 +257,7 @@ htmlLookupStringDecoder =
 
 quotedChars : List String
 quotedChars =
-    [ "@", "$", "/" ]
+    [ "@", "$", "/", "?" ]
 
 maybeStripQuote : String -> Decoder String
 maybeStripQuote string =
@@ -311,7 +317,7 @@ ensureFuncallList atoms =
                         Just name ->
                             JD.succeed
                                 { function = name
-                                , args = ListAtom args
+                                , args = args
                                 }
                         Nothing ->
                             JD.fail <| "Not a function operator: " ++ s
@@ -534,40 +540,38 @@ renderAttributeAtom (name, atomOrLookup) dicts =
                         name atomOrLookup attributeFunction dicts
 
 renderAttributeAtomInternal : String -> Atom msg -> AttributeFunction msg -> TemplateDicts msg -> Attribute msg
-renderAttributeAtomInternal name atomOrLookup function dicts =
-    let atom = processFuncallArgs atomOrLookup dicts
-    in
-        case function of
-            StringAttributeFunction f ->
-                case atom of
-                    StringAtom string -> f string
-                    _ -> badTypeTitle name atom
-            IntAttributeFunction f ->
-                case atom of
-                    IntAtom int -> f int
-                    _ -> badTypeTitle name atom
-            FloatAttributeFunction f ->
-                case atom of
-                    FloatAtom float -> f float
-                    _ -> badTypeTitle name atom
-            BoolAttributeFunction f ->
-                case atom of
-                    BoolAtom bool -> f bool
-                    _ -> badTypeTitle name atom
-            AtomsAttributeFunction f ->
-                case atom of
-                    ListAtom atoms -> f atoms
-                    _ -> badTypeTitle name atom
-            MsgAttributeFunction f ->
-                handleMsgAttribute name f atom dicts
-            MsgAttributeStringLookupFunction f ->
-                handleStringLookupMsgAttribute name f atom dicts
-            MsgAttributeBoolLookupFunction f ->
-                handleBoolLookupMsgAttribute name f atom dicts
-            StringPairListAttributeFunction f ->
-                handleStringPairListAttribute name f atom
-            CharAttributeFunction f ->
-                handleCharAttribute name f atom
+renderAttributeAtomInternal name atom function dicts =
+    case function of
+        StringAttributeFunction f ->
+            case atom of
+                StringAtom string -> f string
+                _ -> badTypeTitle name atom
+        IntAttributeFunction f ->
+            case atom of
+                IntAtom int -> f int
+                _ -> badTypeTitle name atom
+        FloatAttributeFunction f ->
+            case atom of
+                FloatAtom float -> f float
+                _ -> badTypeTitle name atom
+        BoolAttributeFunction f ->
+            case atom of
+                BoolAtom bool -> f bool
+                _ -> badTypeTitle name atom
+        AtomsAttributeFunction f ->
+            case atom of
+                ListAtom atoms -> f atoms
+                _ -> badTypeTitle name atom
+        MsgAttributeFunction f ->
+            handleMsgAttribute name f atom dicts
+        MsgAttributeStringLookupFunction f ->
+            handleStringLookupMsgAttribute name f atom dicts
+        MsgAttributeBoolLookupFunction f ->
+            handleBoolLookupMsgAttribute name f atom dicts
+        StringPairListAttributeFunction f ->
+            handleStringPairListAttribute name f atom
+        CharAttributeFunction f ->
+            handleCharAttribute name f atom
 
 handleMsgAttribute : String -> (msg -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleMsgAttribute attributeName attributeWrapper atom dicts =
@@ -578,14 +582,9 @@ handleMsgAttribute attributeName attributeWrapper atom dicts =
                     Attributes.title
                         <| "Unknown message function: " ++ (toString atom)
                 Just f ->
-                    case maybeLookupAtom args dicts of
-                        Nothing ->
-                            Attributes.title
-                                <| "Unknown atom lookup " ++ (toString atom)
-                        Just a ->
-                            attributeWrapper
-                            <| f (processFuncallArgs a dicts)
-                            <| TheDicts dicts
+                    attributeWrapper
+                    <| f args
+                    <| TheDicts dicts
         _ ->
             badTypeTitle attributeName atom
 
@@ -767,8 +766,8 @@ installBindingsInternal dicts atom =
                     atom
                 Just value ->
                     installBindingsInternal dicts value
-        FuncallAtom { function, args } ->
-            installBindingsInternal dicts <| doFuncall function args dicts
+        FuncallAtom funcallRecord ->
+            installFuncallBindings funcallRecord dicts
         ListAtom list ->
             ListAtom
             <| List.map (installBindingsInternal dicts) list
@@ -788,6 +787,26 @@ installBindingsInternal dicts atom =
                }
         _ ->
             atom
+
+installFuncallBindings : HtmlTemplateFuncall msg -> TemplateDicts msg -> Atom msg
+installFuncallBindings funcallRecord dicts =
+    let { function } = funcallRecord
+    in
+        withFuncallBindings funcallRecord dicts
+            <| (\(bindings, bare, bound) ->
+                let bare2 = List.map (installBindingsInternal dicts) bare
+                in
+                    if bindings == [] then
+                        doFuncall function bare2 dicts
+                    else
+                        doFuncall
+                            function
+                            [ ListAtom <| List.map StringAtom bindings
+                            , ListAtom bare2
+                            , bound
+                            ]
+                            dicts
+                )
 
 isMsgAttributeFunction : AttributeFunction msg -> Bool
 isMsgAttributeFunction function =
@@ -810,7 +829,7 @@ installAttributeBindings dicts (name, atom) =
                   if isMsgFuncall then
                       FuncallAtom
                       { function = function
-                      , args = installBindingsInternal dicts args
+                      , args = List.map (installBindingsInternal dicts) args
                       }
                   else
                       installBindingsInternal dicts atom
@@ -823,49 +842,36 @@ installAttributeBindings dicts (name, atom) =
 -- Still need a letFunction, to bind multiple vars to vals.
 -- Plus some arithmetic.
 
-loopFunction : Atom msg -> Dicts msg -> Atom msg
+loopFunction : List (Atom msg) -> Dicts msg -> Atom msg
 loopFunction args (TheDicts dicts) =
     case args of
-        ListAtom atoms ->
-            case atoms of
-                [ var, values, template ] ->
-                    case loopArgs var values template dicts of
-                        Nothing ->
-                            loopHelp var values template
-                        Just (varName, vals, tmpl) ->
-                            ListAtom <| List.map (loopBody varName tmpl dicts) vals
+        [ vars, values, template ] ->
+            case (vars, values) of
+                (ListAtom [(StringAtom varName)], ListAtom [ ListAtom vals ]) ->
+                    ListAtom <| List.map (loopBody varName template dicts) vals
                 _ ->
-                    StringAtom
-                    <| "Malformed args: " ++ (toString args)
+                    loopHelp vars values template
         _ ->
             StringAtom
-            <| "Args not a ListAtom: " ++ (toString args)
+            <| "Malformed args: " ++ (toString args)
 
-loopBindingsFunction : Atom msg -> Dicts msg -> (List String, Atom msg, Atom msg)
-loopBindingsFunction args (TheDicts dicts) =
+loopBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
+loopBindingsFunction args _ =
     case args of
-        ListAtom atoms ->
-            case atoms of
-                [ var, values, template ] ->
-                    case loopArgs var values template dicts of
-                        Nothing ->
-                            ([], values, template)
-                        Just (varName, vals, body) ->
-                            ([ varName ], ListAtom vals, body)
-                _ ->
-                    ([], args, IntAtom 0)
+        [ var, values, template ] ->
+            case loopArgs var values template of
+                Nothing ->
+                    ([], [ values ], template)
+                Just (varName, vals, body) ->
+                    ([ varName ], vals, body)
         _ ->
             ([], args, IntAtom 0)
 
-loopArgs : Atom msg -> Atom msg -> Atom msg -> TemplateDicts msg -> Maybe (String, List (Atom msg), Atom msg)
-loopArgs var vals template dicts =
+loopArgs : Atom msg -> Atom msg -> Atom msg -> Maybe (String, List (Atom msg), Atom msg)
+loopArgs var vals template =
     case var of
         StringAtom varName ->
-            case vals of
-                ListAtom list ->
-                    Just (varName, list, template)
-                _ ->
-                    Just (varName, [vals], template)
+            Just (varName, [vals], template)
         _ ->
             Nothing
 
@@ -873,12 +879,45 @@ loopBody : String -> Atom msg -> TemplateDicts msg -> Atom msg -> (Atom msg)
 loopBody varName template dicts value =
     let atomsDict = dicts.atoms
     in
-        let val = installBindingsInternal dicts value
-            ds = { dicts
-                     | atoms = Dict.insert varName val atomsDict
+        let ds = { dicts
+                     | atoms = Dict.insert varName value atomsDict
                  }
         in
             installBindingsInternal ds template
+
+letBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
+letBindingsFunction args _ =
+    case args of
+        [bindings, body] ->
+            case bindings of
+                PListAtom plist ->
+                    ( List.map Tuple.first plist
+                    , List.map Tuple.second plist
+                    , body
+                    )
+                _ ->
+                    ( [], [badArgs "let" args], IntAtom 0 )
+        _ ->
+            ( [], [badArgs "let" args], IntAtom 0 )
+
+addAtomBindings : List String -> List (Atom msg) -> TemplateDicts msg -> TemplateDicts msg
+addAtomBindings vars vals dicts =
+    { dicts |
+          atoms = List.foldl (\(var, val) dict -> Dict.insert var val dict)
+                    dicts.atoms
+                    <| LE.zip vars vals
+    }
+
+letFunction : List (Atom msg) -> Dicts msg -> Atom msg
+letFunction args (TheDicts dicts) =
+    case args of
+        [ ListAtom vars, ListAtom vals, body ] ->
+            let names = List.map atomToString vars
+                dicts2 = addAtomBindings names vals dicts
+            in
+                installBindingsInternal dicts2 body                
+        _ ->
+            badArgs "let" args
 
 brTemplate : Atom msg
 brTemplate =
@@ -886,13 +925,11 @@ brTemplate =
 
 loopHelp : Atom msg -> Atom msg -> Atom msg -> Atom msg
 loopHelp var values template =
-    tagWrap "p" []
-        [ StringAtom <| "Loop for " ++ (toBracketedString var)
-        , brTemplate
-        , StringAtom <| " in " ++ (toBracketedString values)
-        , brTemplate
-        , StringAtom <| " do: " ++ (toBracketedString template)
-        ]
+        ListAtom [ StringAtom "/loop"
+                 , var
+                 , values
+                 , template
+                 ]
         
 ifOperatorDict : Dict String (Atom msg -> Atom msg -> Bool)
 ifOperatorDict =
@@ -1071,18 +1108,13 @@ argArith operator atoms =
             firstArg ->
                 List.foldl f firstArg atoms
 
-arithFunction : String -> Atom msg -> Dicts msg -> Atom msg
+arithFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
 arithFunction operator args dicts =
-    let realArgs = installBindings args dicts
-        list = case realArgs of
-                   ListAtom l -> l
-                   _ -> [realArgs]
-    in
-        case argArith operator list of
-            Nothing ->
-                argsHelp ("/" ++ operator) args
-            Just res ->
-                res
+    case argArith operator args of
+        Nothing ->
+            argsHelp ("/" ++ operator) args
+        Just res ->
+            res
 
 plusFunction = arithFunction "+"
 minusFunction = arithFunction "-"
@@ -1090,10 +1122,10 @@ timesFunction = arithFunction "*"
 divideFunction = arithFunction "/"
 intDivideFunction = arithFunction "//"
 
-ifFunction : Atom msg -> Dicts msg -> Atom msg
+ifFunction : List (Atom msg) -> Dicts msg -> Atom msg
 ifFunction args (TheDicts dicts) =
     case args of
-        ListAtom [ operator, c1, c2, body ] ->
+        [ operator, c1, c2, body ] ->
             case operator of
                 StringAtom op ->
                     case Dict.get op ifOperatorDict of
@@ -1109,9 +1141,11 @@ ifFunction args (TheDicts dicts) =
         _ ->
             argsHelp "/if" args
 
-argsHelp : String -> Atom msg -> Atom msg
+argsHelp : String -> List (Atom msg) -> Atom msg
 argsHelp function args =
-    StringAtom <| "[" ++ function ++ ", " ++ (toBracketedString args) ++ "]"
+    StringAtom <| "[\"/" ++ function ++ "\", " ++
+        (String.join " " <| List.map toBracketedString args) ++
+        "]"
 
 isStringAtom : Atom msg -> Bool
 isStringAtom atom =
@@ -1133,51 +1167,48 @@ listAtomList atom =
         _ ->
             []
 
-concatFunction : Atom msg -> x -> Atom msg
-concatFunction atom _ =
-    case atom of
-        ListAtom list -> 
-            case LE.find (\x -> not <| isListAtom x) list of
-                Nothing ->
-                    ListAtom <| List.concat <| List.map listAtomList list
-                Just _ ->
-                    StringAtom <| String.concat <| List.map atomToString list
-        _ ->
-            StringAtom <| atomToString atom
+appendFunction : List (Atom msg) -> Dicts msg -> Atom msg
+appendFunction list _ =
+    case LE.find (\x -> not <| isListAtom x) list of
+        Nothing ->
+            ListAtom <| List.concat <| List.map listAtomList list
+        Just _ ->
+            StringAtom <| String.concat <| List.map atomToString list
 
 cantApply : Atom msg -> List (Atom msg) -> Atom msg
 cantApply function args =
     StringAtom
     <| "Can't apply " ++ (toString function) ++ " to " ++ (toString args)
 
-applyFunction : Atom msg -> x -> Atom msg
-applyFunction atom _ =
-    case atom of
-        ListAtom (function :: args) ->
+applyFunction : List (Atom msg) -> Dicts msg -> Atom msg
+applyFunction args (TheDicts dicts) =
+    case args of
+        function :: functionArgs ->
             case function of
                 StringAtom s ->
                     case extractLookupString "/" s of
                         Nothing ->
                             cantApply function args
                         Just f ->
-                            FuncallAtom
-                                { function = f
-                                , args = flattenApplyArgs args []
-                                }
+                            doFuncall f
+                                (flattenApplyArgs functionArgs [])
+                                dicts
                 _ ->
                     cantApply function args
         _ ->
-            StringAtom
-            <| "Can't happen. Non-list to function: " ++ (toString atom)
+            badArgs "apply" args
 
-flattenApplyArgs : List (Atom msg) -> List (Atom msg) -> (Atom msg)
+badArgs : String -> List (Atom msg) -> Atom msg
+badArgs name args =
+    StringAtom <| "Bad args to " ++ name ++ ": " ++ (toString args)
+
+flattenApplyArgs : List (Atom msg) -> List (Atom msg) -> List (Atom msg)
 flattenApplyArgs args res =
     case args of
         [] ->
-            ListAtom []
+            []
         [last] ->
-            ListAtom
-            <| List.append
+            List.append
                 (List.reverse res)
                 <| case last of
                        ListAtom l -> l
@@ -1202,34 +1233,47 @@ atomToBody atom wrapper =
         _ ->
             [ wrapper [ atom ] ]
 
-psFunction : Atom msg -> Dicts msg -> Atom msg
-psFunction atom (TheDicts dicts) =
-    let body = atomToBody atom (tagWrap "p" [])
+psFunction : List (Atom msg) -> Dicts msg -> Atom msg
+psFunction args (TheDicts dicts) =
+    let body = List.map (\a -> tagWrap "p" [] [a]) args
     in
         tagWrap "div" [] body
 
-defaultFunctionsDict : Dict String (Atom msg -> Dicts msg -> Atom msg)
+logFunction : List (Atom msg) -> Dicts msg -> Atom msg
+logFunction args _ =
+    case args of
+        [] ->
+            ListAtom []
+        [label] ->
+            log "" label
+        label :: (val :: _) ->
+            log (atomToString label) val
+
+defaultFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> Atom msg)
 defaultFunctionsDict =
     Dict.fromList [ ( "loop", loopFunction)
+                  , ( "let", letFunction )
                   , ( "ps", psFunction )
                   , ( "if", ifFunction )
-                  , ( "concat", concatFunction )
+                  , ( "append", appendFunction )
                   , ( "apply", applyFunction )
                   , ( "+", plusFunction )
                   , ( "-", minusFunction )
                   , ( "*", timesFunction )
                   , ( "/", divideFunction )
                   , ( "//", intDivideFunction )
+                  , ( "log", logFunction )
                   ]
 
-defaultBindingsFunctionsDict : Dict String (Atom msg -> Dicts msg -> (List String, Atom msg, Atom msg))
+defaultBindingsFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
 defaultBindingsFunctionsDict =
     Dict.fromList [ ( "loop", loopBindingsFunction)
+                  , ( "let", letBindingsFunction )
                   ]
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
 renderAtom template (TheDicts dicts) =
-    renderHtmlAtom template dicts
+    renderHtmlAtom (installBindingsInternal dicts template) dicts
 
 renderHtmlAtom : Atom msg -> TemplateDicts msg -> Html msg
 renderHtmlAtom template dicts =
@@ -1290,26 +1334,13 @@ getTagFunction tag =
                 Nothing ->
                     Nothing
 
-doFuncall : String -> Atom msg -> TemplateDicts msg -> Atom msg
+doFuncall : String -> List (Atom msg) -> TemplateDicts msg -> Atom msg
 doFuncall function args dicts =
     case Dict.get function dicts.functions of
         Nothing ->
             StringAtom <| "funcall " ++ function ++ (toBracketedString args)
         Just f ->
-            f (processFuncallArgs args dicts) <| TheDicts dicts
-
--- Should handle reference loops here
-processFuncallArgs : Atom msg -> TemplateDicts msg -> Atom msg
-processFuncallArgs atom dicts =
-    case maybeLookupAtom atom dicts of
-        Nothing ->
-            atom
-        Just atom ->
-            case atom of
-                ListAtom list ->
-                    ListAtom <| List.map (\a -> processFuncallArgs a dicts) list
-                _ ->
-                    atom
+            f args <| TheDicts dicts
 
 renderHtmlAttributes : List (String, Atom msg) -> TemplateDicts msg -> List (Attribute msg)
 renderHtmlAttributes attributes dicts =
@@ -1462,7 +1493,7 @@ insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
 insertPair (k, v) dict =
     Dict.insert k v dict
 
-insertFunctions : List (String, (Atom msg -> Dicts msg -> Atom msg)) -> Loaders msg x -> Loaders msg x
+insertFunctions : List (String, (List (Atom msg) -> Dicts msg -> Atom msg)) -> Loaders msg x -> Loaders msg x
 insertFunctions pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         functions = List.foldl insertPair dicts.functions pairs
@@ -1470,7 +1501,7 @@ insertFunctions pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | functions = functions } }
 
-insertMessages : List (String, (Atom msg -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
+insertMessages : List (String, (List (Atom msg) -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
 insertMessages pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         messages = List.foldl insertPair dicts.messages pairs
@@ -1478,7 +1509,7 @@ insertMessages pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | messages = messages } }
 
-insertBindingsFunctions : List (String, (Atom msg -> Dicts msg -> (List String, Atom msg, Atom msg))) -> Loaders msg x -> Loaders msg x
+insertBindingsFunctions : List (String, (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))) -> Loaders msg x -> Loaders msg x
 insertBindingsFunctions pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
         functions = List.foldl insertPair dicts.bindingsFunctions pairs

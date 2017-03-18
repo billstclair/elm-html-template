@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( Loaders, Atom(..)
+import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , makeLoaders, insertFunctions, insertMessages
                              , addPageProcessors
                              , getExtra, getDicts
@@ -86,22 +86,22 @@ templateFilename : String -> String
 templateFilename name =
     name ++ templateFileType
 
-gotoPageFunction : Atom Msg -> x -> Msg
-gotoPageFunction atom _ =
-    case atom of
-        StringAtom page ->
+gotoPageFunction : List (Atom Msg) -> Dicts Msg -> Msg
+gotoPageFunction args _ =
+    case args of
+        [StringAtom page] ->
             GotoPage page
         _ ->
-            SetError <| "Can't go to page: " ++ (toString atom)
+            SetError <| "Can't go to page: " ++ (toString args)
 
-messages : List (String, Atom Msg -> x -> Msg)
+messages : List (String, List (Atom Msg) -> Dicts Msg -> Msg)
 messages =
     [ ( "gotoPage", gotoPageFunction )
     ]
 
-pageLinkFunction : Atom Msg -> x -> Atom Msg
-pageLinkFunction atom _ =
-    case normalizePageLinkArgs atom of
+pageLinkFunction : List (Atom Msg) -> Dicts Msg -> Atom Msg
+pageLinkFunction args _ =
+    case normalizePageLinkArgs args of
         Just ( page, title ) ->
             HtmlAtom
             <| a [ href "#"
@@ -109,31 +109,19 @@ pageLinkFunction atom _ =
                  ]
                 [ text title ]
         _ ->
-            StringAtom <| "Bad link: " ++ (toBracketedString atom)
+            StringAtom <| "Bad link: " ++ (toBracketedString args)
 
-normalizePageLinkArgs : Atom Msg -> Maybe (String, String)
+normalizePageLinkArgs : List (Atom Msg) -> Maybe (String, String)
 normalizePageLinkArgs atom =
     case atom of
-        ListAtom [ pageAtom ] ->
-            case pageAtom of
-                StringAtom page ->
-                    Just (page, page)
-                _ ->
-                    Nothing
-        ListAtom [ pageAtom, titleAtom ] ->
-            case pageAtom of
-                StringAtom page ->
-                    case titleAtom of
-                        StringAtom title ->
-                            Just (page, title)
-                        _ ->
-                            Nothing
-                _ ->
-                    Nothing
+        [ StringAtom page ] ->
+            Just (page, page)
+        [ StringAtom page, StringAtom title ] ->
+            Just (page, title)
         _ ->
             Nothing
 
-functions : List (String, Atom Msg -> x -> Atom Msg)
+functions : List (String, List (Atom Msg) -> Dicts Msg -> Atom Msg)
 functions =
     [ ( "pageLink", pageLinkFunction )
     ]
@@ -365,7 +353,7 @@ view model =
                                       let lds = setAtoms
                                                 [ ("node", atom)
                                                 , ("content", content)
-                                                , ("page", (StringAtom page))
+                                                , ("page", StringAtom page)
                                                 ]
                                                 loaders
                                       in

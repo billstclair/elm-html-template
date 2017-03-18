@@ -92,7 +92,7 @@ atomData =
     , ( "[\"/gotoPage\",\"home\"]"
       , Ok <| FuncallAtom
             { function = "gotoPage"
-            , args = ListAtom [ StringAtom "home" ]
+            , args = [ StringAtom "home" ]
             }
       )
     , ( "[\"foo\",\"bar\"]"
@@ -165,10 +165,10 @@ functionData =
     , ( "[\"/*\",3,[\"/+\",1.2, 2]]"
       , Ok <| FloatAtom 9.6
       )
-    , ( "[\"/apply\",\"/+\",[1, 2]]"
-      , Ok <| IntAtom 3
+    , ( "[\"/apply\",\"/+\",1,[2, 3]]"
+      , Ok <| IntAtom 6
       )
-    , ( "[\"/concat\",[\"/loop\",\"x\",[1,2,3],[\"/loop\",\"x\",[\"/+\",\"$x\",[\"/*\",\"$x\",3]],[\"/+\",\"$x\",1]]]]"
+    , ( "[\"/let\",{\"x\":[1,2,3]},[\"/loop\",\"x\",\"$x\",[\"/let\",{\"x\":[\"/+\",\"$x\",[\"/*\",\"$x\",3]],\"y\":1},[\"/+\",\"$x\",\"$y\"]]]]"
       , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
       )
     ]
@@ -196,14 +196,14 @@ templateData =
       , Ok
             <| FuncallAtom
                 { function = "loop"
-                , args = ListAtom [ LookupAtom "p"
-                                  , LookupAtom "ps"
-                                  , RecordAtom
-                                        { tag = "p"
-                                        , attributes = []
-                                        , body = [ LookupAtom "p" ]
-                                        }
-                                  ]
+                , args = [ LookupAtom "p"
+                         , LookupAtom "ps"
+                         , RecordAtom
+                               { tag = "p"
+                               , attributes = []
+                               , body = [ LookupAtom "p" ]
+                               }
+                         ]
                 }
       )
     , ( "[\"a\",{\"title\": \"foo\"},[\"bar\"]]"
