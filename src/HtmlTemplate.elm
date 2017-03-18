@@ -1070,12 +1070,27 @@ arithFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
 arithFunction operator args dicts =
     case argArith operator args of
         Nothing ->
-            argsHelp ("/" ++ operator) args
+            argsHelp operator args
         Just res ->
             res
 
+boolBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
+boolBindingsFunction args _ =
+    ( ["ignored"]
+    , []
+    , ListAtom args
+    )
+
 boolFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
-boolFunction op args _ =
+boolFunction op args1 dicts =
+    case args1 of
+        [_, _, ListAtom args] ->
+            boolFunctionInternal op args dicts
+        _ ->
+            argsHelp op args1
+
+boolFunctionInternal : String -> List (Atom msg) -> Dicts msg -> Atom msg
+boolFunctionInternal op args dicts =
     let (op2, negate) =
             if op == "<>" then
                 ("==", True)
@@ -1084,42 +1099,67 @@ boolFunction op args _ =
     in
         case Dict.get op2 ifOperatorDict of
             Nothing ->
-                argsHelp ("/" ++ op) args
+                argsHelp op args
             Just f ->
                 let res = case args of
                               [] -> True
                               [_] -> True
                               a :: rest ->
-                                  boolLoop f a rest
+                                  boolLoop
+                                      f (installBindings a dicts) dicts rest
                 in
                     BoolAtom <| if negate then not res else res
 
-boolLoop : (Atom msg -> Atom msg -> Bool) -> Atom msg -> List (Atom msg) -> Bool
-boolLoop f a rest =
+boolLoop : (Atom msg -> Atom msg -> Bool) -> Atom msg -> Dicts msg -> List (Atom msg) -> Bool
+boolLoop f a dicts rest =
     case rest of
         [] -> True
         b :: tail ->
-            if f a b then
-                boolLoop f b tail
-            else
-                False
+            let b2 = installBindings b dicts
+            in
+                if f a b2 then
+                    boolLoop f b2 dicts tail
+                else
+                    False
 
+ifBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
+ifBindingsFunction args _ =
+    case args of
+        condition :: clauses ->
+            ( ["ignored"]
+            , [condition]
+            , ListAtom clauses
+            )
+        _ ->
+            ( ["ignored"]
+            , []
+            , ListAtom args
+            )
 
 ifFunction : List (Atom msg) -> Dicts msg -> Atom msg
-ifFunction args (TheDicts dicts) =
+ifFunction args1 dicts =
+    case args1 of
+        [_, ListAtom [condition], ListAtom args] ->
+            ifFunctionInternal (condition :: args) dicts
+        _ ->
+            argsHelp "if" args1
+
+
+ifFunctionInternal : List (Atom msg) -> Dicts msg -> Atom msg
+ifFunctionInternal args dicts =
     case args of
         [ BoolAtom bool, consequent ] ->
             if bool then
-                consequent
+                installBindings consequent dicts
             else
                 StringAtom ""
         [ BoolAtom bool, consequent, alternative ] ->
             if bool then
-                consequent
+                installBindings consequent dicts
             else
-                alternative
+                installBindings alternative dicts
         _ ->
-            argsHelp "/if" args
+            argsHelp "if" args
 
 argsHelp : String -> List (Atom msg) -> Atom msg
 argsHelp function args =
@@ -1255,10 +1295,22 @@ defaultFunctionsDict =
                   , ( "log", logFunction )
                   ]
 
+boolOpBindingsPair : String -> (String, List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
+boolOpBindingsPair op =
+    (op, boolBindingsFunction)
+
+
 defaultBindingsFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
 defaultBindingsFunctionsDict =
     Dict.fromList [ ( "loop", loopBindingsFunction)
                   , ( "let", letBindingsFunction )
+                  , ( "if", ifBindingsFunction )
+                  , boolOpBindingsPair "=="
+                  , boolOpBindingsPair "<>"
+                  , boolOpBindingsPair "<"
+                  , boolOpBindingsPair ">"
+                  , boolOpBindingsPair "<="
+                  , boolOpBindingsPair ">="
                   ]
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
@@ -1328,7 +1380,7 @@ doFuncall : String -> List (Atom msg) -> TemplateDicts msg -> Atom msg
 doFuncall function args dicts =
     case Dict.get function dicts.functions of
         Nothing ->
-            StringAtom <| "funcall " ++ function ++ (toBracketedString args)
+            StringAtom <| "funcall " ++ function ++ " " ++ (toBracketedString args)
         Just f ->
             f args <| TheDicts dicts
 

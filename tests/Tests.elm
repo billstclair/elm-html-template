@@ -234,6 +234,19 @@ functionData =
     , ( "[\"/if\", [\"/<\",2.3,1.2], 1, 2]"
       , Ok <| IntAtom 2
       )
+    -- These error strings are likely to change to encoded JSON
+    , ( "[\"/if\", 1, 2]"
+      , Ok <| StringAtom "[\"/if\", <IntAtom 1> <IntAtom 2>]"
+      )
+    , ( "[\"/frobulate\"]"
+      , Ok <| StringAtom "funcall frobulate <[]>"
+      )
+    , ( "[\"/if\", [\"/<\",2,1,[\"/log\",\"shortcut bug\",3]], 1, 2]"
+      , Ok <| IntAtom 2
+      )
+    , ( "[\"/if\", true, 1, [\"/log\",\"shortcut bug\",2]]"
+      , Ok <| IntAtom 1
+      )
     ]
 
 templateTest : ( String, Result String (Atom msg) ) -> Test
