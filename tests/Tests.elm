@@ -242,7 +242,9 @@ functionData =
     , ( "[\"/if\",[\"/&&\",true,true,true],1,2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\",[\"/&&\",true,false,[\"/log\",\"shortcut bug\",true]],1,2]"
+    -- If you see "shortcut bug" in the output when running elm-test,
+    -- that means too much is being evaluated.
+    , ( "[\"/if\",[\"/&&\",true,false,[\"/log\",\"shortcut bug 1\",true]],1,2]"
       , Ok <| IntAtom 2
       )
     , ( "[\"/if\",[\"/||\"],1,2]"
@@ -251,7 +253,7 @@ functionData =
     , ( "[\"/if\",[\"/||\",false,false,true],1,2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\",[\"/||\",false,true,[\"/log\",\"shortcut bug\",false]],1,2]"
+    , ( "[\"/if\",[\"/||\",false,true,[\"/log\",\"shortcut bug 2\",false]],1,2]"
       , Ok <| IntAtom 1
       )
     , ( "[\"/if\",[\"/xor\"],1,2]"
@@ -270,12 +272,13 @@ functionData =
     , ( "[\"/frobulate\"]"
       , Ok <| StringAtom "funcall frobulate <[]>"
       )
-    -- If you see "shortcut bug" in the output when running elm-test,
-    -- that means too much is being evaluated.
     , ( "[\"/if\", [\"/<\",2,1,[\"/log\",\"shortcut bug\",3]], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", true, 1, [\"/log\",\"shortcut bug\",2]]"
+    , ( "[\"/if\", true, 1, [\"/log\",\"shortcut bug 4\",2]]"
+      , Ok <| IntAtom 1
+      )
+    , ( "[\"/let\",{},1]"
       , Ok <| IntAtom 1
       )
     ]

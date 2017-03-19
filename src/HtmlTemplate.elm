@@ -17,7 +17,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , setPages, removePage
                              , setAtoms, removeAtom
                              , insertFunctions, insertMessages, addPageProcessors
-                             , insertBindingsFunctions
+                             , insertDelayedBindingsFunctions
                              , addPageProperties, runPageProcessor
                              , clearTemplates, clearPages, clearAtoms
                              , addOutstandingPagesAndTemplates
@@ -32,7 +32,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , toBracketedString
 
                              , decodeAtom, atomDecoder
-                             , templateReferences, atomReferences, pageReferences
+                             , templateReferences, pageReferences
                              , maybeLookupAtom, maybeLookupTemplateAtom
                              , lookupTemplateAtom, lookupPageAtom, lookupAtom
                              , atomToBody, installBindings
@@ -78,7 +78,7 @@ type alias TemplateDicts msg =
     , templates : Dict String (Atom msg)
     , pages : Dict String (Atom msg)
     , functions : Dict String (List (Atom msg) -> Dicts msg -> (Atom msg) )
-    , bindingsFunctions : Dict String (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
+    , delayedBindingsFunctions : Set String
     , messages : Dict String (List (Atom msg) -> Dicts msg -> msg)
     }
 
@@ -106,7 +106,7 @@ emptyTemplateDicts =
     , templates = Dict.empty
     , pages = Dict.empty
     , functions = Dict.empty
-    , bindingsFunctions = Dict.empty
+    , delayedBindingsFunctions = Set.empty
     , messages = Dict.empty
     }
 
@@ -120,7 +120,7 @@ defaultTemplateDicts =
     , templates = Dict.empty
     , pages = Dict.empty
     , functions = defaultFunctionsDict
-    , bindingsFunctions = defaultBindingsFunctionsDict
+    , delayedBindingsFunctions = defaultDelayedBindingsFunctions
     , messages = Dict.empty
     }
 
@@ -175,50 +175,6 @@ templateReferencesLoop template res =
             List.foldl templateReferencesLoop res body
         FuncallAtom { args } ->
             List.concatMap templateReferences args
-        _ ->
-            res
-
-withFuncallBindings : HtmlTemplateFuncall msg -> TemplateDicts msg -> ((List String, List (Atom msg), Atom msg) -> x) -> x
-withFuncallBindings {function, args} dicts f =
-    case Dict.get function dicts.bindingsFunctions of
-        Nothing ->
-            f ([], args, IntAtom 1)
-        Just bindingsFunction ->
-            f <| bindingsFunction args (TheDicts dicts)
-
--- This isn't currently used. I included it only to mirror
--- pageReferences and templateReferences
-atomReferences : Atom msg -> Dicts msg -> List String
-atomReferences atom (TheDicts dicts) =
-    atomReferencesLoop [] dicts atom []
-
-atomReferencesLoop : List String -> TemplateDicts msg -> Atom msg -> List String -> List String
-atomReferencesLoop boundNames dicts atom res =
-    case atom of
-        LookupAtom name ->
-            if (List.member name res) || (List.member name boundNames) then
-                res
-            else
-                name :: res
-        ListAtom atoms ->
-            List.foldl (atomReferencesLoop boundNames dicts) res atoms
-        PListAtom plist ->
-            let values = List.map Tuple.second plist
-            in
-                List.foldl (atomReferencesLoop boundNames dicts) res values
-        RecordAtom { body } ->
-            List.foldl (atomReferencesLoop boundNames dicts) res body
-        FuncallAtom funcallRecord ->
-            withFuncallBindings funcallRecord dicts
-                <| (\(bindings, bare, bound) ->
-                    let bare2 = List.map (\a -> atomReferencesLoop boundNames dicts a [])
-                                bare
-                        res2 = List.append (List.concat bare2) res
-                    in
-                        atomReferencesLoop (List.append bindings boundNames)
-                            dicts bound
-                            <| atomReferencesLoop boundNames dicts bound res2
-                   )
         _ ->
             res
 
@@ -751,8 +707,8 @@ installBindingsInternal dicts atom =
                     atom
                 Just value ->
                     installBindingsInternal dicts value
-        FuncallAtom funcallRecord ->
-            installFuncallBindings funcallRecord dicts
+        FuncallAtom { function, args } ->
+            doFuncall function args dicts
         ListAtom list ->
             ListAtom
             <| List.map (installBindingsInternal dicts) list
@@ -772,26 +728,6 @@ installBindingsInternal dicts atom =
                }
         _ ->
             atom
-
-installFuncallBindings : HtmlTemplateFuncall msg -> TemplateDicts msg -> Atom msg
-installFuncallBindings funcallRecord dicts =
-    let { function } = funcallRecord
-    in
-        withFuncallBindings funcallRecord dicts
-            <| (\(bindings, bare, bound) ->
-                let bare2 = List.map (installBindingsInternal dicts) bare
-                in
-                    if bindings == [] then
-                        doFuncall function bare2 dicts
-                    else
-                        doFuncall
-                            function
-                            [ ListAtom <| List.map StringAtom bindings
-                            , ListAtom bare2
-                            , bound
-                            ]
-                            dicts
-                )
 
 isMsgAttributeFunction : AttributeFunction msg -> Bool
 isMsgAttributeFunction function =
@@ -831,34 +767,16 @@ loopFunction : List (Atom msg) -> Dicts msg -> Atom msg
 loopFunction args (TheDicts dicts) =
     case args of
         [ vars, values, template ] ->
-            case (vars, values) of
-                (ListAtom [(StringAtom varName)], ListAtom [ ListAtom vals ]) ->
-                    ListAtom <| List.map (loopBody varName template dicts) vals
-                _ ->
-                    loopHelp vars values template
+            let vals = installBindingsInternal dicts values
+            in
+                case (vars, vals) of
+                    (StringAtom varName, ListAtom vs) ->
+                        ListAtom <| List.map (loopBody varName template dicts) vs
+                    _ ->
+                        loopHelp vars values template
         _ ->
             StringAtom
             <| "Malformed args: " ++ (toString args)
-
-loopBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
-loopBindingsFunction args _ =
-    case args of
-        [ var, values, template ] ->
-            case loopArgs var values template of
-                Nothing ->
-                    ([], [ values ], template)
-                Just (varName, vals, body) ->
-                    ([ varName ], vals, body)
-        _ ->
-            ([], args, IntAtom 0)
-
-loopArgs : Atom msg -> Atom msg -> Atom msg -> Maybe (String, List (Atom msg), Atom msg)
-loopArgs var vals template =
-    case var of
-        StringAtom varName ->
-            Just (varName, [vals], template)
-        _ ->
-            Nothing
 
 loopBody : String -> Atom msg -> TemplateDicts msg -> Atom msg -> (Atom msg)
 loopBody varName template dicts value =
@@ -869,21 +787,6 @@ loopBody varName template dicts value =
                  }
         in
             installBindingsInternal ds template
-
-letBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
-letBindingsFunction args _ =
-    case args of
-        [bindings, body] ->
-            case bindings of
-                PListAtom plist ->
-                    ( List.map Tuple.first plist
-                    , List.map Tuple.second plist
-                    , body
-                    )
-                _ ->
-                    ( [], [argsHelp "let" args], IntAtom 0 )
-        _ ->
-            ( [], [argsHelp "let" args], IntAtom 0 )
 
 addAtomBindings : List String -> List (Atom msg) -> TemplateDicts msg -> TemplateDicts msg
 addAtomBindings vars vals dicts =
@@ -896,11 +799,24 @@ addAtomBindings vars vals dicts =
 letFunction : List (Atom msg) -> Dicts msg -> Atom msg
 letFunction args (TheDicts dicts) =
     case args of
-        [ ListAtom vars, ListAtom vals, body ] ->
-            let names = List.map atomToString vars
-                dicts2 = addAtomBindings names vals dicts
+        [PListAtom bindings, body] ->
+            let vars = List.map Tuple.first bindings
+                vals = List.map (installBindingsInternal dicts)
+                       <| List.map Tuple.second bindings
+                dicts2 = addAtomBindings vars vals dicts
             in
                 installBindingsInternal dicts2 body                
+        _ ->
+            argsHelp "let" args
+
+letStarFunction : List (Atom msg) -> Dicts msg -> Atom msg
+letStarFunction args (TheDicts dicts) =
+    case args of
+        [PListAtom bindings, body] ->
+            let atoms = List.foldl (\(k, v) d -> Dict.insert k v d)
+                        dicts.atoms bindings
+            in
+                installBindingsInternal { dicts | atoms = atoms } body
         _ ->
             argsHelp "let" args
 
@@ -1106,24 +1022,8 @@ argLogical function firstArg suddenStop atoms dicts =
     in
         loop atoms firstArg
 
-delayedBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
-delayedBindingsFunction args _ =
-    ( ["ignored"]
-    , []
-    , ListAtom args
-    )
-
--- Needs to use delayedBindingsFunction
 logicalFunction : String -> (Bool -> Bool -> Bool) -> Bool -> Bool -> List (Atom msg) -> Dicts msg -> Atom msg
-logicalFunction op function firstArg suddenStop args1 dicts =
-    case args1 of
-        [_, _, ListAtom args] ->
-            logicalFunctionInternal op function firstArg suddenStop args dicts
-        _ ->
-            argsHelp op args1
-
-logicalFunctionInternal : String -> (Bool -> Bool -> Bool) -> Bool -> Bool -> List (Atom msg) -> Dicts msg -> Atom msg
-logicalFunctionInternal op function firstArg suddenStop args dicts =
+logicalFunction op function firstArg suddenStop args dicts =
     case argLogical function firstArg suddenStop args dicts of
         Nothing ->
             argsHelp op args
@@ -1138,17 +1038,8 @@ notFunction args _ =
         _ ->
             argsHelp "not" args
 
--- Needs to use delayedBindingsFunction
 boolFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
-boolFunction op args1 dicts =
-    case args1 of
-        [_, _, ListAtom args] ->
-            boolFunctionInternal op args dicts
-        _ ->
-            argsHelp op args1
-
-boolFunctionInternal : String -> List (Atom msg) -> Dicts msg -> Atom msg
-boolFunctionInternal op args dicts =
+boolFunction op args dicts =
     let (op2, negate) =
             if op == "<>" then
                 ("==", True)
@@ -1180,42 +1071,27 @@ boolLoop f a dicts rest =
                 else
                     False
 
-ifBindingsFunction : List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg)
-ifBindingsFunction args _ =
-    case args of
-        condition :: clauses ->
-            ( ["ignored"]
-            , [condition]
-            , ListAtom clauses
-            )
-        _ ->
-            ( ["ignored"]
-            , []
-            , ListAtom args
-            )
-
 ifFunction : List (Atom msg) -> Dicts msg -> Atom msg
-ifFunction args1 dicts =
-    case args1 of
-        [_, ListAtom [condition], ListAtom args] ->
-            ifFunctionInternal (condition :: args) dicts
-        _ ->
-            argsHelp "if" args1
-
-
-ifFunctionInternal : List (Atom msg) -> Dicts msg -> Atom msg
-ifFunctionInternal args dicts =
+ifFunction args dicts =
     case args of
-        [ BoolAtom bool, consequent ] ->
-            if bool then
-                installBindings consequent dicts
-            else
-                StringAtom ""
-        [ BoolAtom bool, consequent, alternative ] ->
-            if bool then
-                installBindings consequent dicts
-            else
-                installBindings alternative dicts
+        [ bool, consequent ] ->
+            case installBindings bool dicts of
+                BoolAtom b ->
+                    if b then
+                        installBindings consequent dicts
+                    else
+                        StringAtom ""
+                _ ->
+                    argsHelp "if" args
+        [ bool, consequent, alternative ] ->
+            case installBindings bool dicts of
+                BoolAtom b ->
+                    if b then
+                        installBindings consequent dicts
+                    else
+                        installBindings alternative dicts
+                _ ->
+                    argsHelp "if" args
         _ ->
             argsHelp "if" args
 
@@ -1335,6 +1211,7 @@ defaultFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> Atom msg)
 defaultFunctionsDict =
     Dict.fromList [ ( "loop", loopFunction)
                   , ( "let", letFunction )
+                  , ( "let*", letStarFunction )
                   , ( "ps", psFunction )
                   , ( "if", ifFunction )
                   , ( "append", appendFunction )
@@ -1357,25 +1234,22 @@ defaultFunctionsDict =
                   , ( "log", logFunction )
                   ]
 
-delayedOpBindingsPair : String -> (String, List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
-delayedOpBindingsPair op =
-    (op, delayedBindingsFunction)
-
-defaultBindingsFunctionsDict : Dict String (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))
-defaultBindingsFunctionsDict =
-    Dict.fromList [ ( "loop", loopBindingsFunction)
-                  , ( "let", letBindingsFunction )
-                  , ( "if", ifBindingsFunction )
-                  , delayedOpBindingsPair "=="
-                  , delayedOpBindingsPair "<>"
-                  , delayedOpBindingsPair "<"
-                  , delayedOpBindingsPair ">"
-                  , delayedOpBindingsPair "<="
-                  , delayedOpBindingsPair ">="
-                  , delayedOpBindingsPair "&&"
-                  , delayedOpBindingsPair "||"
-                  , delayedOpBindingsPair "xor"
-                  ]
+defaultDelayedBindingsFunctions : Set String
+defaultDelayedBindingsFunctions =
+    Set.fromList [ "loop"
+                 , "let"
+                 , "let*" 
+                 , "if"
+                 ,  "=="
+                 ,  "<>"
+                 ,  "<"
+                 ,  ">"
+                 ,  "<="
+                 ,  ">="
+                 ,  "&&"
+                 ,  "||"
+                 ,  "xor"
+                 ]
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
 renderAtom template (TheDicts dicts) =
@@ -1446,7 +1320,12 @@ doFuncall function args dicts =
         Nothing ->
             StringAtom <| "funcall " ++ function ++ " " ++ (toBracketedString args)
         Just f ->
-            f args <| TheDicts dicts
+            let args2 = if Set.member function dicts.delayedBindingsFunctions then
+                            args
+                        else
+                            List.map (installBindingsInternal dicts) args
+            in
+                f args2 <| TheDicts dicts
 
 renderHtmlAttributes : List (String, Atom msg) -> TemplateDicts msg -> List (Attribute msg)
 renderHtmlAttributes attributes dicts =
@@ -1615,13 +1494,13 @@ insertMessages pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | messages = messages } }
 
-insertBindingsFunctions : List (String, (List (Atom msg) -> Dicts msg -> (List String, List (Atom msg), Atom msg))) -> Loaders msg x -> Loaders msg x
-insertBindingsFunctions pairs (TheLoaders loaders) =
+insertDelayedBindingsFunctions : List String -> Loaders msg x -> Loaders msg x
+insertDelayedBindingsFunctions strings (TheLoaders loaders) =
     let dicts = loaders.dicts
-        functions = List.foldl insertPair dicts.bindingsFunctions pairs
+        functions = List.foldl Set.insert dicts.delayedBindingsFunctions strings
     in
         TheLoaders
-            { loaders | dicts = { dicts | bindingsFunctions = functions } }
+            { loaders | dicts = { dicts | delayedBindingsFunctions = functions } }
 
 clearTemplates : Loaders msg x -> Loaders msg x
 clearTemplates (TheLoaders loaders) =
