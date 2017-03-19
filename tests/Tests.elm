@@ -5,7 +5,7 @@ import Expect exposing ( Expectation )
 import List
 
 import HtmlTemplate exposing ( Atom(..), decodeAtom
-                             , defaultDicts, installBindings
+                             , defaultDicts
                              )
 
 log = Debug.log
@@ -182,7 +182,7 @@ atomData =
 
 eval : Atom msg -> Atom msg
 eval atom =
-    installBindings atom defaultDicts
+    HtmlTemplate.eval atom defaultDicts
 
 functionTest : ( String, Result String (Atom msg) ) -> Test
 functionTest ( json, expected ) =
@@ -215,7 +215,7 @@ functionData =
       )
     , ( """
          ["_let",{"x":[1,2,3]},
-          ["_loop","x","$x",
+          ["_loop",{"x":"$x"},
            ["_let",{"x":["_+","$x",["_*","$x",3]],
                     "y":1},
             ["_+","$x","$y"]
@@ -224,6 +224,15 @@ functionData =
          ]
         """
       , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
+      )
+    , ( """
+         ["_loop",{"x":[1,2,3],
+                   "y":[4,5,6,7]
+                  },
+          ["_+","$x","$y"]
+         ]
+        """
+      , Ok <| ListAtom [IntAtom 5, IntAtom 7, IntAtom 9]
       )
     -- if & logical predicates
     , ( """
@@ -453,13 +462,13 @@ templateData =
       , Ok <| LookupAtom "atom"
       )
     , ( """
-         ["_loop","$p","$ps",["p",{},["$p"]]]
+         ["_loop",{"p":"$ps"},["p",{},["$p"]]]
         """
       , Ok
             <| FuncallAtom
                 { function = "loop"
-                , args = [ LookupAtom "p"
-                         , LookupAtom "ps"
+                , args = [ PListAtom
+                               ([ ("p", LookupAtom "ps") ])
                          , RecordAtom
                                { tag = "p"
                                , attributes = []

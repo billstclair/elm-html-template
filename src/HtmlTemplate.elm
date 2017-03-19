@@ -35,7 +35,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , templateReferences, pageReferences
                              , maybeLookupAtom, maybeLookupTemplateAtom
                              , lookupTemplateAtom, lookupPageAtom, lookupAtom
-                             , atomToBody, installBindings
+                             , atomToBody, eval
                              )
 
 import Entities
@@ -698,49 +698,49 @@ br : Html msg
 br =
     Html.br [] []
 
-installBindings : Atom msg -> Dicts msg -> Atom msg
-installBindings atom (TheDicts dicts) =
-    installBindingsInternal dicts atom
+eval : Atom msg -> Dicts msg -> Atom msg
+eval atom (TheDicts dicts) =
+    evalInternal dicts atom
 
-installBindingsInternal : TemplateDicts msg -> Atom msg -> Atom msg
-installBindingsInternal dicts atom =
+evalInternal : TemplateDicts msg -> Atom msg -> Atom msg
+evalInternal dicts atom =
     case atom of
         LookupAtom name ->
             case lookupAtom name dicts of
                 Nothing ->
                     atom
                 Just value ->
-                    installBindingsInternal dicts value
+                    evalInternal dicts value
         LookupPageAtom name ->
             case lookupPageAtom name dicts of
                 Nothing ->
                     atom
                 Just value ->
-                    installBindingsInternal dicts value
+                    evalInternal dicts value
         LookupTemplateAtom name ->
             case lookupTemplateAtom name dicts of
                 Nothing ->
                     atom
                 Just value ->
-                    installBindingsInternal dicts value
+                    evalInternal dicts value
         FuncallAtom { function, args } ->
             doFuncall function args dicts
         ListAtom list ->
             ListAtom
-            <| List.map (installBindingsInternal dicts) list
+            <| List.map (evalInternal dicts) list
         PListAtom plist ->
             PListAtom
             <| List.map (\pair ->
                              let (name, value) = pair
                              in
-                                 (name, installBindingsInternal dicts value)
+                                 (name, evalInternal dicts value)
                         )
                 plist
         RecordAtom { tag, attributes, body } ->
             RecordAtom
             <| { tag = tag
                , attributes = List.map (installAttributeBindings dicts) attributes
-               , body = List.map (installBindingsInternal dicts) body
+               , body = List.map (evalInternal dicts) body
                }
         _ ->
             atom
@@ -766,12 +766,12 @@ installAttributeBindings dicts (name, atom) =
                   if isMsgFuncall then
                       FuncallAtom
                       { function = function
-                      , args = List.map (installBindingsInternal dicts) args
+                      , args = List.map (evalInternal dicts) args
                       }
                   else
-                      installBindingsInternal dicts atom
+                      evalInternal dicts atom
           _ ->
-              installBindingsInternal dicts atom
+              evalInternal dicts atom
     )
 
 -- If you give a non-list as the loopFunction values, should you get
@@ -782,28 +782,81 @@ installAttributeBindings dicts (name, atom) =
 loopFunction : List (Atom msg) -> Dicts msg -> Atom msg
 loopFunction args (TheDicts dicts) =
     case args of
-        [ vars, values, template ] ->
-            let vals = installBindingsInternal dicts values
+        [ bindings, template ] ->
+            let binds = evalInternal dicts bindings
             in
-                case (vars, vals) of
-                    (StringAtom varName, ListAtom vs) ->
-                        ListAtom <| List.map (loopBody varName template dicts) vs
+                case binds of
+                    (PListAtom plist) ->
+                        if plist == [] then
+                            ListAtom []
+                        else
+                            case doLoop plist template dicts of
+                                Just list ->
+                                    ListAtom list
+                                Nothing ->
+                                    loopHelp binds template
                     _ ->
-                        loopHelp vars values template
+                        loopHelp binds template
         _ ->
             StringAtom
-            <| "Malformed args: " ++ (toString args)
+            <| "Malformed loop args: " ++ (toString args)
 
-loopBody : String -> Atom msg -> TemplateDicts msg -> Atom msg -> (Atom msg)
-loopBody varName template dicts value =
-    let atomsDict = dicts.atoms
+mostPositiveInt : Int
+mostPositiveInt =
+    2^30 + (2^30-1)
+
+doLoop : List (String, Atom msg) -> Atom msg -> TemplateDicts msg -> Maybe (List (Atom msg))
+doLoop bindings template dicts =
+    let atoms = dicts.atoms
+        vars = List.map Tuple.first bindings
+        values = List.map (\(_, val) ->
+                             case val of
+                                 ListAtom list ->
+                                     Just list
+                                 _ ->
+                                     Nothing
+                             )
+                 bindings
     in
-        let ds = { dicts
-                     | atoms = Dict.insert varName value atomsDict
-                 }
-        in
-            installBindingsInternal ds template
+        if List.member Nothing values then
+            Nothing
+        else
+            let vals = List.map (\v -> case v of
+                                           Just l -> l
+                                           Nothing -> [] --can't happen
+                                )
+                       values
+                len = List.foldl (\v m -> min m <| List.length v)
+                      mostPositiveInt vals
+            in
+                Just <| loopLoop vars vals template dicts len []
 
+loopLoop : List String -> List (List (Atom msg)) -> Atom msg -> TemplateDicts msg ->  Int -> List (Atom msg) -> List (Atom msg)
+loopLoop vars vals template dicts len res =
+    if len <= 0 then
+        List.reverse res
+    else
+        let firstVals = List.map (\v -> case List.head v of
+                                            Just a ->
+                                                a
+                                            Nothing ->
+                                                IntAtom 0 --can't happen
+                                 )
+                        vals
+            restVals = List.map (List.drop 1) vals
+            dicts2 = addAtomBindings vars firstVals dicts
+            elt = evalInternal dicts2 template --*** HERE'S THE WORK ***
+        in
+            loopLoop vars restVals template dicts (len - 1) (elt :: res)
+
+loopHelp : Atom msg -> Atom msg -> Atom msg
+loopHelp bindings template =
+        ListAtom [ StringAtom "/loop "
+                 , bindings
+                 , StringAtom " "
+                 , template
+                 ]
+        
 addAtomBindings : List String -> List (Atom msg) -> TemplateDicts msg -> TemplateDicts msg
 addAtomBindings vars vals dicts =
     { dicts |
@@ -817,11 +870,11 @@ letFunction args (TheDicts dicts) =
     case args of
         [PListAtom bindings, body] ->
             let vars = List.map Tuple.first bindings
-                vals = List.map (installBindingsInternal dicts)
+                vals = List.map (evalInternal dicts)
                        <| List.map Tuple.second bindings
                 dicts2 = addAtomBindings vars vals dicts
             in
-                installBindingsInternal dicts2 body                
+                evalInternal dicts2 body                
         _ ->
             argsHelp "let" args
 
@@ -832,7 +885,7 @@ letStarFunction args (TheDicts dicts) =
             let atoms = List.foldl (\(k, v) d -> Dict.insert k v d)
                         dicts.atoms bindings
             in
-                installBindingsInternal { dicts | atoms = atoms } body
+                evalInternal { dicts | atoms = atoms } body
         _ ->
             argsHelp "let" args
 
@@ -840,14 +893,6 @@ brTemplate : Atom msg
 brTemplate =
     tagWrap "br" [] []
 
-loopHelp : Atom msg -> Atom msg -> Atom msg -> Atom msg
-loopHelp var values template =
-        ListAtom [ StringAtom "/loop"
-                 , var
-                 , values
-                 , template
-                 ]
-        
 ifOperatorDict : Dict String (Atom msg -> Atom msg -> Bool)
 ifOperatorDict =
     Dict.fromList
@@ -1022,7 +1067,7 @@ argLogical function firstArg suddenStop atoms dicts =
                         [] ->
                             Just res
                         a :: tail ->
-                            case installBindings a dicts of
+                            case eval a dicts of
                                 BoolAtom y ->
                                     let res2 = function res y
                                     in
@@ -1071,7 +1116,7 @@ boolFunction op args dicts =
                               [_] -> True
                               a :: rest ->
                                   boolLoop
-                                      f (installBindings a dicts) dicts rest
+                                      f (eval a dicts) dicts rest
                 in
                     BoolAtom <| if negate then not res else res
 
@@ -1080,7 +1125,7 @@ boolLoop f a dicts rest =
     case rest of
         [] -> True
         b :: tail ->
-            let b2 = installBindings b dicts
+            let b2 = eval b dicts
             in
                 if f a b2 then
                     boolLoop f b2 dicts tail
@@ -1091,21 +1136,21 @@ ifFunction : List (Atom msg) -> Dicts msg -> Atom msg
 ifFunction args dicts =
     case args of
         [ bool, consequent ] ->
-            case installBindings bool dicts of
+            case eval bool dicts of
                 BoolAtom b ->
                     if b then
-                        installBindings consequent dicts
+                        eval consequent dicts
                     else
                         StringAtom ""
                 _ ->
                     argsHelp "if" args
         [ bool, consequent, alternative ] ->
-            case installBindings bool dicts of
+            case eval bool dicts of
                 BoolAtom b ->
                     if b then
-                        installBindings consequent dicts
+                        eval consequent dicts
                     else
-                        installBindings alternative dicts
+                        eval alternative dicts
                 _ ->
                     argsHelp "if" args
         _ ->
@@ -1269,7 +1314,7 @@ defaultDelayedBindingsFunctions =
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
 renderAtom template (TheDicts dicts) =
-    renderHtmlAtom (installBindingsInternal dicts template) dicts
+    renderHtmlAtom (evalInternal dicts template) dicts
 
 renderHtmlAtom : Atom msg -> TemplateDicts msg -> Html msg
 renderHtmlAtom template dicts =
@@ -1339,7 +1384,7 @@ doFuncall function args dicts =
             let args2 = if Set.member function dicts.delayedBindingsFunctions then
                             args
                         else
-                            List.map (installBindingsInternal dicts) args
+                            List.map (evalInternal dicts) args
             in
                 f args2 <| TheDicts dicts
 

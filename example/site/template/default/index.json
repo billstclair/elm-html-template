@@ -1,6 +1,6 @@
 ["div",{},
  [["p",{},["$settings.siteDescription"]],
-  ["_loop","node","$node","?node"],
+  ["_loop",{"node":"$node"},"?node"],
   "?refererlink"
  ]
 ]
