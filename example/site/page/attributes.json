@@ -10,7 +10,7 @@
        ["span",{"attribute:title":"Here's lookin' atcha!"},
         ["Hover to see title via \"attribute:title\"."]
        ],
-       ["4 * (1.1 + 2) = ", ["/*", 4, ["/+", 1.1, 2]]],
+       ["4 * (1.1 + 2) = ", ["_*", 4, ["_+", 1.1, 2]]],
        ["Table illustrates integer (\"colspan\") attribute values.",
         ["br",{},[]],
         ["table",{"class":"bordered"},
