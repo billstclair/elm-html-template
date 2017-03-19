@@ -68,61 +68,96 @@ atomTest ( json, expected ) =
 
 atomData : List ( String, Result String (Atom msg) )
 atomData =
-    [ ( "\"foo\""
+    [ ( """
+         "foo"
+        """
       , Ok <| StringAtom "foo"
       )
-    , ( "1"
+    , ( """
+         1
+        """
       , Ok <| IntAtom 1
       )
-    , ( "1.23"
+    , ( """
+         1.23
+        """
       , Ok <| FloatAtom 1.23
       )
-    , ( "true"
+    , ( """
+         true
+        """
       , Ok <| BoolAtom True
       )
-    , ( "\"$foo\""
+    , ( """
+         "$foo"
+        """
       , Ok <| LookupAtom "foo"
       )
-    , ( "\"@foo\""
+    , ( """
+         "@foo"
+        """
       , Ok <| LookupPageAtom "foo"
       )
-    , ( "\"?foo\""
+    , ( """
+         "?foo"
+        """
       , Ok <| LookupTemplateAtom "foo"
       )
-    , ( "[\"_gotoPage\",\"home\"]"
+    , ( """
+         ["_gotoPage","home"]
+        """
       , Ok <| FuncallAtom
             { function = "gotoPage"
             , args = [ StringAtom "home" ]
             }
       )
-    , ( "[\"foo\",\"bar\"]"
+    , ( """
+         ["foo","bar"]
+        """
       , Ok <| ListAtom [ StringAtom "foo", StringAtom "bar"]
       )
-    , ( "[1,2,3]"
+    , ( """
+         [1,2,3]
+        """
       , Ok <| ListAtom [IntAtom 1, IntAtom 2, IntAtom 3]
       )
-    , ( "[1.2,2.3,3.4,4.5]"
+    , ( """
+         [1.2,2.3,3.4,4.5]
+        """
       , Ok <| ListAtom [FloatAtom 1.2, FloatAtom 2.3, FloatAtom 3.4, FloatAtom 4.5]
       )
-    , ( "[true,false,false,true]"
+    , ( """
+         [true,false,false,true]
+        """
       , Ok <| ListAtom [BoolAtom True, BoolAtom False, BoolAtom False, BoolAtom True]
       )
-    , ( "[1, 2.3, \"foo\"]"
+    , ( """
+         [1, 2.3, "foo"]
+        """
       , Ok <| ListAtom [IntAtom 1, FloatAtom 2.3, StringAtom "foo"]
       )
-    , ( "\"foo"
+    , ( """
+         "foo
+        """
       , Err "Malformed JSON."
       )
-    , ( "[1,2,3"
+    , ( """
+         [1,2,3
+        """
       , Err "Malformed JSON."
       )
-    , ( "{\"string\":\"bar\",\"int\":1,\"float\":2.3}"
+    , ( """
+         {"string":"bar","int":1,"float":2.3}
+        """
       , Ok <| PListAtom [ ("float", FloatAtom 2.3)
                         , ("int", IntAtom 1)
                         , ("string", StringAtom "bar")
                         ]
       )
-    , ( "[\"a\",{\"href\":\"http://example.com/\"},[\"example.com\"]]"
+    , ( """
+         ["a",{"href":"http://example.com/"},
+          ["example.com"]]
+        """
       , Ok
             <| RecordAtom
               { tag = "a"
@@ -130,13 +165,17 @@ atomData =
               , body = [ StringAtom "example.com" ]
               }
       )
-    , ( "[\"p\",{},1]"
+    , ( """
+         ["p",{},1]
+        """
       , Ok <| RecordAtom { tag = "p"
                          , attributes = []
                          , body = [ IntAtom 1 ]
                          }
       )
-    , ( "[\"p\",{},1,2]"
+    , ( """
+         ["p",{},1,2]
+        """
       , Ok <| ListAtom [ StringAtom "p", PListAtom [], IntAtom 1, IntAtom 2 ]
       )
     ]
@@ -159,127 +198,232 @@ functionTest ( json, expected ) =
 
 functionData : List ( String, Result String (Atom msg) )
 functionData =
-    [ ( "[\"_+\",1, 2]"
+    [ ( """
+         ["_+",1, 2]
+        """
       , Ok <| IntAtom 3
       )
-    , ( "[\"_*\",3,[\"_+\",1.2, 2]]"
+    , ( """
+         ["_*",3,["_+",1.2, 2]]
+        """
       , Ok <| FloatAtom 9.6
       )
-    , ( "[\"_apply\",\"_+\",1,[2, 3]]"
+    , ( """
+         ["_apply","_+",1,[2, 3]]
+        """
       , Ok <| IntAtom 6
       )
-    , ( "[\"_let\",{\"x\":[1,2,3]},[\"_loop\",\"x\",\"$x\",[\"_let\",{\"x\":[\"_+\",\"$x\",[\"_*\",\"$x\",3]],\"y\":1},[\"_+\",\"$x\",\"$y\"]]]]"
+    , ( """
+         ["_let",{"x":[1,2,3]},
+          ["_loop","x","$x",
+           ["_let",{"x":["_+","$x",["_*","$x",3]],
+                    "y":1},
+            ["_+","$x","$y"]
+           ]
+          ]
+         ]
+        """
       , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
       )
     -- if & logical predicates
-    , ( "[\"_if\", true, 1]"
+    , ( """
+         ["_if", true, 1]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", false, 1]"
+    , ( """
+         ["_if", false, 1]
+        """
       , Ok <| StringAtom ""
       )
-    , ( "[\"_if\", true, 1, 2]"
+    , ( """
+         ["_if", true, 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", false, 1, 2]"
+    , ( """
+         ["_if", false, 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_==\",3,3,3], 1, 2]"
+    , ( """
+         ["_if", ["_==",3,3,3], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_==\",3,3,2], 1, 2]"
+    , ( """
+         ["_if", ["_==",3,3,2], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_<>\",3,3,2], 1, 2]"
+    , ( """
+         ["_if", ["_<>",3,3,2], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_<>\",3,3,3], 1, 2]"
+    , ( """
+         ["_if", ["_<>",3,3,3], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_>\",3,2,1], 1, 2]"
+    , ( """
+         ["_if", ["_>",3,2,1], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_>\",3,2,2], 1, 2]"
+    , ( """
+         ["_if", ["_>",3,2,2], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_<\",1,2], 1, 2]"
+    , ( """
+         ["_if", ["_<",1,2], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_<=\",1,2], 1, 2]"
+    , ( """
+         ["_if", ["_<=",1,2], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_<=\",1,1], 1, 2]"
+    , ( """
+         ["_if", ["_<=",1,1], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_<=\",2,1], 1, 2]"
+    , ( """
+         ["_if", ["_<=",2,1], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_>=\",2,1], 1, 2]"
+    , ( """
+         ["_if", ["_>=",2,1], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_>=\",1,1], 1, 2]"
+    , ( """
+         ["_if", ["_>=",1,1], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_>=\",1,2], 1, 2]"
+    , ( """
+         ["_if", ["_>=",1,2], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_<\",\"a\",\"b\"], 1, 2]"
+    , ( """
+         ["_if", ["_<","a","b"], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_<\",\"b\",\"a\"], 1, 2]"
+    , ( """
+         ["_if", ["_<","b","a"], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", [\"_<\",1.2,2.3], 1, 2]"
+    , ( """
+         ["_if", ["_<",1.2,2.3], 1, 2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\", [\"_<\",2.3,1.2], 1, 2]"
+    , ( """
+         ["_if", ["_<",2.3,1.2], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
     -- Logical operators
-    , ( "[\"_if\",[\"_&&\"],1,2]"
+    , ( """
+         ["_if",["_&&"],1,2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\",[\"_&&\",true,true,true],1,2]"
+    , ( """
+         ["_if",["_&&",true,true,true],1,2]
+        """
       , Ok <| IntAtom 1
       )
     -- If you see "shortcut bug" in the output when running elm-test,
     -- that means too much is being evaluated.
-    , ( "[\"_if\",[\"_&&\",true,false,[\"_log\",\"shortcut bug 1\",true]],1,2]"
+    , ( """
+         ["_if",["_&&",true,false,["_log","shortcut bug 1",true]],1,2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\",[\"_||\"],1,2]"
+    , ( """
+         ["_if",["_||"],1,2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\",[\"_||\",false,false,true],1,2]"
+    , ( """
+         ["_if",["_||",false,false,true],1,2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\",[\"_||\",false,true,[\"_log\",\"shortcut bug 2\",false]],1,2]"
+    , ( """
+         ["_if",["_||",false,true,["_log","shortcut bug 2",false]],1,2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\",[\"_xor\"],1,2]"
+    , ( """
+         ["_if",["_xor"],1,2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\",[\"_xor\",false,false,true],1,2]"
+    , ( """
+         ["_if",["_xor",false,false,true],1,2]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_if\",[\"_xor\",false,true,true],1,2]"
+    , ( """
+         ["_if",["_xor",false,true,true],1,2]
+        """
       , Ok <| IntAtom 2
       )
     -- These error strings are likely to change to encoded JSON
-    , ( "[\"_if\", 1, 2]"
+    , ( """
+         ["_if", 1, 2]
+        """
       , Ok <| StringAtom "[\"_if\", <IntAtom 1> <IntAtom 2>]"
       )
-    , ( "[\"_frobulate\"]"
+    , ( """
+         ["_frobulate"]
+        """
       , Ok <| StringAtom "funcall frobulate <[]>"
       )
-    , ( "[\"_if\", [\"_<\",2,1,[\"_log\",\"shortcut bug\",3]], 1, 2]"
+    , ( """
+         ["_if", ["_<",2,1,["_log","shortcut bug",3]], 1, 2]
+        """
       , Ok <| IntAtom 2
       )
-    , ( "[\"_if\", true, 1, [\"_log\",\"shortcut bug 4\",2]]"
+    , ( """
+         ["_if", true, 1, ["_log","shortcut bug 4",2]]
+        """
       , Ok <| IntAtom 1
       )
-    , ( "[\"_let\",{},1]"
+    , ( """
+         ["_let",{},1]
+        """
       , Ok <| IntAtom 1
+      )
+    , ( """
+         ["_let",{"x":5},
+          ["_let",{"x":1,
+                   "y":["_+","$x",1]
+                  },
+           ["$x","$y"]
+          ]
+         ]
+        """
+      , Ok <| ListAtom [IntAtom 1, IntAtom 6]
+      )
+    , ( """
+         ["_let*",{"x":1,
+                   "y":["_+","$x",1]
+                  },
+          "$y"
+         ]
+        """
+      , Ok <| IntAtom 2
       )
     ]
 
@@ -293,16 +437,24 @@ templateTest ( json, expected ) =
 
 templateData : List ( String, Result String (Atom msg) )
 templateData =
-    [ ( "\"foo\""
+    [ ( """
+         "foo"
+        """
       , Ok <| StringAtom "foo"
       )
-    , ( "\"?that\""
+    , ( """
+         "?that"
+        """
       , Ok <| LookupTemplateAtom "that"
       )
-    , ( "\"$atom\""
+    , ( """
+         "$atom"
+        """
       , Ok <| LookupAtom "atom"
       )
-    , ( "[\"_loop\",\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]"
+    , ( """
+         ["_loop","$p","$ps",["p",{},["$p"]]]
+        """
       , Ok
             <| FuncallAtom
                 { function = "loop"
@@ -316,14 +468,18 @@ templateData =
                          ]
                 }
       )
-    , ( "[\"a\",{\"title\": \"foo\"},[\"bar\"]]"
+    , ( """
+         ["a",{"title": "foo"},["bar"]]
+        """
       , Ok <| RecordAtom
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
                 , body = [ StringAtom "bar" ]
                 }
       )
-    , ( "[ \"a\", {\"title\": \"foo\"}, [ [\"i\", {}, [\"bar\"]], \" \", \"$frob\"]]"
+    , ( """
+         [ "a", {"title": "foo"}, [ ["i", {}, ["bar"]], " ", "$frob"]]
+        """
       , Ok <| RecordAtom
                 { tag = "a"
                 , attributes = [ ("title", StringAtom "foo") ]
