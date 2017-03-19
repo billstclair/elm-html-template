@@ -3,7 +3,7 @@
    ["@@import \"style.css\""]
   ],
   ["h2",{},
-   [["/pageLink","index","$settings.siteName"]
+   [["_pageLink","index","$settings.siteName"]
    ]
   ],
   ["h3",{},["$settings.siteSlogan"]],

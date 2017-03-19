@@ -209,11 +209,27 @@ pageReferencesLoop atom res =
 
 htmlLookupStringDecoder : Decoder String
 htmlLookupStringDecoder =
-    JD.andThen (ensureLookupString "?" "a question mark") JD.string
+    JD.andThen (ensureLookupString templateLookupPrefix "a question mark") JD.string
+
+pageLookupPrefix : String
+pageLookupPrefix =
+    "@"
+
+varLookupPrefix : String
+varLookupPrefix =
+    "$"
+
+functionLookupPrefix : String
+functionLookupPrefix =
+    "_"
+
+templateLookupPrefix : String
+templateLookupPrefix =
+    "?"
 
 quotedChars : List String
 quotedChars =
-    [ "@", "$", "/", "?" ]
+    [ pageLookupPrefix, varLookupPrefix, functionLookupPrefix, templateLookupPrefix ]
 
 maybeStripQuote : String -> Decoder String
 maybeStripQuote string =
@@ -257,11 +273,11 @@ ensureLookupString prefix name string =
 
 htmlAtomLookupStringDecoder : Decoder String
 htmlAtomLookupStringDecoder =
-    JD.andThen (ensureLookupString "$" "a dollar sign")  JD.string
+    JD.andThen (ensureLookupString varLookupPrefix "a dollar sign")  JD.string
 
 htmlPageLookupStringDecoder : Decoder String
 htmlPageLookupStringDecoder =
-    JD.andThen (ensureLookupString "@" "an atsign")  JD.string
+    JD.andThen (ensureLookupString pageLookupPrefix "an atsign")  JD.string
 
 ensureFuncallList : List (Atom msg) -> Decoder (HtmlTemplateFuncall msg)
 ensureFuncallList atoms =
@@ -269,7 +285,7 @@ ensureFuncallList atoms =
         f :: args ->
             case f of
                 StringAtom s ->
-                    case extractLookupString "/" s of
+                    case extractLookupString functionLookupPrefix s of
                         Just name ->
                             JD.succeed
                                 { function = name
@@ -289,7 +305,7 @@ htmlTemplateFuncallDecoder =
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
-    JD.andThen (ensureLookupString "/" "a slash") JD.string
+    JD.andThen (ensureLookupString functionLookupPrefix "a slash") JD.string
     
 htmlRecordDecoder : Decoder (Atom msg)
 htmlRecordDecoder =
@@ -1097,7 +1113,7 @@ ifFunction args dicts =
 
 argsHelp : String -> List (Atom msg) -> Atom msg
 argsHelp function args =
-    StringAtom <| "[\"/" ++ function ++ "\", " ++
+    StringAtom <| "[\"" ++ functionLookupPrefix ++ function ++ "\", " ++
         (String.join " " <| List.map toBracketedString args) ++
         "]"
 
@@ -1140,7 +1156,7 @@ applyFunction args (TheDicts dicts) =
         function :: functionArgs ->
             case function of
                 StringAtom s ->
-                    case extractLookupString "/" s of
+                    case extractLookupString functionLookupPrefix s of
                         Nothing ->
                             cantApply function args
                         Just f ->

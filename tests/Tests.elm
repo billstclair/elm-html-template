@@ -89,7 +89,7 @@ atomData =
     , ( "\"?foo\""
       , Ok <| LookupTemplateAtom "foo"
       )
-    , ( "[\"/gotoPage\",\"home\"]"
+    , ( "[\"_gotoPage\",\"home\"]"
       , Ok <| FuncallAtom
             { function = "gotoPage"
             , args = [ StringAtom "home" ]
@@ -159,126 +159,126 @@ functionTest ( json, expected ) =
 
 functionData : List ( String, Result String (Atom msg) )
 functionData =
-    [ ( "[\"/+\",1, 2]"
+    [ ( "[\"_+\",1, 2]"
       , Ok <| IntAtom 3
       )
-    , ( "[\"/*\",3,[\"/+\",1.2, 2]]"
+    , ( "[\"_*\",3,[\"_+\",1.2, 2]]"
       , Ok <| FloatAtom 9.6
       )
-    , ( "[\"/apply\",\"/+\",1,[2, 3]]"
+    , ( "[\"_apply\",\"_+\",1,[2, 3]]"
       , Ok <| IntAtom 6
       )
-    , ( "[\"/let\",{\"x\":[1,2,3]},[\"/loop\",\"x\",\"$x\",[\"/let\",{\"x\":[\"/+\",\"$x\",[\"/*\",\"$x\",3]],\"y\":1},[\"/+\",\"$x\",\"$y\"]]]]"
+    , ( "[\"_let\",{\"x\":[1,2,3]},[\"_loop\",\"x\",\"$x\",[\"_let\",{\"x\":[\"_+\",\"$x\",[\"_*\",\"$x\",3]],\"y\":1},[\"_+\",\"$x\",\"$y\"]]]]"
       , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
       )
     -- if & logical predicates
-    , ( "[\"/if\", true, 1]"
+    , ( "[\"_if\", true, 1]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", false, 1]"
+    , ( "[\"_if\", false, 1]"
       , Ok <| StringAtom ""
       )
-    , ( "[\"/if\", true, 1, 2]"
+    , ( "[\"_if\", true, 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", false, 1, 2]"
+    , ( "[\"_if\", false, 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/==\",3,3,3], 1, 2]"
+    , ( "[\"_if\", [\"_==\",3,3,3], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/==\",3,3,2], 1, 2]"
+    , ( "[\"_if\", [\"_==\",3,3,2], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/<>\",3,3,2], 1, 2]"
+    , ( "[\"_if\", [\"_<>\",3,3,2], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/<>\",3,3,3], 1, 2]"
+    , ( "[\"_if\", [\"_<>\",3,3,3], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/>\",3,2,1], 1, 2]"
+    , ( "[\"_if\", [\"_>\",3,2,1], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/>\",3,2,2], 1, 2]"
+    , ( "[\"_if\", [\"_>\",3,2,2], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/<\",1,2], 1, 2]"
+    , ( "[\"_if\", [\"_<\",1,2], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/<=\",1,2], 1, 2]"
+    , ( "[\"_if\", [\"_<=\",1,2], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/<=\",1,1], 1, 2]"
+    , ( "[\"_if\", [\"_<=\",1,1], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/<=\",2,1], 1, 2]"
+    , ( "[\"_if\", [\"_<=\",2,1], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/>=\",2,1], 1, 2]"
+    , ( "[\"_if\", [\"_>=\",2,1], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/>=\",1,1], 1, 2]"
+    , ( "[\"_if\", [\"_>=\",1,1], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/>=\",1,2], 1, 2]"
+    , ( "[\"_if\", [\"_>=\",1,2], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/<\",\"a\",\"b\"], 1, 2]"
+    , ( "[\"_if\", [\"_<\",\"a\",\"b\"], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/<\",\"b\",\"a\"], 1, 2]"
+    , ( "[\"_if\", [\"_<\",\"b\",\"a\"], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", [\"/<\",1.2,2.3], 1, 2]"
+    , ( "[\"_if\", [\"_<\",1.2,2.3], 1, 2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\", [\"/<\",2.3,1.2], 1, 2]"
+    , ( "[\"_if\", [\"_<\",2.3,1.2], 1, 2]"
       , Ok <| IntAtom 2
       )
     -- Logical operators
-    , ( "[\"/if\",[\"/&&\"],1,2]"
+    , ( "[\"_if\",[\"_&&\"],1,2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\",[\"/&&\",true,true,true],1,2]"
+    , ( "[\"_if\",[\"_&&\",true,true,true],1,2]"
       , Ok <| IntAtom 1
       )
     -- If you see "shortcut bug" in the output when running elm-test,
     -- that means too much is being evaluated.
-    , ( "[\"/if\",[\"/&&\",true,false,[\"/log\",\"shortcut bug 1\",true]],1,2]"
+    , ( "[\"_if\",[\"_&&\",true,false,[\"_log\",\"shortcut bug 1\",true]],1,2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\",[\"/||\"],1,2]"
+    , ( "[\"_if\",[\"_||\"],1,2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\",[\"/||\",false,false,true],1,2]"
+    , ( "[\"_if\",[\"_||\",false,false,true],1,2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\",[\"/||\",false,true,[\"/log\",\"shortcut bug 2\",false]],1,2]"
+    , ( "[\"_if\",[\"_||\",false,true,[\"_log\",\"shortcut bug 2\",false]],1,2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\",[\"/xor\"],1,2]"
+    , ( "[\"_if\",[\"_xor\"],1,2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\",[\"/xor\",false,false,true],1,2]"
+    , ( "[\"_if\",[\"_xor\",false,false,true],1,2]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/if\",[\"/xor\",false,true,true],1,2]"
+    , ( "[\"_if\",[\"_xor\",false,true,true],1,2]"
       , Ok <| IntAtom 2
       )
     -- These error strings are likely to change to encoded JSON
-    , ( "[\"/if\", 1, 2]"
-      , Ok <| StringAtom "[\"/if\", <IntAtom 1> <IntAtom 2>]"
+    , ( "[\"_if\", 1, 2]"
+      , Ok <| StringAtom "[\"_if\", <IntAtom 1> <IntAtom 2>]"
       )
-    , ( "[\"/frobulate\"]"
+    , ( "[\"_frobulate\"]"
       , Ok <| StringAtom "funcall frobulate <[]>"
       )
-    , ( "[\"/if\", [\"/<\",2,1,[\"/log\",\"shortcut bug\",3]], 1, 2]"
+    , ( "[\"_if\", [\"_<\",2,1,[\"_log\",\"shortcut bug\",3]], 1, 2]"
       , Ok <| IntAtom 2
       )
-    , ( "[\"/if\", true, 1, [\"/log\",\"shortcut bug 4\",2]]"
+    , ( "[\"_if\", true, 1, [\"_log\",\"shortcut bug 4\",2]]"
       , Ok <| IntAtom 1
       )
-    , ( "[\"/let\",{},1]"
+    , ( "[\"_let\",{},1]"
       , Ok <| IntAtom 1
       )
     ]
@@ -302,7 +302,7 @@ templateData =
     , ( "\"$atom\""
       , Ok <| LookupAtom "atom"
       )
-    , ( "[\"/loop\",\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]"
+    , ( "[\"_loop\",\"$p\",\"$ps\",[\"p\",{},[\"$p\"]]]"
       , Ok
             <| FuncallAtom
                 { function = "loop"
