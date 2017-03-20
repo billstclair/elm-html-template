@@ -10,6 +10,11 @@
        ["span",{"attribute:title":"Here's lookin' atcha!"},
         ["Hover to see title via \"attribute:title\"."]
        ],
+       ["a",{"href":"#",
+             "onClick":["/frob",1]
+            },
+        ["Hover to see error title for missing message function."]
+       ],
        ["4 * (1.1 + 2) = ", ["_*", 4, ["_+", 1.1, 2]]],
        ["Table illustrates integer (\"colspan\") attribute values.",
         ["br",{},[]],

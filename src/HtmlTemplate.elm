@@ -32,6 +32,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , toBracketedString
 
                              , decodeAtom, atomDecoder
+                             , encodeAtom, customEncodeAtom, atomEncoder
                              , templateReferences, pageReferences
                              , maybeLookupAtom, maybeLookupTemplateAtom
                              , lookupTemplateAtom, lookupPageAtom, lookupAtom
@@ -50,9 +51,8 @@ import Html.Events as Events
 import Dict exposing ( Dict
                      )
 
-import Json.Decode as JD exposing ( Decoder
-
-                                  )
+import Json.Decode as JD exposing ( Decoder )
+import Json.Encode as JE exposing ( Value )
 import Set exposing ( Set )
 
 import List.Extra as LE
@@ -204,7 +204,7 @@ pageReferencesLoop atom res =
             res
 
 ---
---- Template Decoders
+--- Decoders
 ---
 
 htmlLookupStringDecoder : Decoder String
@@ -424,10 +424,6 @@ isAttribute string atom =
         Just _ ->
             True
 
----
---- Decode Atoms
----
-
 atomDecoder : Decoder (Atom msg)
 atomDecoder =
     JD.oneOf
@@ -451,6 +447,75 @@ atomListDecoder =
 atomPListDecoder : Decoder (List (String, Atom msg))
 atomPListDecoder =
     JD.keyValuePairs <| JD.lazy (\_ -> atomDecoder)
+
+---
+--- Encoders
+---
+
+encodeAtom : Atom msg -> String
+encodeAtom atom =
+    customEncodeAtom 2 atom
+
+customEncodeAtom : Int -> Atom msg -> String
+customEncodeAtom indentation atom =
+    JE.encode indentation <| atomEncoder atom
+
+quotePrefix : String -> String
+quotePrefix string =
+    let loop = (\prefixes ->
+                    case prefixes of
+                        [] ->
+                            string
+                        prefix :: tail ->
+                            if String.startsWith prefix string then
+                                prefix ++ string
+                            else
+                                loop (List.drop 1 prefixes)
+               )
+    in
+        loop quotedChars
+
+plistEncoder : List (String, Atom msg) -> Value
+plistEncoder plist =
+    JE.object <| List.map (\(a, v) -> (a, atomEncoder v)) plist
+
+atomEncoder : Atom msg -> Value
+atomEncoder atom =
+    case atom of
+        LookupAtom string ->
+            JE.string <| varLookupPrefix ++ string
+        LookupPageAtom string ->
+            JE.string <| pageLookupPrefix ++ string
+        LookupTemplateAtom string ->
+            JE.string <| templateLookupPrefix ++ string
+        FuncallAtom { function, args } ->
+            JE.list
+                <| ( JE.string functionLookupPrefix )
+                    :: ( List.map atomEncoder args )
+        StringAtom string ->
+            JE.string <| quotePrefix string
+        IntAtom int ->
+            JE.int int
+        FloatAtom float ->
+            JE.float float
+        BoolAtom bool ->
+            JE.bool bool
+        RecordAtom { tag, attributes, body } ->
+            JE.list
+                [ JE.string tag
+                , plistEncoder attributes
+                , JE.list <| List.map atomEncoder body
+                ]
+        ListAtom list ->
+            JE.list <| List.map atomEncoder list
+        PListAtom plist ->
+            plistEncoder plist
+        HtmlAtom html ->
+            atomEncoder <| FuncallAtom { function = "error"
+                                       , args = [ StringAtom"HtmlAtom "
+                                                , StringAtom <| toString html
+                                                ]
+                                       }
 
 ---
 --- Attribute rendering
@@ -552,7 +617,7 @@ handleMsgAttribute attributeName attributeWrapper atom dicts =
             case Dict.get function dicts.messages of
                 Nothing ->
                     Attributes.title
-                        <| "Unknown message function: " ++ (toString atom)
+                        <| encodeAtom atom
                 Just f ->
                     attributeWrapper
                     <| f args
@@ -814,6 +879,16 @@ installAttributeBindings dicts (name, atom) =
               evalInternal dicts atom
     )
 
+makeFuncallAtom : String -> List (Atom msg) -> Atom msg
+makeFuncallAtom function args =
+    FuncallAtom { function = function
+                , args = args
+                }
+
+cantFuncall : String -> List (Atom msg) -> Atom msg
+cantFuncall function args =
+    StringAtom <| customEncodeAtom 0 <| makeFuncallAtom function args
+
 -- If you give a non-list as the loopFunction values, should you get
 -- a non-list back? Probably.
 -- Still need a letFunction, to bind multiple vars to vals.
@@ -838,8 +913,7 @@ loopFunction args (TheDicts dicts) =
                     _ ->
                         loopHelp binds template
         _ ->
-            StringAtom
-            <| "Malformed loop args: " ++ (toString args)
+            cantFuncall "loop" args
 
 mostPositiveInt : Int
 mostPositiveInt =
@@ -916,7 +990,7 @@ letFunction args (TheDicts dicts) =
             in
                 evalInternal dicts2 body                
         _ ->
-            argsHelp "let" args
+            cantFuncall "let" args
 
 letStarFunction : List (Atom msg) -> Dicts msg -> Atom msg
 letStarFunction args (TheDicts dicts) =
@@ -927,7 +1001,7 @@ letStarFunction args (TheDicts dicts) =
             in
                 evalInternal { dicts | atoms = atoms } body
         _ ->
-            argsHelp "let" args
+            cantFuncall "let" args
 
 brTemplate : Atom msg
 brTemplate =
@@ -1096,7 +1170,7 @@ arithFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
 arithFunction operator args dicts =
     case argArith operator args of
         Nothing ->
-            argsHelp operator args
+            cantFuncall operator args
         Just res ->
             res
 
@@ -1127,7 +1201,7 @@ logicalFunction : String -> (Bool -> Bool -> Bool) -> Bool -> Bool -> List (Atom
 logicalFunction op function firstArg suddenStop args dicts =
     case argLogical function firstArg suddenStop args dicts of
         Nothing ->
-            argsHelp op args
+            cantFuncall op args
         Just res ->
             BoolAtom res
 
@@ -1137,7 +1211,7 @@ notFunction args _ =
         [ BoolAtom b ] ->
             BoolAtom <| not b
         _ ->
-            argsHelp "not" args
+            cantFuncall "not" args
 
 boolFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
 boolFunction op args dicts =
@@ -1149,7 +1223,7 @@ boolFunction op args dicts =
     in
         case Dict.get op2 ifOperatorDict of
             Nothing ->
-                argsHelp op args
+                cantFuncall op args
             Just f ->
                 let res = case args of
                               [] -> True
@@ -1183,7 +1257,7 @@ ifFunction args dicts =
                     else
                         StringAtom ""
                 _ ->
-                    argsHelp "if" args
+                    cantFuncall "if" args
         [ bool, consequent, alternative ] ->
             case eval bool dicts of
                 BoolAtom b ->
@@ -1192,15 +1266,9 @@ ifFunction args dicts =
                     else
                         eval alternative dicts
                 _ ->
-                    argsHelp "if" args
+                    cantFuncall "if" args
         _ ->
-            argsHelp "if" args
-
-argsHelp : String -> List (Atom msg) -> Atom msg
-argsHelp function args =
-    StringAtom <| "[\"" ++ functionLookupPrefix ++ function ++ "\", " ++
-        (String.join " " <| List.map toBracketedString args) ++
-        "]"
+            cantFuncall "if" args
 
 isStringAtom : Atom msg -> Bool
 isStringAtom atom =
@@ -1232,8 +1300,7 @@ appendFunction list _ =
 
 cantApply : Atom msg -> List (Atom msg) -> Atom msg
 cantApply function args =
-    StringAtom
-    <| "Can't apply " ++ (toString function) ++ " to " ++ (toString args)
+    cantFuncall "apply" [ function, ListAtom args ]
 
 applyFunction : List (Atom msg) -> Dicts msg -> Atom msg
 applyFunction args (TheDicts dicts) =
@@ -1251,7 +1318,7 @@ applyFunction args (TheDicts dicts) =
                 _ ->
                     cantApply function args
         _ ->
-            argsHelp "apply" args
+            cantFuncall "apply" args
 
 flattenApplyArgs : List (Atom msg) -> List (Atom msg) -> List (Atom msg)
 flattenApplyArgs args res =
@@ -1419,7 +1486,7 @@ doFuncall : String -> List (Atom msg) -> TemplateDicts msg -> Atom msg
 doFuncall function args dicts =
     case Dict.get function dicts.functions of
         Nothing ->
-            StringAtom <| "funcall " ++ function ++ " " ++ (toBracketedString args)
+            cantFuncall function args
         Just f ->
             let args2 = if Set.member function dicts.delayedBindingsFunctions then
                             args
@@ -1433,9 +1500,10 @@ renderHtmlAttributes attributes dicts =
     List.map (\pair -> renderAttributeAtom pair dicts) attributes
 
 badTypeTitle : String -> Atom msg -> Attribute msg
-badTypeTitle name atom =
+badTypeTitle name msgFuncall =
     Attributes.title
-        <| "Bad arg for attribute: " ++ name ++ ": " ++ (toString atom)
+        <| "Bad message: "
+            ++ (customEncodeAtom 0 <| PListAtom [ (name, msgFuncall) ])
 
 -- There really COULD be a first-element getter for Set, which would
 -- be fast and wouldn't cons (much).

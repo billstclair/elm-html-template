@@ -5,7 +5,7 @@ import Expect exposing ( Expectation )
 import List
 import Dict
 
-import HtmlTemplate exposing ( Atom(..), Dicts(..), decodeAtom
+import HtmlTemplate exposing ( Atom(..), Dicts(..), decodeAtom, encodeAtom
                              , defaultDicts
                              )
 
@@ -416,15 +416,19 @@ functionData =
       , Ok <| IntAtom 2
       )
     -- These error strings are likely to change to encoded JSON
-    , ( """
-         ["_if", 1, 2]
-        """
-      , Ok <| StringAtom "[\"_if\", <IntAtom 1> <IntAtom 2>]"
+    , let str = """
+                 ["_if", 1, 2]
+                """
+      in
+          ( str
+          , Ok <| encodeDecode str
       )
-    , ( """
-         ["_frobulate"]
-        """
-      , Ok <| StringAtom "funcall frobulate <[]>"
+    , let str = """
+                 ["_frobulate"]
+                """
+      in
+          ( str
+          , Ok <| encodeDecode str
       )
     , ( """
          ["_if", ["_<",2,1,["_log","shortcut bug",3]], 1, 2]
@@ -463,6 +467,14 @@ functionData =
       )
       -- This loops forever if somebody breaks the detection code
     ]
+
+encodeDecode : String -> Atom msg
+encodeDecode json =
+    case decodeAtom json of
+        Ok atom ->
+            StringAtom <| encodeAtom atom
+        Err str ->
+            StringAtom <| "Decoding error: " ++ str
 
 templateTest : ( String, Result String (Atom msg) ) -> Test
 templateTest ( json, expected ) =
