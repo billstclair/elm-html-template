@@ -13,6 +13,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , renderAtom
                              , makeLoaders, getExtra, getDicts
                              , getTemplate, getPage, getAtom
+                             , getDictsAtom
                              , setTemplates, removeTemplate
                              , setPages, removePage
                              , setAtoms, removeAtom
@@ -36,7 +37,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , templateReferences, pageReferences
                              , maybeLookupAtom, maybeLookupTemplateAtom
                              , lookupTemplateAtom, lookupPageAtom, lookupAtom
-                             , atomToBody, eval
+                             , atomToBody, eval, cantFuncall
                              )
 
 import Entities
@@ -67,6 +68,7 @@ type Atom msg
     | LookupAtom String
     | LookupPageAtom String
     | LookupTemplateAtom String
+    | LookupFunctionAtom String
     | FuncallAtom (HtmlTemplateFuncall msg)
     | ListAtom (List (Atom msg))
     | PListAtom (List (String, Atom msg))
@@ -284,15 +286,11 @@ ensureFuncallList atoms =
     case atoms of
         f :: args ->
             case f of
-                StringAtom s ->
-                    case extractLookupString functionLookupPrefix s of
-                        Just name ->
-                            JD.succeed
-                                { function = name
-                                , args = args
-                                }
-                        Nothing ->
-                            JD.fail <| "Not a function operator: " ++ s
+                LookupFunctionAtom name ->
+                    JD.succeed
+                        { function = name
+                        , args = args
+                        }
                 _ ->
                     JD.fail <| "Not a string: " ++ (toString f)
         _ ->
@@ -305,7 +303,7 @@ htmlTemplateFuncallDecoder =
 
 htmlFuncallStringDecoder : Decoder String
 htmlFuncallStringDecoder =
-    JD.andThen (ensureLookupString functionLookupPrefix "a slash") JD.string
+    JD.andThen (ensureLookupString functionLookupPrefix "an underscore") JD.string
     
 htmlRecordDecoder : Decoder (Atom msg)
 htmlRecordDecoder =
@@ -430,6 +428,7 @@ atomDecoder =
         [ JD.map LookupAtom htmlAtomLookupStringDecoder
         , JD.map LookupPageAtom htmlPageLookupStringDecoder
         , JD.map LookupTemplateAtom htmlLookupStringDecoder
+        , JD.map LookupFunctionAtom htmlFuncallStringDecoder
         , JD.map FuncallAtom <| JD.lazy (\_ -> htmlTemplateFuncallDecoder)
         , JD.map StringAtom stripQuoteDecoder
         , JD.map IntAtom JD.int
@@ -454,7 +453,7 @@ atomPListDecoder =
 
 encodeAtom : Atom msg -> String
 encodeAtom atom =
-    customEncodeAtom 2 atom
+    customEncodeAtom 1 atom
 
 customEncodeAtom : Int -> Atom msg -> String
 customEncodeAtom indentation atom =
@@ -488,9 +487,11 @@ atomEncoder atom =
             JE.string <| pageLookupPrefix ++ string
         LookupTemplateAtom string ->
             JE.string <| templateLookupPrefix ++ string
+        LookupFunctionAtom string ->
+            JE.string <| functionLookupPrefix ++ string
         FuncallAtom { function, args } ->
             JE.list
-                <| ( JE.string <| functionLookupPrefix ++ function )
+                <| ( JE.string <| functionLookupPrefix ++ function)
                     :: ( List.map atomEncoder args )
         StringAtom string ->
             JE.string <| quotePrefix string
@@ -511,11 +512,7 @@ atomEncoder atom =
         PListAtom plist ->
             plistEncoder plist
         HtmlAtom html ->
-            atomEncoder <| FuncallAtom { function = "error"
-                                       , args = [ StringAtom"HtmlAtom "
-                                                , StringAtom <| toString html
-                                                ]
-                                       }
+            JE.string "<Rendered Html>"
 
 ---
 --- Attribute rendering
@@ -828,6 +825,8 @@ evalBase varsSeen dicts atom =
                     atom
                 Just (value, seen) ->
                     evalBase seen dicts value
+        LookupFunctionAtom name ->
+            atom
         FuncallAtom { function, args } ->
             doFuncall function args dicts
         ListAtom list ->
@@ -1002,6 +1001,107 @@ letStarFunction args (TheDicts dicts) =
                 evalInternal { dicts | atoms = atoms } body
         _ ->
             cantFuncall "let" args
+
+recordToList : Atom msg -> Maybe (List (Atom msg))
+recordToList atom =
+    case atom of
+        ListAtom list ->
+            Just list
+        RecordAtom { tag, attributes, body } ->
+            Just [ StringAtom tag, PListAtom attributes, ListAtom body ]
+        _ ->
+            Nothing
+
+lengthFunction : List (Atom msg) -> d -> Atom msg
+lengthFunction args _ =
+    case args of
+        [ arg ] ->
+            case recordToList arg of
+                Just list ->
+                    IntAtom <| List.length list
+                Nothing ->
+                    cantFuncall "length" args
+        _ ->
+          cantFuncall "length" args
+
+nthFunction : List (Atom msg) -> d -> Atom msg
+nthFunction args _ =
+    case args of
+        [ IntAtom idx, list ] ->
+            case recordToList list of
+                Just l ->
+                    case LE.getAt idx l of
+                        Just atom ->
+                            atom
+                        Nothing ->
+                            cantFuncall "nth" args
+                Nothing ->
+                    cantFuncall "nth" args
+        _ ->
+            cantFuncall "nth" args
+
+makeListFunction : List (Atom msg) -> d -> Atom msg
+makeListFunction args _ =
+    case args of
+        [ IntAtom len, init ] ->
+            ListAtom <| List.repeat len init
+        _ ->
+            cantFuncall "makeList" args
+
+firstFunction : List (Atom msg) -> d -> Atom msg
+firstFunction args _ =
+    case args of
+        [ list ] ->
+            case recordToList list  of
+                Just l ->
+                    case List.head l of
+                        Just res ->
+                            res
+                        Nothing ->
+                            StringAtom ""
+                Nothing ->
+                    cantFuncall "rest" args
+        _ ->
+            cantFuncall "rest" args
+
+restFunction : List (Atom msg) -> d -> Atom msg
+restFunction args _ =
+    case args of
+        [ list ] ->
+            case recordToList list of
+                Just l ->
+                    case List.tail l of
+                        Just res ->
+                            ListAtom res
+                        Nothing ->
+                            ListAtom []
+                Nothing ->
+                    cantFuncall "rest" args
+        _ ->
+            cantFuncall "rest" args
+
+consFunction : List (Atom msg) -> d -> Atom msg
+consFunction args _ =
+    case args of
+        [ x, list ] ->
+            case recordToList list of
+                Just l ->
+                    ListAtom <| x :: l
+                Nothing ->
+                    cantFuncall "rest" args
+        _ ->
+            cantFuncall "rest" args
+
+makeRecordFunction : List (Atom msg) -> d -> Atom msg
+makeRecordFunction args _ =
+    case args of
+        [ StringAtom tag, PListAtom attributes, ListAtom body ] ->
+            RecordAtom { tag = tag
+                       , attributes = attributes
+                       , body = body
+                       }
+        _ ->
+            cantFuncall "makeRecord" args
 
 brTemplate : Atom msg
 brTemplate =
@@ -1307,6 +1407,10 @@ applyFunction args (TheDicts dicts) =
     case args of
         function :: functionArgs ->
             case function of
+                LookupFunctionAtom name ->
+                    doFuncall name
+                        (flattenApplyArgs functionArgs [])
+                        dicts
                 StringAtom s ->
                     case extractLookupString functionLookupPrefix s of
                         Nothing ->
@@ -1380,6 +1484,13 @@ defaultFunctionsDict =
     Dict.fromList [ ( "loop", loopFunction)
                   , ( "let", letFunction )
                   , ( "let*", letStarFunction )
+                  , ( "length", lengthFunction )
+                  , ( "nth", nthFunction )
+                  , ( "makeList", makeListFunction )
+                  , ( "first", firstFunction )
+                  , ( "rest", restFunction )
+                  , ( "cons", consFunction )
+                  , ( "makeRecord", makeRecordFunction )
                   , ( "ps", psFunction )
                   , ( "if", ifFunction )
                   , ( "append", appendFunction )
@@ -1454,6 +1565,8 @@ renderHtmlAtom template dicts =
                     renderHtmlAtom atom dicts
                 Nothing ->
                     text <| toBracketedString template
+        LookupFunctionAtom name ->
+            text <| "\"" ++ functionLookupPrefix ++ name ++ "\""
         FuncallAtom { function, args } ->
             renderHtmlAtom (doFuncall function args dicts) dicts
         RecordAtom { tag, attributes, body } ->
@@ -1628,6 +1741,10 @@ addPageProperties pageName properties (TheLoaders loaders) =
 getAtom : String -> Loaders msg x -> Maybe (Atom msg)
 getAtom name (TheLoaders loaders) =
     Dict.get name loaders.dicts.atoms
+
+getDictsAtom : String -> Dicts msg -> Maybe (Atom msg)
+getDictsAtom name (TheDicts dicts) =
+    Dict.get name dicts.atoms
 
 setAtoms : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 setAtoms pairs (TheLoaders loaders) =

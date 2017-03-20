@@ -9,16 +9,18 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , loadOutstandingPageOrTemplate
                              , maybeLoadOutstandingPageOrTemplate
                              , getPage, addPageProperties, getTemplate
-                             , getAtom, setAtoms
+                             , getAtom, setAtoms, getDictsAtom
                              , clearPages
                              , renderAtom, toBracketedString
+                             , decodeAtom, eval, encodeAtom, customEncodeAtom
+                             , cantFuncall
                              )
 
 import Html exposing ( Html, Attribute
-                     , div, p, text, a
+                     , div, p, text, a, textarea, pre
                      )
-import Html.Attributes as Attributes exposing ( style, href )
-import Html.Events exposing ( onClick )
+import Html.Attributes as Attributes exposing ( style, href, rows, cols )
+import Html.Events exposing ( onClick, onInput )
 import Http
 
 log = Debug.log
@@ -35,6 +37,9 @@ type alias Model =
     { loaders: Loaders Msg Extra
     , page: Maybe String
     , pendingPage : Maybe String
+    , playString : String
+    , parsedPlayString : String
+    , evaluatedPlayString : String
     , error : Maybe String
     }
 
@@ -109,7 +114,7 @@ pageLinkFunction args _ =
                  ]
                 [ text title ]
         _ ->
-            StringAtom <| "Bad link: " ++ (toBracketedString args)
+            cantFuncall "pageLink" args
 
 normalizePageLinkArgs : List (Atom Msg) -> Maybe (String, String)
 normalizePageLinkArgs atom =
@@ -151,11 +156,15 @@ initialLoaders =
 
 init : ( Model, Cmd Msg)
 init =
-    let model = { loaders = initialLoaders
-                , page = Nothing
-                , pendingPage = Just indexPage
-                , error = Nothing
-                }
+    let (model, _) = updatePlayString "\"Hello HtmlTemplate!\""
+                     { loaders = initialLoaders
+                     , page = Nothing
+                     , pendingPage = Just indexPage
+                     , playString = ""
+                     , parsedPlayString = ""
+                     , evaluatedPlayString = ""
+                     , error = Nothing
+                     }
     in
         ( model
         , loadOutstandingPageOrTemplate model.loaders
@@ -177,6 +186,7 @@ type Msg
     = TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | PageFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | GotoPage String
+    | UpdatePlayString String
     | SetError String
 
 fetchUrl : String -> ((Result Http.Error String) -> Msg) -> Cmd Msg
@@ -224,12 +234,13 @@ update msg model =
             pageFetchDone name loaders result model
         GotoPage page ->
             gotoPage page model
+        UpdatePlayString string ->
+            updatePlayString string model
         SetError message ->
             ( { model | error = Just message }
             , Cmd.none
             )
 
--- TODO
 gotoPage : String -> Model -> ( Model, Cmd Msg )
 gotoPage page model =
     let m = { model | error = Nothing
@@ -320,6 +331,41 @@ pageFetchDone name loaders result model =
                 Ok loaders2 ->
                     continueLoading loaders2 model
 
+maxOneLineEncodeLength : Int
+maxOneLineEncodeLength =
+    60
+
+encode : Atom msg -> String
+encode atom =
+    let res = customEncodeAtom 0 atom
+    in
+        if String.length res <= maxOneLineEncodeLength then
+            res
+        else
+            encodeAtom atom
+
+updatePlayString : String -> Model -> ( Model, Cmd Msg )
+updatePlayString string model =
+    let decode = decodeAtom string
+        decodeString = case decode of
+                           Err err ->
+                               "Parse error: " ++ err
+                           Ok atom ->
+                               encode atom
+        evalString = case decode of
+                         Err _ ->
+                             ""
+                         Ok atom ->
+                             encode <| eval atom <| getDicts model.loaders
+    in
+        ( { model
+              | playString = string
+              , parsedPlayString = decodeString
+              , evaluatedPlayString = evalString
+          }
+        , Cmd.none
+        )
+
 view : Model -> Html Msg
 view model =
     div []
@@ -333,7 +379,9 @@ view model =
               Nothing ->
                   text ""
               Just page ->
-                  let loaders = model.loaders
+                  let loaders = insertFunctions
+                                [ ( "playDiv", playDivFunction model ) ]
+                                model.loaders                                      
                       template = pageTemplate
                       content = (LookupTemplateAtom
                                      <| if page == "index" then
@@ -377,3 +425,23 @@ dictsDiv thing page loaders =
 br : Html Msg
 br =
     Html.br [] []
+
+playDiv : Model -> Html Msg
+playDiv model =
+    div []
+        [ textarea [ rows 8
+                   , cols 80
+                   , onInput UpdatePlayString
+                   ]
+              [ text model.playString ]
+        , p [] [ text "Parsed:" ]
+        , pre []
+            [ text model.parsedPlayString ]
+        , p [] [ text "Evaluated:" ]
+        , pre []
+            [ text model.evaluatedPlayString ]
+        ]
+
+playDivFunction : Model -> a -> b -> Atom Msg
+playDivFunction model _ _ =
+    HtmlAtom <| playDiv model
