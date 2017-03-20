@@ -3,8 +3,9 @@ module Tests exposing (all)
 import Test exposing (..)
 import Expect exposing ( Expectation )
 import List
+import Dict
 
-import HtmlTemplate exposing ( Atom(..), decodeAtom
+import HtmlTemplate exposing ( Atom(..), Dicts(..), decodeAtom
                              , defaultDicts
                              )
 
@@ -25,7 +26,8 @@ all : Test
 all =
     Test.concat <|
         List.concat
-            [ (List.map atomTest atomData)
+            [ [circularTest circularAtom] --infinite loop if circularity test broken
+            , (List.map atomTest atomData)
             , (List.map templateTest templateData)
             , (List.map functionTest functionData)
             ]
@@ -179,6 +181,31 @@ atomData =
       , Ok <| ListAtom [ StringAtom "p", PListAtom [], IntAtom 1, IntAtom 2 ]
       )
     ]
+
+circular : String
+circular =
+    "circular"
+
+circularAtom : Atom msg
+circularAtom =
+    LookupAtom circular
+
+circularDicts =
+    case defaultDicts of
+        TheDicts ds ->
+            TheDicts
+            { ds |
+                  atoms = Dict.insert circular circularAtom ds.atoms
+            }
+
+-- This will loop forever, if somebody breaks the loop detection code.
+circularTest : Atom msg -> Test
+circularTest expected =
+    test "circularTest"
+        (\_ ->
+             expectResult (Ok expected)
+             <| Ok <| HtmlTemplate.eval circularAtom circularDicts
+        )
 
 eval : Atom msg -> Atom msg
 eval atom =
@@ -434,6 +461,7 @@ functionData =
         """
       , Ok <| IntAtom 2
       )
+      -- This loops forever if somebody breaks the detection code
     ]
 
 templateTest : ( String, Result String (Atom msg) ) -> Test

@@ -698,49 +698,89 @@ br : Html msg
 br =
     Html.br [] []
 
+type alias VarsSeen =
+    { atoms : Set String
+    , pages : Set String
+    , templates : Set String
+    }
+
+emptyVarsSeen : VarsSeen
+emptyVarsSeen =
+    { atoms = Set.empty
+    , pages = Set.empty
+    , templates = Set.empty
+    }
+
+lookupForEval : String -> TemplateDicts msg -> (String -> TemplateDicts msg -> Maybe a) -> VarsSeen -> (VarsSeen -> Set String) -> (Set String -> VarsSeen -> VarsSeen) -> Maybe (a, VarsSeen)
+lookupForEval name dicts looker varsSeen getter putter =
+    if Set.member name <| getter varsSeen then
+        Nothing
+    else
+        case looker name dicts of
+            Nothing ->
+                Nothing
+            Just val ->
+                Just (val, putter (Set.insert name <| getter varsSeen) varsSeen)
+
+setVSAtoms : Set String -> VarsSeen -> VarsSeen
+setVSAtoms atoms varsSeen =
+    { varsSeen | atoms = atoms }
+
+setVSPages : Set String -> VarsSeen -> VarsSeen
+setVSPages atoms varsSeen =
+    { varsSeen | pages = atoms }
+
+setVSTemplates : Set String -> VarsSeen -> VarsSeen
+setVSTemplates atoms varsSeen =
+    { varsSeen | templates = atoms }
+
 eval : Atom msg -> Dicts msg -> Atom msg
 eval atom (TheDicts dicts) =
     evalInternal dicts atom
 
 evalInternal : TemplateDicts msg -> Atom msg -> Atom msg
 evalInternal dicts atom =
+    evalBase emptyVarsSeen dicts atom
+
+evalBase : VarsSeen -> TemplateDicts msg -> Atom msg -> Atom msg
+evalBase varsSeen dicts atom =
     case atom of
         LookupAtom name ->
-            case lookupAtom name dicts of
+            case lookupForEval name dicts lookupAtom varsSeen .atoms setVSAtoms of
                 Nothing ->
                     atom
-                Just value ->
-                    evalInternal dicts value
+                Just (value, seen) ->
+                    evalBase seen dicts value
         LookupPageAtom name ->
-            case lookupPageAtom name dicts of
+            case lookupForEval name dicts lookupPageAtom varsSeen .pages setVSPages of
                 Nothing ->
                     atom
-                Just value ->
-                    evalInternal dicts value
+                Just (value, seen) ->
+                    evalBase seen dicts value
         LookupTemplateAtom name ->
-            case lookupTemplateAtom name dicts of
+            case lookupForEval name dicts lookupTemplateAtom varsSeen .templates setVSTemplates of
                 Nothing ->
                     atom
-                Just value ->
-                    evalInternal dicts value
+                Just (value, seen) ->
+                    evalBase seen dicts value
         FuncallAtom { function, args } ->
             doFuncall function args dicts
         ListAtom list ->
             ListAtom
-            <| List.map (evalInternal dicts) list
+            <| List.map (evalBase varsSeen dicts) list
         PListAtom plist ->
             PListAtom
             <| List.map (\pair ->
                              let (name, value) = pair
                              in
-                                 (name, evalInternal dicts value)
+                                 (name, evalBase varsSeen dicts value)
                         )
                 plist
         RecordAtom { tag, attributes, body } ->
             RecordAtom
             <| { tag = tag
                , attributes = List.map (installAttributeBindings dicts) attributes
-               , body = List.map (evalInternal dicts) body
+               , body = List.map (evalBase varsSeen dicts) body
                }
         _ ->
             atom
