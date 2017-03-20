@@ -17,9 +17,9 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              )
 
 import Html exposing ( Html, Attribute
-                     , div, p, text, a, textarea, pre, blockquote
+                     , div, p, text, a, textarea, pre
                      )
-import Html.Attributes as Attributes exposing ( style, href, rows, cols )
+import Html.Attributes as Attributes exposing ( style, href, rows, cols, class )
 import Html.Events exposing ( onClick, onInput )
 import Http
 
@@ -446,7 +446,7 @@ playDiv model =
         , pre []
             [ text model.parsedPlayString ]
         , p [] [ text "Rendered:" ]
-        , blockquote []
+        , div [ class "rendered" ]
             [ model.renderedPlayString ]
         , p [] [ text "Evaluated:" ]
         , pre []

@@ -56,12 +56,12 @@ table.bordered>tr>td {
 pre {
     width: 40em;
 }
-blockquote {
+div.rendered {
     width: 32em;
 }
-pre, blockquote {
+pre, div.rendered {
     overflow: auto;
-    margin-left: 1em;
+    margin-left: 0;
     padding: 0.5em;
     border: 1px solid black;
     background-color: GhostWhite;
