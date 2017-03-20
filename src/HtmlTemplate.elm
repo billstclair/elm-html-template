@@ -490,7 +490,7 @@ atomEncoder atom =
             JE.string <| templateLookupPrefix ++ string
         FuncallAtom { function, args } ->
             JE.list
-                <| ( JE.string functionLookupPrefix )
+                <| ( JE.string <| functionLookupPrefix ++ function )
                     :: ( List.map atomEncoder args )
         StringAtom string ->
             JE.string <| quotePrefix string

@@ -5,7 +5,8 @@ import Expect exposing ( Expectation )
 import List
 import Dict
 
-import HtmlTemplate exposing ( Atom(..), Dicts(..), decodeAtom, encodeAtom
+import HtmlTemplate exposing ( Atom(..), Dicts(..)
+                             , decodeAtom, customEncodeAtom
                              , defaultDicts
                              )
 
@@ -472,7 +473,7 @@ encodeDecode : String -> Atom msg
 encodeDecode json =
     case decodeAtom json of
         Ok atom ->
-            StringAtom <| encodeAtom atom
+            StringAtom <| customEncodeAtom 0 atom
         Err str ->
             StringAtom <| "Decoding error: " ++ str
 
