@@ -10,7 +10,9 @@
 ----------------------------------------------------------------------
 
 module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
-                             , renderAtom
+                             , TemplateDicts
+
+                             , render, renderAtom
                              , makeLoaders, getExtra, getDicts
                              , getTemplate, getPage, getAtom
                              , getDictsAtom
@@ -40,6 +42,56 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , atomToBody, eval, cantFuncall
                              )
 
+{-| The `HtmlTemplate` module allows you to code the `view` part of an Elm web page in JSON. You can parse that JSON into `Atom` instances as you desire, and then call `renderAtom` to render an `Atom` instance into an `Html` instance.
+
+The `Atom` type includes a scripting language. It's pretty small now, but I expect to make it grow over time. I also plan to make a more Lisp-like syntax, better for script writing, and a Markdown syntax, better for human-written static web pages. The JSON syntax will eventually be written automatically by a blogging package, which will be an expansion of the example included with this package.
+
+See the README for a link to the documentation for the JSON and its scripting language. The documentation here tells you only how to use the Elm API for the Elm part of your application.
+
+I plan to eventually expand scripting to be usable for the `update` and `Msg` parts of an Elm application, so that you can do almost the whole thing dynamically. For some applications that will make sense. For now, you need to write `update` in Elm, define your `Msg` type in Elm, and create entries for the `TemplateDicts.messages` table to enable creation of those `Msg` types from the scripting language.
+
+The example defined by `examples/template.elm` is live at [lisplog.org/elm-html-template](https://lisplog.org/elm-html-template/).
+
+# Basics
+@docs Atom, Loaders
+@docs render
+@docs makeLoaders, insertMessages
+@docs addOutstandingPagesAndTemplates
+@docs loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
+@docs loadTemplate, receiveTemplate
+@docs loadPage, receivePage
+@docs getExtra, addPageProcessors
+@docs clearPages, clearTemplates, clearAtoms
+
+# JSON encoding/decoding
+@docs decodeAtom, atomDecoder
+@docs encodeAtom, customEncodeAtom, atomEncoder
+
+# More `Loaders` functions
+@docs getTemplate, getPage, getAtom
+@docs setTemplates, removeTemplate
+@docs setPages, removePage
+@docs setAtoms, removeAtom
+@docs insertFunctions, insertDelayedBindingsFunctions
+@docs eval, cantFuncall
+@docs addPageProperties, runPageProcessor
+
+# Lower Level Access
+@docs Dicts, TemplateDicts
+@docs getDicts, getDictsAtom
+@docs renderAtom
+@docs defaultDicts, emptyTemplateDicts, defaultTemplateDicts
+@docs loopFunction, psFunction, ifFunction, tagWrap
+@docs defaultFunctionsDict, defaultAtomsDict
+@docs toBracketedString
+
+# For wizards only
+@docs templateReferences, pageReferences
+@docs maybeLookupAtom, maybeLookupTemplateAtom
+@docs lookupTemplateAtom, lookupPageAtom, lookupAtom
+@docs atomToBody
+
+-}
 import Entities
 
 import Html exposing ( Html, Attribute
@@ -1529,6 +1581,10 @@ defaultDelayedBindingsFunctions =
                  ,  "||"
                  ,  "xor"
                  ]
+
+render : Atom msg -> Loaders msg x -> Html msg
+render template (TheLoaders loaders) =
+    renderHtmlAtom template loaders.dicts
 
 renderAtom : Atom msg -> Dicts msg -> Html msg
 renderAtom template (TheDicts dicts) =

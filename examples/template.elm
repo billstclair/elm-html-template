@@ -11,7 +11,7 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , getPage, addPageProperties, getTemplate
                              , getAtom, setAtoms, getDictsAtom
                              , clearPages
-                             , renderAtom, toBracketedString
+                             , render, toBracketedString
                              , decodeAtom, eval, encodeAtom, customEncodeAtom
                              , cantFuncall
                              )
@@ -363,7 +363,7 @@ updatePlayString string model =
                        Err _ ->
                            text ""
                        Ok atom ->
-                           renderAtom atom <| getDicts model.loaders
+                           render atom model.loaders
     in
         ( { model
               | playString = string
@@ -406,14 +406,14 @@ view model =
                                   Nothing ->
                                       dictsDiv "Page" page loaders
                                   Just atom ->
-                                      let lds = setAtoms
-                                                [ ("node", atom)
-                                                , ("content", content)
-                                                , ("page", StringAtom page)
-                                                ]
-                                                loaders
+                                      let loaders2 = setAtoms
+                                                     [ ("node", atom)
+                                                     , ("content", content)
+                                                     , ("page", StringAtom page)
+                                                     ]
+                                                     loaders
                                       in
-                                          renderAtom tmpl <| getDicts lds
+                                          render tmpl loaders2
         ]
 
 dictsDiv : String -> String -> Loaders Msg Extra -> Html Msg
