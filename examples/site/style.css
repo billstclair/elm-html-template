@@ -55,6 +55,11 @@ table.bordered>tr>td {
 }
 pre {
     width: 40em;
+}
+blockquote {
+    width: 32em;
+}
+pre, blockquote {
     overflow: auto;
     margin-left: 1em;
     padding: 0.5em;

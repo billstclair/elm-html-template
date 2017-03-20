@@ -17,7 +17,7 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              )
 
 import Html exposing ( Html, Attribute
-                     , div, p, text, a, textarea, pre
+                     , div, p, text, a, textarea, pre, blockquote
                      )
 import Html.Attributes as Attributes exposing ( style, href, rows, cols )
 import Html.Events exposing ( onClick, onInput )
@@ -40,6 +40,7 @@ type alias Model =
     , playString : String
     , parsedPlayString : String
     , evaluatedPlayString : String
+    , renderedPlayString : Html Msg
     , error : Maybe String
     }
 
@@ -163,6 +164,7 @@ init =
                      , playString = ""
                      , parsedPlayString = ""
                      , evaluatedPlayString = ""
+                     , renderedPlayString = text ""
                      , error = Nothing
                      }
     in
@@ -357,11 +359,17 @@ updatePlayString string model =
                              ""
                          Ok atom ->
                              encode <| eval atom <| getDicts model.loaders
+        rendered = case decode of
+                       Err _ ->
+                           text ""
+                       Ok atom ->
+                           renderAtom atom <| getDicts model.loaders
     in
         ( { model
               | playString = string
               , parsedPlayString = decodeString
               , evaluatedPlayString = evalString
+              , renderedPlayString = rendered
           }
         , Cmd.none
         )
@@ -437,6 +445,9 @@ playDiv model =
         , p [] [ text "Parsed:" ]
         , pre []
             [ text model.parsedPlayString ]
+        , p [] [ text "Rendered:" ]
+        , blockquote []
+            [ model.renderedPlayString ]
         , p [] [ text "Evaluated:" ]
         , pre []
             [ text model.evaluatedPlayString ]
