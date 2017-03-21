@@ -7,7 +7,7 @@
         "src"
     ],
     "exposed-modules": [
-        ""
+        "HtmlTemplate"
     ],
     "dependencies": {
         "elm-community/list-extra": "6.0.0 <= v < 7.0.0",

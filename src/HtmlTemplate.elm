@@ -9,47 +9,54 @@
 --
 ----------------------------------------------------------------------
 
-module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
-                             , TemplateDicts
+module HtmlTemplate exposing
+    ( Atom(..), Loaders, Dicts
 
-                             , render, renderAtom
-                             , makeLoaders, getExtra, setExtra, getDicts
-                             , getTemplate, getPage, getAtom
-                             , getDictsAtom
-                             , setTemplates, removeTemplate
-                             , setPages, removePage
-                             , setAtoms, removeAtom
-                             , insertFunctions, insertMessages, addPageProcessors
-                             , insertDelayedBindingsFunctions
-                             , addPageProperties, runPageProcessor
-                             , clearTemplates, clearPages, clearAtoms
-                             , addOutstandingPagesAndTemplates
-                             , loadTemplate, receiveTemplate
-                             , loadPage, receivePage
-                             , loadOutstandingPageOrTemplate
-                             , maybeLoadOutstandingPageOrTemplate
+    -- Basic State
+    , makeLoaders, insertMessages
+    , addOutstandingPagesAndTemplates
+    , loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
+    , loadTemplate, receiveTemplate
+    , loadPage, receivePage
+    , getExtra, setExtra, addPageProcessors
+    , clearPages, clearTemplates, clearAtoms
 
-                             , decodeAtom, atomDecoder
-                             , encodeAtom, customEncodeAtom, atomEncoder
-                             , templateReferences, pageReferences
-                             , maybeLookupAtom, maybeLookupTemplateAtom
-                             , lookupTemplateAtom, lookupPageAtom, lookupAtom
-                             , eval, cantFuncall
-                             , defaultDicts
-                             )
+    -- Turning the Parsed JSON into Html
+    , render
 
-{-| The `HtmlTemplate` module allows you to code the `view` part of an Elm web page in JSON. You can parse that JSON into `Atom` instances as you desire, and then call `renderAtom` to render an `Atom` instance into an `Html` instance.
+    -- JSON encoding/decoding
+    , decodeAtom, atomDecoder
+    , encodeAtom, customEncodeAtom, atomEncoder
+
+    -- More State Accessors
+    , getAtom, setAtom, setAtoms, removeAtom
+    , getTemplate, setTemplate, setTemplates, removeTemplate
+    , getPage, setPage, setPages, removePage
+    , insertFunctions, insertDelayedBindingsFunctions
+    , cantFuncall, tagWrap
+    , getDicts, getDictsAtom
+
+    -- Did Somebody Say Eval?
+    , eval
+    )
+    
+{-| The `HtmlTemplate` module allows you to code the `view` part of an Elm web page in JSON. You can parse that JSON into `Atom` instances as you desire, and then call `render` to render an `Atom` instance into an `Html` instance.
 
 The `Atom` type includes a scripting language. It's pretty small now, but I expect to make it grow over time. I also plan to make a more Lisp-like syntax, better for script writing, and a Markdown syntax, better for human-written static web pages. The JSON syntax will eventually be written automatically by a blogging package, which will be an expansion of the example included with this package.
 
-See the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md) and its scripting language. The documentation here tells you only how to use the Elm API for the Elm part of your application.
+See the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) and its scripting language. The documentation here tells you only how to use the Elm API for the Elm part of your application.
 
 I plan to eventually expand scripting to be usable for the `update` and `Msg` parts of an Elm application, so that you can do almost the whole thing dynamically. For some applications that will make sense. For now, you need to write `update` in Elm, define your `Msg` type in Elm, and create entries for the `TemplateDicts.messages` table to enable creation of those `Msg` types from the scripting language.
 
 The example defined by `examples/template.elm` is live at [lisplog.org/elm-html-template](https://lisplog.org/elm-html-template/).
 
 # Basic State
-@docs Atom, Loaders
+
+Use these functions to initialize your application by loading the templates and pages needed to display the first web page.
+
+Besides the function descriptions, you'll need to grok the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) in order to make much progress here. Or just pattern match from the application in the `examples` directory.
+
+@docs Atom, Loaders, Dicts
 @docs makeLoaders, insertMessages
 @docs addOutstandingPagesAndTemplates
 @docs loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
@@ -59,6 +66,9 @@ The example defined by `examples/template.elm` is live at [lisplog.org/elm-html-
 @docs clearPages, clearTemplates, clearAtoms
 
 # Turning the Parsed JSON into Html
+
+This is the point of the `HtmlTemplate` module. It creates an `Html Msg` that you can return from your `view` function (or as part of the whole page created by your `view` function).
+
 @docs render
 
 # JSON encoding/decoding
@@ -66,27 +76,15 @@ The example defined by `examples/template.elm` is live at [lisplog.org/elm-html-
 @docs encodeAtom, customEncodeAtom, atomEncoder
 
 # More State Accessors
-@docs getTemplate, getPage, getAtom
-@docs setTemplates, removeTemplate
-@docs setPages, removePage
-@docs setAtoms, removeAtom
+@docs getAtom, setAtom, setAtoms, removeAtom
+@docs getTemplate, setTemplate, setTemplates, removeTemplate
+@docs getPage, setPage, setPages, removePage
 @docs insertFunctions, insertDelayedBindingsFunctions
 @docs cantFuncall, tagWrap
-@docs addPageProperties, runPageProcessor
+@docs getDicts, getDictsAtom
 
 # Did Somebody Say Eval?
 @docs eval
-
-# Lower Level Access
-@docs Dicts, TemplateDicts
-@docs getDicts, getDictsAtom
-@docs renderAtom
-
-# For wizards only
-@docs templateReferences, pageReferences
-@docs maybeLookupAtom, maybeLookupTemplateAtom
-@docs lookupTemplateAtom, lookupPageAtom, lookupAtom
-@docs defaultDicts
 
 -}
 import Entities
@@ -110,9 +108,9 @@ import List.Extra as LE
 log = Debug.log
 
 {-|
-`Atom` is the basic data type of the `HtmlTemplate` module. JSON is parsed as an `Atom`, and an `Atom` is what `render` renders as `Html`. Remember to always say `Atom Msg` in your code, where `Msg` is your message type. The `Msg` is only needed by the functions you install with `insertMessages`, but they're used in any attribute that needs to invoke your `update` function.
+`Atom` is the basic data type of the `HtmlTemplate` module. JSON is parsed into an `Atom`, and an `Atom` is what `render` renders as `Html`. Remember to always say `Atom Msg` in your code, where `Msg` is your message type. The `Msg` is only needed by the functions you install with `insertMessages`, but they're used in any attribute that needs to invoke your `update` function.
 
-See the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md) for details about which atom types represent which Elm objects.
+See the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) for details about which atom types represent which Elm objects.
 -}
 type Atom msg
     = StringAtom String
@@ -138,7 +136,8 @@ type alias TemplateDicts msg =
     , messages : Dict String (List (Atom msg) -> Dicts msg -> msg)
     }
 
--- Tag TemplateDicts for recursive use
+{-| This type wraps the dictionaries needed by functions added by `insertFunctions` or `insertMessages`. It is opaque to your code, so is only exported so you can properly type the parameters to those functions.
+-}
 type Dicts msg
     = TheDicts (TemplateDicts msg)
 
@@ -180,6 +179,10 @@ defaultTemplateDicts =
     , messages = Dict.empty
     }
 
+{-| Passes a JSON string to `atomDecoder` and return the `Result`.
+
+Convenience function. You can call `Json.Decode.decodeString` yourself, if you prefer.
+-}
 decodeAtom : String -> Result String (Atom msg)
 decodeAtom json =
     JD.decodeString atomDecoder json
@@ -476,6 +479,9 @@ isAttribute string atom =
         Just _ ->
             True
 
+{-|
+A `Json.Decode.Decoder` to parse JSON into an `Atom`. You will usually use `decodeAtom` for this, but if you have a data structure that includes an `Atom`, this allows you to include it in your own decoder.
+-}
 atomDecoder : Decoder (Atom msg)
 atomDecoder =
     JD.oneOf
@@ -505,10 +511,18 @@ atomPListDecoder =
 --- Encoders
 ---
 
+{-| Passes an `Atom` to `atomEncoder` and returns the resulting JSON `String`. Uses indentation of `1`. Call `customEncodeAtom` to specify the indentation yourself.
+
+Convenience function. You can call `Json.Encode.encode` yourself, if you prefer.
+-}
 encodeAtom : Atom msg -> String
 encodeAtom atom =
     customEncodeAtom 1 atom
 
+{-| Passes an `Atom` to `atomEncoder` and returns the resulting JSON `String`.
+
+Convenience function. You can call `Json.Encode.encode` yourself, if you prefer.
+-}
 customEncodeAtom : Int -> Atom msg -> String
 customEncodeAtom indentation atom =
     JE.encode indentation <| atomEncoder atom
@@ -532,6 +546,9 @@ plistEncoder : List (String, Atom msg) -> Value
 plistEncoder plist =
     JE.object <| List.map (\(a, v) -> (a, atomEncoder v)) plist
 
+{-|
+Encode an `Atom` as a `Json.Encode.Value`. You will usually use `encodeAtom` to get a JSON `String`, but if you have a data structure that includes an `Atom`, this allows you to include it in your own encoder.
+-}
 atomEncoder : Atom msg -> Value
 atomEncoder atom =
     case atom of
@@ -850,6 +867,10 @@ setVSTemplates : Set String -> VarsSeen -> VarsSeen
 setVSTemplates atoms varsSeen =
     { varsSeen | templates = atoms }
 
+{-| This is exposed primarily so that the example application can use it on its `play` page. It can currently result in an `Atom` with function calls changed to strings and attributes already rendered into `Html`.
+
+You shouldn't need to use it.
+-}
 eval : Atom msg -> Dicts msg -> Atom msg
 eval atom (TheDicts dicts) =
     evalInternal dicts atom
@@ -938,6 +959,10 @@ makeFuncallAtom function args =
                 , args = args
                 }
 
+{-| Useful for reporting on badly-formed arguments to a function added with `insertFunctions` (or `insertMessages`). Turns the function call into a string, so that you can see that on your `render`ed web page.
+
+I plan to eventually provide a delayed-evaluation mechanism, so that instead of turning a function call into a string, you can wrap it with that, but until then, this is what you've got.
+-}
 cantFuncall : String -> List (Atom msg) -> Atom msg
 cantFuncall function args =
     StringAtom <| customEncodeAtom 0 <| makeFuncallAtom function args
@@ -1492,10 +1517,18 @@ flattenApplyArgs args res =
         car :: cdr ->
             flattenApplyArgs cdr <| car :: res
 
+{-|
+Useful if a function added with `insertFunctions` wants to return a standard Html tag.
+
+Same as `RecordAtom { tag = tag, attributes = attributes, body = body }`
+-}
 tagWrap : String -> List (String, Atom msg) -> List (Atom msg) -> Atom msg
 tagWrap tag attributes body =
     RecordAtom
-    <| HtmlTemplateRecord tag attributes body
+        { tag = tag
+        , attributes = attributes
+        , body = body
+        }
 
 toBracketedString : a -> String
 toBracketedString thing =
@@ -1584,6 +1617,10 @@ defaultDelayedBindingsFunctions =
                  ,  "xor"
                  ]
 
+{-| Convert an `Atom` to `Html` for rendering a browser page. You will usually pass a template here, but since the only difference between a template, a page, or any other `Atom` is how you use them, that's up to you.
+
+The application in the `examples` directory always passes its `page` template here (except on its `play` page, where it passes the `Atom` decoded from the user input).
+-}
 render : Atom msg -> Loaders msg x -> Html msg
 render template (TheLoaders loaders) =
     renderHtmlAtom template loaders.dicts
@@ -1710,7 +1747,7 @@ type alias LoadersRecord msg x =
     , pageLoader : String -> Loaders msg x -> Cmd msg
     , pagesToLoad : Set String
     , dicts : TemplateDicts msg
-    , pageProcessors : Dict String (String -> Atom msg -> Loaders msg x -> (Loaders msg x, Bool))
+    , pageProcessors : Dict String (String -> Atom msg -> Loaders msg x -> Loaders msg x)
     , extra : x
     }
 
@@ -1722,7 +1759,7 @@ type alias LoadersRecord msg x =
 
 `pageLoader name Loaders` does likewise for pages.
 
-See the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md) for more about pages and templates.
+See the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) for more about pages and templates.
 -}
 makeLoaders : (String -> Loaders msg x -> Cmd msg) -> (String -> Loaders msg x -> Cmd msg) -> x -> Loaders msg x
 makeLoaders templateLoader pageLoader extra =
@@ -1736,22 +1773,32 @@ makeLoaders templateLoader pageLoader extra =
         , extra = extra
         }
 
+{-| If you use the `extra` arg to `makeLoaders` to put state there that you need in your page or template loader, you can fetch that state with this function.
+-}
 getExtra : Loaders msg x -> x
 getExtra (TheLoaders loaders) =
     loaders.extra
 
+{-| If you use the `extra` arg to `makeLoaders` to put state there that you need in your page or template loader, you can set that state with this function.
+-}
 setExtra : x -> Loaders msg x -> Loaders msg x
 setExtra extra (TheLoaders loaders) =
     TheLoaders <| { loaders | extra = extra }
 
+{-| Get the `Dicts` out of a `Loaders`. Rarely needed.
+-}
 getDicts : Loaders msg x -> Dicts msg
 getDicts (TheLoaders loaders) =
     TheDicts loaders.dicts
 
+{-| Lookup the template with the given name. Same as `"?<name>"` in a JSON file.
+-}
 getTemplate : String -> Loaders msg x -> Maybe (Atom msg)
 getTemplate name (TheLoaders loaders) =
     Dict.get name loaders.dicts.templates
 
+{-| Remove a template.
+-}
 removeTemplate : String -> Loaders msg x -> Loaders msg x
 removeTemplate name (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1759,6 +1806,17 @@ removeTemplate name (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | templates = templates } }
 
+{-| Store a template with the given name.
+-}
+setTemplate : String -> Atom msg -> Loaders msg x -> Loaders msg x
+setTemplate name atom (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        templates = Dict.insert name atom dicts.templates
+    in
+        TheLoaders { loaders | dicts = { dicts | templates = templates } }
+
+{-| Set multiple templates. The same as calling `setTemplate` for each pair.
+-}
 setTemplates : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 setTemplates pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1766,10 +1824,14 @@ setTemplates pairs (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | templates = templates } }
 
+{-| Lookup the page with the given name. Same as `"@<name>"` in a JSON file.
+-}
 getPage : String -> Loaders msg x -> Maybe (Atom msg)
 getPage name (TheLoaders loaders) =
     Dict.get name loaders.dicts.pages
 
+{-| Remove a page.
+-}
 removePage : String -> Loaders msg x -> Loaders msg x
 removePage name (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1777,6 +1839,17 @@ removePage name (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | pages = pages } }
 
+{-| Store a page with the given name.
+-}
+setPage : String -> Atom msg -> Loaders msg x -> Loaders msg x
+setPage name atom (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        pages = Dict.insert name atom dicts.pages
+    in
+        TheLoaders { loaders | dicts = { dicts | pages = pages } }
+
+{-| Set multiple pages. The same as calling `setPage` for each pair.
+-}
 setPages : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 setPages pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1784,42 +1857,46 @@ setPages pairs (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | pages = pages } }
 
-addPageProcessors : List (String, String -> Atom msg -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
+{-|
+Sometimes you need to do something when a page is loaded. If so, instead of checking for that after your call to receivePage, you can ask `HtmlTemplate` to do the checking for you. The args to a page processor passed here are:
+
+    pageName page loaders
+    
+After adding relevant state, your page processor returns the modified `loaders`.
+
+If you add a page processor for a page with a blank name (`""`), it will be called for EVERY page that does not have an explicit page processor for its name.
+-}
+addPageProcessors : List (String, String -> Atom msg -> Loaders msg x -> Loaders msg x) -> Loaders msg x -> Loaders msg x
 addPageProcessors pairs (TheLoaders loaders) =
     let pp = List.foldl insertPair loaders.pageProcessors pairs
     in
-        TheLoaders { loaders | pageProcessors = pp }        
+        TheLoaders { loaders | pageProcessors = pp }
 
-addPageProperties : String -> List (String, Atom msg) -> Loaders msg x -> Loaders msg x
-addPageProperties pageName properties (TheLoaders loaders) =
-    let dicts = loaders.dicts
-        pages = dicts.pages
-    in
-        case Dict.get pageName pages of
-            Nothing ->
-                TheLoaders loaders
-            Just page ->
-                case page of
-                    PListAtom plist ->
-                        let new = PListAtom <| List.append properties plist
-                        in
-                            TheLoaders <|
-                                { loaders | dicts =
-                                      { dicts | pages =
-                                            Dict.insert pageName new pages
-                                      }
-                                }
-                    _ ->
-                        TheLoaders loaders
-
+{-| Lookup the atom with the given name. Same as `"$<name>"` in a JSON file.
+-}
 getAtom : String -> Loaders msg x -> Maybe (Atom msg)
 getAtom name (TheLoaders loaders) =
     Dict.get name loaders.dicts.atoms
 
+{-| Lookup an atom. Sometimes useful inside of funtions added with `insertFunctions` or `insertMessages`.
+
+Same as `getAtom <| getDicts loaders`.
+-}
 getDictsAtom : String -> Dicts msg -> Maybe (Atom msg)
 getDictsAtom name (TheDicts dicts) =
     Dict.get name dicts.atoms
 
+{-| Store an atom with the given name. Done with `"_let"` in a JSON file.
+-}
+setAtom : String -> Atom msg -> Loaders msg x -> Loaders msg x
+setAtom name atom (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        atoms = Dict.insert name atom dicts.atoms
+    in
+        TheLoaders { loaders | dicts = { dicts | atoms = atoms } }
+
+{-| Set multiple atoms. The same as calling `setAtom` for each pair.
+-}
 setAtoms : List (String, Atom msg) -> Loaders msg x -> Loaders msg x
 setAtoms pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1827,6 +1904,8 @@ setAtoms pairs (TheLoaders loaders) =
     in
         TheLoaders { loaders | dicts = { dicts | atoms = atoms } }
 
+{-| Remove an atom.
+-}
 removeAtom : String -> Loaders msg x -> Loaders msg x
 removeAtom name (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1838,6 +1917,10 @@ insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
 insertPair (k, v) dict =
     Dict.insert k v dict
 
+{-| If you want to define your own function to be available via "_foo" in your JSON files, you can do so with `insertFunctions` (or `insertMessages`).
+
+There is more information about defining functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md).
+-}
 insertFunctions : List (String, (List (Atom msg) -> Dicts msg -> Atom msg)) -> Loaders msg x -> Loaders msg x
 insertFunctions pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1848,7 +1931,7 @@ insertFunctions pairs (TheLoaders loaders) =
 
 {-| If you need to script `onClick` or other event attributes that are processed by your `update` function, you'll need to define message functions to create them for your scripting code. Call `insertMessages` in your `init` function, with a list of those functions, before stashing the `Loaders` in your `Model`.
 
-There are more details about message functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md).
+There are more details about message functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md).
 -}
 insertMessages : List (String, (List (Atom msg) -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
 insertMessages pairs (TheLoaders loaders) =
@@ -1858,6 +1941,8 @@ insertMessages pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | messages = messages } }
 
+{-| Some functions, e.g. variable binding functions like `"_let"` and `"_loop"`, and short-circuiting functions like `_if`, `"_&&"` and `"_||"`, need to delay evaluation of their arguments. If one of the functions you add with `insertFunctions` (or `insertMessages`) needs to be called with unevaluated arguments, declare that with `insertDelayedBindingsFunctions`.
+-}
 insertDelayedBindingsFunctions : List String -> Loaders msg x -> Loaders msg x
 insertDelayedBindingsFunctions strings (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1866,6 +1951,10 @@ insertDelayedBindingsFunctions strings (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | delayedBindingsFunctions = functions } }
 
+{-| Removes all templates from the table inside of the `Loaders`. You will usually call `loadPage` or `loadTemplate` right after this.
+
+The application in the `examples` directory doesn't ever reload its templates, requiring a page refresh to do that, so it never calls `clearTemplates`.
+-}
 clearTemplates : Loaders msg x -> Loaders msg x
 clearTemplates (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1874,6 +1963,10 @@ clearTemplates (TheLoaders loaders) =
                          dicts = { dicts | templates = Dict.empty }
                    }
 
+{-| Removes all pages from the table inside of the `Loaders`. You will usually call `loadPage` right after this, to load the page the user just asked to display, and all the pages and templates it references.
+
+The application in the `examples` directory calls this every time the page changes to force all changed pages to be reloaded.
+-}
 clearPages : Loaders msg x -> Loaders msg x
 clearPages (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1882,6 +1975,9 @@ clearPages (TheLoaders loaders) =
                          dicts = { dicts | pages = Dict.empty }
                    }
 
+{-|
+Removes all Atoms from the table inside of the `Loaders`. This function exists only as a mirror of `clearPages` and `clearTemplates`. You will rarely need to call it.
+-}
 clearAtoms : Loaders msg x -> Loaders msg x
 clearAtoms (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1890,10 +1986,20 @@ clearAtoms (TheLoaders loaders) =
                          dicts = { dicts | atoms = Dict.empty }
                    }
 
+{-| Start the load of the template with the given name. Calls the `templateLoader` you used when you created the `Loaders` to get the returned `Cmd`. There's nothing special here. You could call that function yourself, or create the `Cmd` some other way.
+-}
 loadTemplate : String -> Loaders msg x -> Cmd msg
 loadTemplate name (TheLoaders loaders) =
     loaders.templateLoader name <| TheLoaders loaders
 
+{-| After your command to load a template has passed a `Msg` to your `update` function, and has some JSON in hand, call this function to decode that JSON into an `Atom`, and store it in `Loaders`' tables with the given name.
+
+    receiveTemplate name json loaders
+    
+The returned `Result` will be `Ok` with the modified `Loaders` if decoding was successful, or `Err msg`, where `msg` is the decoding error string otherwise.
+
+Usually, you will then call `maybeLoadOutstandingPageOrTemplate` to continue loading referenced pages and templates.
+-}
 receiveTemplate : String -> String -> Loaders msg x -> Result String (Loaders msg x)
 receiveTemplate name json (TheLoaders loaders) =
     case decodeAtom json of
@@ -1913,10 +2019,20 @@ receiveTemplate name json (TheLoaders loaders) =
             in
                 Ok loaders2
 
+{-| Start the load of the page with the given name. Calls the `pageLoader` you used when you created the `Loaders` to get the returned `Cmd`. There's nothing special here. You could call that function yourself, or create the `Cmd` some other way.
+-}
 loadPage : String -> Loaders msg x -> Cmd msg
 loadPage name (TheLoaders loaders) =
     loaders.pageLoader name <| TheLoaders loaders
 
+{-| After your command to load a page has passed a `Msg` to your `update` function, and has some JSON in hand, call this function to decode that JSON into an `Atom`, and store it in `Loaders`' tables with the given name.
+
+    receivePage name json loaders
+    
+The returned `Result` will be `Ok` with the modified `Loaders` if decoding was successful, or `Err msg`, where `msg` is the decoding error string otherwise.
+
+Usually, you will then call `maybeLoadOutstandingPageOrTemplate` to continue loading referenced pages and templates.
+-}
 receivePage : String -> String -> Loaders msg x -> Result String (Loaders msg x)
 receivePage name json (TheLoaders loaders) =
     case decodeAtom json of
@@ -1943,22 +2059,13 @@ runPageProcessors name page (TheLoaders loaders) =
     in
         case Dict.get name dict of
             Just f ->
-                runPageProcessor name page f <| TheLoaders loaders
+                f name page <| TheLoaders loaders
             Nothing ->
                 case Dict.get "" dict of
                     Just f ->
-                        runPageProcessor name page f <| TheLoaders loaders
+                        f name page <| TheLoaders loaders
                     Nothing ->
                         TheLoaders loaders
-
-runPageProcessor : String -> Atom msg -> (String -> Atom msg -> Loaders msg x -> (Loaders msg x, Bool)) -> Loaders msg x -> Loaders msg x
-runPageProcessor name page processor loaders =
-    let (res, delete) = processor name page loaders
-    in
-        if delete then
-            removePage name res
-        else
-            res                
 
 {-| Call this to initialize the list of toplevel templates and pages you need to render your application's first page. You don't need to mention everything, since the `HtmlTemplate` module will find pages and templates referenced by those you provide here, and call the `templateLoader` and and `pageLoader` functions you provided in your call to `makeLoaders` to load them.
 -}
@@ -1978,6 +2085,10 @@ addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
     in
         TheLoaders lo
 
+{-| If there are pages or templates in the `Loaders` that have not been loaded, return a command to load one of them. Otherwise, return Nothing. At startup, applications will usually want to display a loading screen until Nothing comes back from here, at which time they can switch to the start page, since all of its templates and included pages will be in `Loaders`' tables then.
+
+Calls the `templateLoader` or `pageLoader` you passed to `makeLoaders` to create the `Cmd`s.
+-}
 maybeLoadOutstandingPageOrTemplate : Loaders msg x -> Maybe (Cmd msg)
 maybeLoadOutstandingPageOrTemplate (TheLoaders loaders) =
     case popSet loaders.pagesToLoad of
@@ -1994,6 +2105,10 @@ maybeLoadOutstandingPageOrTemplate (TheLoaders loaders) =
                     in
                         Just <| loadTemplate name <| TheLoaders lo
 
+{-| If there are pages or templates in the `Loaders` that have not been loaded, return a command to load one of them. Otherwise, return Cmd.none. You will usually call this in your `init` function and use the returned `Cmd` in the returned `( Model, Cmd Msg )`.
+
+Calls the `templateLoader` or `pageLoader` you passed to `makeLoaders` to create the `Cmd`s.
+-}
 loadOutstandingPageOrTemplate : Loaders msg x -> Cmd msg
 loadOutstandingPageOrTemplate loaders =
     case maybeLoadOutstandingPageOrTemplate loaders of

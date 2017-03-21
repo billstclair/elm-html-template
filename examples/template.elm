@@ -8,8 +8,9 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , loadPage, receivePage, loadTemplate, receiveTemplate
                              , loadOutstandingPageOrTemplate
                              , maybeLoadOutstandingPageOrTemplate
-                             , getPage, addPageProperties, getTemplate
-                             , getAtom, setAtoms, getDictsAtom
+                             , getPage, setPage, removePage
+                             , getTemplate
+                             , getAtom, setAtom, setAtoms, getDictsAtom
                              , clearPages
                              , render
                              , decodeAtom, eval, encodeAtom, customEncodeAtom
@@ -141,7 +142,7 @@ initialExtra =
     { templateDir = "default"
     }
 
-pageProcessors : List (String, String -> Atom Msg -> Loaders Msg Extra -> (Loaders Msg Extra, Bool))
+pageProcessors : List (String, String -> Atom Msg -> Loaders Msg Extra -> Loaders Msg Extra)
 pageProcessors =
     [ ( settingsPageName, installSettings )
     , ( "", add_page_Property )
@@ -154,6 +155,10 @@ initialLoaders =
     |> insertMessages messages
     |> addPageProcessors pageProcessors
     |> addOutstandingPagesAndTemplates initialPages initialTemplates
+
+---
+--- init
+---
 
 init : ( Model, Cmd Msg)
 init =
@@ -172,17 +177,22 @@ init =
         , loadOutstandingPageOrTemplate model.loaders
         )
 
-installSettings : String -> Atom Msg -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
-installSettings _ settings loaders =
-    ( setAtoms [(settingsFile, settings)] loaders
-    , True
-    )
+-- Store just-loaded "settings" plist as an atom, and remove it as a page.
+-- The pages reference it as "$settings.<property>".
+installSettings : String -> Atom Msg -> Loaders Msg Extra -> Loaders Msg Extra
+installSettings name settings loaders =
+    setAtom settingsFile settings
+        <| removePage name loaders
 
-add_page_Property : String -> Atom Msg -> Loaders Msg Extra -> (Loaders Msg Extra, Bool)
+-- The value of most pages is a plist processed by the "node" template.
+-- This adds the page's own name to its plist when it's loaded.
+add_page_Property : String -> Atom Msg -> Loaders Msg Extra -> Loaders Msg Extra
 add_page_Property name page loaders =
-    ( addPageProperties name [("page", StringAtom name)] loaders
-    , False
-    )
+    case page of
+        PListAtom plist ->
+          setPage name (PListAtom <| ("page", StringAtom name) :: plist) loaders
+        _ ->
+          loaders
 
 type Msg
     = TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
@@ -227,6 +237,10 @@ fetchPage name loaders =
     in
         fetchUrl url <| PageFetchDone name loaders
 
+---
+--- update
+---
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -252,10 +266,6 @@ gotoPage page model =
         ( m
         , fetchPage page <| clearPages model.loaders
         )
-
-setAtom : String -> Atom Msg -> Model -> Model
-setAtom name atom model =
-    { model | loaders = setAtoms [(name, atom)] model.loaders }
 
 templateFetchDone : String -> Loaders Msg Extra -> Result Http.Error String -> Model -> ( Model, Cmd Msg )
 templateFetchDone name loaders result model =
@@ -302,8 +312,9 @@ continueLoading loaders model =
                           , loaders = case m.page of
                                           Nothing -> loaders
                                           Just referer ->
-                                              setAtoms
-                                                [("referer", StringAtom referer)]
+                                              setAtom
+                                                "referer"
+                                                (StringAtom referer)
                                                 loaders
                           }
                 , Cmd.none
@@ -373,6 +384,10 @@ updatePlayString string model =
           }
         , Cmd.none
         )
+
+---
+--- view
+----
 
 view : Model -> Html Msg
 view model =

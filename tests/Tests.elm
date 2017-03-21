@@ -5,9 +5,9 @@ import Expect exposing ( Expectation )
 import List
 import Dict
 
-import HtmlTemplate exposing ( Atom(..), Dicts(..)
+import HtmlTemplate exposing ( Atom(..), Dicts
                              , decodeAtom, customEncodeAtom
-                             , defaultDicts
+                             , makeLoaders, setAtom, getDicts
                              )
 
 log = Debug.log
@@ -191,13 +191,13 @@ circularAtom : Atom msg
 circularAtom =
     LookupAtom circular
 
+circularDicts : Dicts msg
 circularDicts =
-    case defaultDicts of
-        TheDicts ds ->
-            TheDicts
-            { ds |
-                  atoms = Dict.insert circular circularAtom ds.atoms
-            }
+    let nullLoader = (\a b -> Cmd.none)
+        loaders = makeLoaders nullLoader nullLoader 1
+    in
+        getDicts
+            <| setAtom circular circularAtom loaders
 
 -- This will loop forever, if somebody breaks the loop detection code.
 circularTest : Atom msg -> Test
@@ -210,7 +210,7 @@ circularTest expected =
 
 eval : Atom msg -> Atom msg
 eval atom =
-    HtmlTemplate.eval atom defaultDicts
+    HtmlTemplate.eval atom circularDicts
 
 functionTest : ( String, Result String (Atom msg) ) -> Test
 functionTest ( json, expected ) =
