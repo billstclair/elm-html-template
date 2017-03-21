@@ -3,7 +3,7 @@ module Main exposing (..)
 import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , makeLoaders, insertFunctions, insertMessages
                              , addPageProcessors
-                             , getExtra, getDicts
+                             , getExtra, setExtra, getDicts
                              , addOutstandingPagesAndTemplates
                              , loadPage, receivePage, loadTemplate, receiveTemplate
                              , loadOutstandingPageOrTemplate
@@ -11,7 +11,7 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , getPage, addPageProperties, getTemplate
                              , getAtom, setAtoms, getDictsAtom
                              , clearPages
-                             , render, toBracketedString
+                             , render
                              , decodeAtom, eval, encodeAtom, customEncodeAtom
                              , cantFuncall
                              )

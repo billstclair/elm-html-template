@@ -13,7 +13,7 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , TemplateDicts
 
                              , render, renderAtom
-                             , makeLoaders, getExtra, getDicts
+                             , makeLoaders, getExtra, setExtra, getDicts
                              , getTemplate, getPage, getAtom
                              , getDictsAtom
                              , setTemplates, removeTemplate
@@ -29,67 +29,64 @@ module HtmlTemplate exposing ( Loaders(..), Atom(..), Dicts(..)
                              , loadOutstandingPageOrTemplate
                              , maybeLoadOutstandingPageOrTemplate
 
-                             , defaultDicts, emptyTemplateDicts, defaultTemplateDicts
-                             , loopFunction, psFunction, ifFunction, tagWrap
-                             , defaultFunctionsDict, defaultAtomsDict
-                             , toBracketedString
-
                              , decodeAtom, atomDecoder
                              , encodeAtom, customEncodeAtom, atomEncoder
                              , templateReferences, pageReferences
                              , maybeLookupAtom, maybeLookupTemplateAtom
                              , lookupTemplateAtom, lookupPageAtom, lookupAtom
-                             , atomToBody, eval, cantFuncall
+                             , eval, cantFuncall
+                             , defaultDicts
                              )
 
 {-| The `HtmlTemplate` module allows you to code the `view` part of an Elm web page in JSON. You can parse that JSON into `Atom` instances as you desire, and then call `renderAtom` to render an `Atom` instance into an `Html` instance.
 
 The `Atom` type includes a scripting language. It's pretty small now, but I expect to make it grow over time. I also plan to make a more Lisp-like syntax, better for script writing, and a Markdown syntax, better for human-written static web pages. The JSON syntax will eventually be written automatically by a blogging package, which will be an expansion of the example included with this package.
 
-See the README for a link to the documentation for the JSON and its scripting language. The documentation here tells you only how to use the Elm API for the Elm part of your application.
+See the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md) and its scripting language. The documentation here tells you only how to use the Elm API for the Elm part of your application.
 
 I plan to eventually expand scripting to be usable for the `update` and `Msg` parts of an Elm application, so that you can do almost the whole thing dynamically. For some applications that will make sense. For now, you need to write `update` in Elm, define your `Msg` type in Elm, and create entries for the `TemplateDicts.messages` table to enable creation of those `Msg` types from the scripting language.
 
 The example defined by `examples/template.elm` is live at [lisplog.org/elm-html-template](https://lisplog.org/elm-html-template/).
 
-# Basics
+# Basic State
 @docs Atom, Loaders
-@docs render
 @docs makeLoaders, insertMessages
 @docs addOutstandingPagesAndTemplates
 @docs loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
 @docs loadTemplate, receiveTemplate
 @docs loadPage, receivePage
-@docs getExtra, addPageProcessors
+@docs getExtra, setExtra, addPageProcessors
 @docs clearPages, clearTemplates, clearAtoms
+
+# Turning the Parsed JSON into Html
+@docs render
 
 # JSON encoding/decoding
 @docs decodeAtom, atomDecoder
 @docs encodeAtom, customEncodeAtom, atomEncoder
 
-# More `Loaders` functions
+# More State Accessors
 @docs getTemplate, getPage, getAtom
 @docs setTemplates, removeTemplate
 @docs setPages, removePage
 @docs setAtoms, removeAtom
 @docs insertFunctions, insertDelayedBindingsFunctions
-@docs eval, cantFuncall
+@docs cantFuncall, tagWrap
 @docs addPageProperties, runPageProcessor
+
+# Did Somebody Say Eval?
+@docs eval
 
 # Lower Level Access
 @docs Dicts, TemplateDicts
 @docs getDicts, getDictsAtom
 @docs renderAtom
-@docs defaultDicts, emptyTemplateDicts, defaultTemplateDicts
-@docs loopFunction, psFunction, ifFunction, tagWrap
-@docs defaultFunctionsDict, defaultAtomsDict
-@docs toBracketedString
 
 # For wizards only
 @docs templateReferences, pageReferences
 @docs maybeLookupAtom, maybeLookupTemplateAtom
 @docs lookupTemplateAtom, lookupPageAtom, lookupAtom
-@docs atomToBody
+@docs defaultDicts
 
 -}
 import Entities
@@ -112,6 +109,11 @@ import List.Extra as LE
 
 log = Debug.log
 
+{-|
+`Atom` is the basic data type of the `HtmlTemplate` module. JSON is parsed as an `Atom`, and an `Atom` is what `render` renders as `Html`. Remember to always say `Atom Msg` in your code, where `Msg` is your message type. The `Msg` is only needed by the functions you install with `insertMessages`, but they're used in any attribute that needs to invoke your `update` function.
+
+See the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md) for details about which atom types represent which Elm objects.
+-}
 type Atom msg
     = StringAtom String
     | IntAtom Int
@@ -136,7 +138,7 @@ type alias TemplateDicts msg =
     , messages : Dict String (List (Atom msg) -> Dicts msg -> msg)
     }
 
--- Have to tag this for recursive use
+-- Tag TemplateDicts for recursive use
 type Dicts msg
     = TheDicts (TemplateDicts msg)
 
@@ -1605,10 +1607,10 @@ renderHtmlAtom template dicts =
             span [] <| List.map (\a -> renderHtmlAtom a dicts) list
         LookupTemplateAtom name ->
             case Dict.get name dicts.templates of
-                Nothing ->
-                    text <| toBracketedString template
                 Just atom ->
                     renderHtmlAtom atom dicts
+                Nothing ->
+                    text <| toBracketedString template
         LookupAtom name ->
             case lookupAtom name dicts of
                 Just atom ->
@@ -1693,6 +1695,12 @@ setMinusDict set dict =
 --- Support for loading pages and templates
 ---
 
+{-| `Loaders` stores all the state about loading templates and pages, and the tables for looking them up at `render` time. You should create one in your `init` function by calling `makeLoaders`, initialize it with `insertMessages`, `addOutstandingPagesAndTemplates`, call `loadOutstandingPageOrTemplate` to get a `Cmd` to start loading the pages and templates, then include it in your `Model`.
+
+You should always reference it as `Loaders Msg x`, where `Msg` is your `Msg` type, and `x` is whatever type you decide to use if you need to store state for your template and page loaders. See `getExtra` and `setExtra`.
+
+`Loaders` is opaque to user code, though there are a bunch of functions for querying and modifying it.
+-}
 type Loaders msg x =
     TheLoaders (LoadersRecord msg x)
 
@@ -1706,6 +1714,16 @@ type alias LoadersRecord msg x =
     , extra : x
     }
 
+{-| Call `makeLoaders` in your `init` function to create the object that stores state for `HtmlTemplate`:
+
+    makeLoaders templateLoader pageLoader extra
+    
+`templateLoader name loaders` returns a Cmd to load a template, usually either from a file on the web server, via `Http`, or from a database.
+
+`pageLoader name Loaders` does likewise for pages.
+
+See the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md) for more about pages and templates.
+-}
 makeLoaders : (String -> Loaders msg x -> Cmd msg) -> (String -> Loaders msg x -> Cmd msg) -> x -> Loaders msg x
 makeLoaders templateLoader pageLoader extra =
     TheLoaders
@@ -1828,6 +1846,10 @@ insertFunctions pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | functions = functions } }
 
+{-| If you need to script `onClick` or other event attributes that are processed by your `update` function, you'll need to define message functions to create them for your scripting code. Call `insertMessages` in your `init` function, with a list of those functions, before stashing the `Loaders` in your `Model`.
+
+There are more details about message functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/JSON.md).
+-}
 insertMessages : List (String, (List (Atom msg) -> Dicts msg -> msg)) -> Loaders msg x -> Loaders msg x
 insertMessages pairs (TheLoaders loaders) =
     let dicts = loaders.dicts
@@ -1938,6 +1960,8 @@ runPageProcessor name page processor loaders =
         else
             res                
 
+{-| Call this to initialize the list of toplevel templates and pages you need to render your application's first page. You don't need to mention everything, since the `HtmlTemplate` module will find pages and templates referenced by those you provide here, and call the `templateLoader` and and `pageLoader` functions you provided in your call to `makeLoaders` to load them.
+-}
 addOutstandingPagesAndTemplates : List String -> List String -> Loaders msg x -> Loaders msg x
 addOutstandingPagesAndTemplates pagesList templatesList (TheLoaders loaders) =
     let templates = Set.fromList templatesList
