@@ -1676,7 +1676,7 @@ renderHtmlAtom template dicts =
         HtmlAtom html ->
             html
         PListAtom _ ->
-            text <| toBracketedString template
+            text <| customEncodeAtom 0 template
 
 getTagFunction : String -> Maybe (List (Attribute msg) -> List (Html msg) -> Html msg)
 getTagFunction tag =

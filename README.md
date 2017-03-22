@@ -1,4 +1,4 @@
-The [billstclair/elm-html-template](http://package.elm-lang.org/packages/billstclair/elm-html-tempate/latest) package allows you to generate HTML from JSON templates and dictionaries to fill in variables in the templates.
+The [billstclair/elm-html-template](http://package.elm-lang.org/packages/billstclair/elm-html-template/latest) package allows you to generate HTML from JSON templates and dictionaries to fill in variables in the templates.
 
 [![Build Status](https://travis-ci.org/billstclair/elm-html-template.svg?branch=master)](https://travis-ci.org/billstclair/elm-html-template)
 
