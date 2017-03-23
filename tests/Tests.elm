@@ -5,8 +5,8 @@ import Expect exposing ( Expectation )
 import List
 import Dict
 
-import HtmlTemplate exposing ( Atom(..), Dicts
-                             , decodeAtom, customEncodeAtom
+import HtmlTemplate.Types exposing ( Atom(..), Dicts )
+import HtmlTemplate exposing ( decodeAtom, customEncodeAtom
                              , makeLoaders, setAtom, getDicts
                              )
 
