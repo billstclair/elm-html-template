@@ -9,52 +9,161 @@
 --
 ----------------------------------------------------------------------
 
-module HtmlTemplate.MarkDown exposing ( mdFunction )
-
+module HtmlTemplate.Markdown exposing ( mdFunction
+                                      , run, markdownParser --for debugging
+                                      )
 import HtmlTemplate.Types exposing ( Atom(..) )
+
+import Dict exposing ( Dict )
+import Parser exposing ( Parser, Error, Count(..)
+                       , (|.), (|=)
+                       , oneOf, succeed, symbol, lazy, ignore, source
+                       , zeroOrMore, oneOrMore, keep, repeat
+                       )
 
 mdFunction : List (Atom msg) -> d -> Atom msg
 mdFunction args _ =
-    ListAtom <| List.map processMarkdown args
-    
-processMarkdown : Atom msg -> Atom msg
-processMarkdown atom =
-    mergeSublists <| processMarkdownInternal atom
+  ListAtom args
 
-mergeSublists : Atom msg -> Atom msg
-mergeSublists atom =
-    case atom of
-        ListAtom list ->
-            ListAtom <| mergeSublistsLoop list []
-        _ ->
-            atom
+type State msg =
+    TheState (StateRecord msg)
 
-mergeSublistsLoop : List (Atom msg) -> List (Atom msg) -> List (Atom msg)
-mergeSublistsLoop list res =
-    case list of
-        [] -> List.reverse res
-        head :: tail ->
-            case head of
-                ListAtom hl ->
-                    mergeSublistsLoop tail <| List.append (List.reverse hl) res
-                _ ->
-                    mergeSublistsLoop tail <| head :: res    
+type alias StateRecord msg =
+    { lookingFor : Maybe String
+    , collected : List (Atom msg)
+    , stack : List State
+    , result : List (Atom msg)
+    }
 
-processMarkdownInternal : Atom msg -> Atom msg
-processMarkdownInternal atom =
-    case atom of
-        StringAtom string ->
-            processMarkdownString string
-        ListAtom list ->
-            ListAtom <| List.map processMarkdown list
-        _ ->
-            atom
+type alias Converter msg =
+    Token -> State msg -> State msg
 
--- Convert the following:
+pairedConverters : List (String, Converter msg)
+pairedConverters =
+    [ ( "`", backtickConverter )
+    , ( "_", underscoreConverter )
+    , ( "*", asteriskConverter )
+    ]
+
+unpairedConverters : List (String, Converter msg)
+unpairedConverters =
+    [ ( "\n", newlineConverter )
+    ]
+
+backtickConverter : Converter msg
+backtickConverter token state =
+    state
+
+underscoreConverter : Converter msg
+underscoreConverter token state =
+    state
+
+asteriskConverter : Converter msg
+asteriskConverter token state =
+    state
+
+newlineConverter : Converter msg
+newlineConverter token state =
+    state
+
+conversionDict : Dict String (Converter msg)
+conversionDict =
+    Dict.fromList
+        <| List.concat [ pairedConverters
+                       , unpairedConverters
+                       ]
+
+initialState : State msg
+initialState =
+    TheState
+        { lookingFor = Nothing
+        , collected = []
+        , stack = []
+        , result = []
+        }
+
+-- Convert a tokenized string to the following:
 -- "...`foo`..." -> ["code",{},["...foo..."]]
 -- "..._foo_..." -> ["i",{},["...foo..."]]
 -- "...*foo*..." -> ["b",{},["...foo..."]]
 -- "...\n..." -> ["...",["br",{},[]],"..."],...]
-processMarkdownString : String -> Atom msg
-processMarkdownString string =
-    StringAtom string
+processTokens : List Token -> Atom msg
+processTokens tokens =
+    processLoop tokens initialState
+
+processLoop : List Token -> State msg -> Atom msg
+processLoop tokens state =
+    case tokens of
+        [] ->
+            finishProcessing state
+        token :: tail ->
+            processLoop tail <| processToken token state
+
+finishProcessing : State msg -> Atom msg
+finishProcessing (TheState state) =
+    ListAtom <| List.reverse state.result
+
+pushStringOnResult : String -> State msg -> State msg
+pushStringOnResult string (TheState state) =
+    let result = state.result
+    in
+        TheState { state |
+                       result = (StringAtom string) :: result }
+
+processToken : Token -> State msg -> State msg
+processToken token state =
+    case token of
+        StringToken string ->
+            pushStringOnResult string state
+        SymbolToken symbol ->
+            case Dict.get symbol conversionDict of
+                Nothing ->
+                    pushStringOnResult symbol state
+                Just converter ->
+                    converter token state
+
+tokenToString : Token -> String
+tokenToString token =
+    case token of
+        StringToken s -> s
+        SymbolToken s -> s
+
+symbols : List (Char)
+symbols =
+    [ '`', '_', '*', '\n' ]
+
+isSymbol : Char -> Bool
+isSymbol s =
+    List.member s symbols
+
+type Token
+    = SymbolToken String
+    | StringToken String
+
+string : Parser Token
+string =
+    succeed StringToken
+        |= keep oneOrMore (\x -> not <| isSymbol x)
+
+symbol : Parser Token
+symbol =
+    succeed SymbolToken
+        |= keep (Exactly 1) isSymbol
+
+token : Parser Token
+token =
+    oneOf [ symbol, string ]
+
+-- Tokenize a string into special characters and the strings between them.
+markdownParser : Parser (Atom msg)
+markdownParser =
+    succeed processTokens
+        |= repeat zeroOrMore token
+
+run : String -> Atom msg
+run string =
+    case Parser.run markdownParser string of
+        Err err ->
+            StringAtom <| toString err
+        Ok atom ->
+            atom
