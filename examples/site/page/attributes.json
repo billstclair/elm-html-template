@@ -1,5 +1,10 @@
 {"title":"Attributes",
  "ps":["This is a test page for unusual attributes.",
+       ["_--",
+        "Look, Ma. A comment.",
+        "With multiple lines, each inside double quotes.",
+        "Sorta like this."
+       ],
        ["span",{"style":[["font-weight","bold"],
                          ["font-size","150%"]
                         ]
@@ -22,24 +27,25 @@
         ["br",{},[]],
         {"src":"page/images/mountain-man-192x192.png"}
        ],
-       ["The table below illustrates integer (\"colspan\") attribute values.",
-        ["br",{},[]],
-        ["table",{"class":"bordered"},
-         [["tr",{},
-           [["td",{},["1.1"]],
-            ["td",{},["1.2"]],
-            ["td",{},["1.3"]],
-            ["td",{},["1.4"]]
-           ]
-          ],
-          ["tr",{},
-           [["td",{"colspan":2},["2.1-2"]],
-            ["td",{"colspan":2},["2.3-4"]]
-           ]
-          ],
-          ["tr",{},
-           [["td",{"colspan":4},["3.1-4"]]
-           ]
+       "The table below illustrates integer (\"colspan\") attribute values.",
+       ["table",{"class":"bordered"},
+        [["tr",{},
+          ["th",{"colspan":4},["Pretty Table"]]
+         ],
+         ["tr",{},
+          [["td",{},["1.1"]],
+           ["td",{},["1.2"]],
+           ["td",{},["1.3"]],
+           ["td",{},["1.4"]]
+          ]
+         ],
+         ["tr",{},
+          [["td",{"colspan":2},["2.1-2"]],
+           ["td",{"colspan":2},["2.3-4"]]
+          ]
+         ],
+         ["tr",{},
+          [["td",{"colspan":4},["3.1-4"]]
           ]
          ]
         ]

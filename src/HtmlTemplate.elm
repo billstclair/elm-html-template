@@ -1491,6 +1491,10 @@ logFunction args _ =
         label :: (val :: _) ->
             log (atomToString label) val
 
+commentFunction : List (Atom msg) -> d -> Atom msg
+commentFunction args _ =
+    ListAtom []
+
 boolOpPair : String -> (String, List (Atom msg) -> Dicts msg -> Atom msg)
 boolOpPair op =
     (op, boolFunction op)
@@ -1531,6 +1535,7 @@ defaultFunctionsDict =
                   , ("xor", logicalFunction "||" (xor) False False)
                   , ( "not", notFunction )
                   , ( "log", logFunction )
+                  , ( "--", commentFunction )
                   ]
 
 defaultDelayedBindingsFunctions : Set String

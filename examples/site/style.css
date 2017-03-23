@@ -47,11 +47,27 @@ iframe {
     margin: 0;
 }
 table.bordered {
-    border: 1px solid black;
+    margin: 0em 0.5em 0.5em 0.5em;
+    background: whitesmoke;
+    border-collapse: collapse;
 }
-table.bordered>tr>td {
-    border: 1px solid black;
+table.bordered th, table.bordered td {
+    border: 1px silver solid;
+    padding: 0.2em;
+}
+table.bordered td {
+    text-align: center
+}
+table.bordered th {
+    background: gainsboro;
     text-align: center;
+}
+table.bordered caption {
+  margin-left: inherit;
+  margin-right: inherit;
+}
+table.innertable th, table.innertable td {
+  border: 0;
 }
 pre {
     width: 40em;
