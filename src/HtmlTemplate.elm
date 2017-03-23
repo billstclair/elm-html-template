@@ -10,10 +10,9 @@
 ----------------------------------------------------------------------
 
 module HtmlTemplate exposing
-    ( Atom(..), Loaders, Dicts
-
+    ( 
     -- Basic State
-    , makeLoaders, insertMessages
+      makeLoaders, insertMessages
     , addOutstandingPagesAndTemplates
     , loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
     , loadTemplate, receiveTemplate
@@ -56,7 +55,6 @@ Use these functions to initialize your application by loading the templates and 
 
 Besides the function descriptions, you'll need to grok the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) in order to make much progress here. Or just pattern match from the application in the `examples` directory.
 
-@docs Atom, Loaders, Dicts
 @docs makeLoaders, insertMessages
 @docs addOutstandingPagesAndTemplates
 @docs loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
@@ -87,7 +85,14 @@ This is the point of the `HtmlTemplate` module. It creates an `Html Msg` that yo
 @docs eval
 
 -}
-import Entities
+
+import HtmlTemplate.Types exposing
+    ( Atom(..), Loaders(..), Dicts(..)
+    , TemplateDicts, HtmlTemplateRecord, HtmlTemplateFuncall
+    , LoadersRecord, AttributeFunction(..)
+    )
+
+import HtmlTemplate.Entities as Entities
 
 import Html exposing ( Html, Attribute
                      , p, text, span
@@ -106,40 +111,6 @@ import Set exposing ( Set )
 import List.Extra as LE
 
 log = Debug.log
-
-{-|
-`Atom` is the basic data type of the `HtmlTemplate` module. JSON is parsed into an `Atom`, and an `Atom` is what `render` renders as `Html`. Remember to always say `Atom Msg` in your code, where `Msg` is your message type. The `Msg` is only needed by the functions you install with `insertMessages`, but they're used in any attribute that needs to invoke your `update` function.
-
-See the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) for details about which atom types represent which Elm objects.
--}
-type Atom msg
-    = StringAtom String
-    | IntAtom Int
-    | FloatAtom Float
-    | BoolAtom Bool
-    | LookupAtom String
-    | LookupPageAtom String
-    | LookupTemplateAtom String
-    | LookupFunctionAtom String
-    | FuncallAtom (HtmlTemplateFuncall msg)
-    | ListAtom (List (Atom msg))
-    | PListAtom (List (String, Atom msg))
-    | RecordAtom (HtmlTemplateRecord msg)
-    | HtmlAtom (Html msg)
-
-type alias TemplateDicts msg =
-    { atoms : Dict String (Atom msg)
-    , templates : Dict String (Atom msg)
-    , pages : Dict String (Atom msg)
-    , functions : Dict String (List (Atom msg) -> Dicts msg -> (Atom msg) )
-    , delayedBindingsFunctions : Set String
-    , messages : Dict String (List (Atom msg) -> Dicts msg -> msg)
-    }
-
-{-| This type wraps the dictionaries needed by functions added by `insertFunctions` or `insertMessages`. It is opaque to your code, so is only exported so you can properly type the parameters to those functions.
--}
-type Dicts msg
-    = TheDicts (TemplateDicts msg)
 
 entitiesPlist : Atom msg
 entitiesPlist =
@@ -186,31 +157,6 @@ Convenience function. You can call `Json.Decode.decodeString` yourself, if you p
 decodeAtom : String -> Result String (Atom msg)
 decodeAtom json =
     JD.decodeString atomDecoder json
-
----
---- Template Types
----
-
--- JSON: [ "<tag>"
---        , "?<templateName>" | [["<name>", "<value>"], ...]
---        , [<HtmlTemplate JSON>, ...]
---       ]
--- If <value> begins with a "$", it's a variable lookup.
--- Maybe later: <value> can also be [ "/<function>" args... ]
-type alias HtmlTemplateRecord msg =
-    { tag : String
-    , attributes : List (String, Atom msg)
-    , body : List (Atom msg)
-    }
-
--- JSON: [ "/<function name>
---         , args
---         , ...
---       ]
-type alias HtmlTemplateFuncall msg =
-    { function : String
-    , args : List (Atom msg)
-    }
 
 templateReferences : Atom msg -> List String
 templateReferences template =
@@ -588,19 +534,6 @@ atomEncoder atom =
 ---
 --- Attribute rendering
 ---
-
-type AttributeFunction msg
-    = StringAttributeFunction (String -> Attribute msg)
-    | IntAttributeFunction (Int -> Attribute msg)
-    | FloatAttributeFunction (Float -> Attribute msg)
-    | BoolAttributeFunction (Bool -> Attribute msg)
-    | AtomsAttributeFunction (List (Atom msg) -> Attribute msg)
-    | MsgAttributeFunction (msg -> Attribute msg)
-    | MsgAttributeStringLookupFunction ((String -> msg) -> Attribute msg)
-    | MsgAttributeBoolLookupFunction ((Bool -> msg) -> Attribute msg)
-    -- Only used for "style".
-    | StringPairListAttributeFunction (List (String, String) -> Attribute msg)
-    | CharAttributeFunction (Char -> Attribute msg)
 
 genericAttributeFunction : String -> AttributeFunction msg
 genericAttributeFunction name =
@@ -1675,8 +1608,17 @@ renderHtmlAtom template dicts =
                         f attrs b
         HtmlAtom html ->
             html
-        PListAtom _ ->
-            text <| customEncodeAtom 0 template
+        PListAtom plist ->
+            case getprop "src" plist of
+                Just _ ->
+                    -- Implicit img
+                    renderHtmlAtom
+                        ( RecordAtom
+                            { tag = "img", attributes = plist, body = [] }
+                        )
+                        dicts
+                Nothing ->
+                    text <| customEncodeAtom 0 template
 
 getTagFunction : String -> Maybe (List (Attribute msg) -> List (Html msg) -> Html msg)
 getTagFunction tag =
@@ -1731,25 +1673,6 @@ setMinusDict set dict =
 ---
 --- Support for loading pages and templates
 ---
-
-{-| `Loaders` stores all the state about loading templates and pages, and the tables for looking them up at `render` time. You should create one in your `init` function by calling `makeLoaders`, initialize it with `insertMessages`, `addOutstandingPagesAndTemplates`, call `loadOutstandingPageOrTemplate` to get a `Cmd` to start loading the pages and templates, then include it in your `Model`.
-
-You should always reference it as `Loaders Msg x`, where `Msg` is your `Msg` type, and `x` is whatever type you decide to use if you need to store state for your template and page loaders. See `getExtra` and `setExtra`.
-
-`Loaders` is opaque to user code, though there are a bunch of functions for querying and modifying it.
--}
-type Loaders msg x =
-    TheLoaders (LoadersRecord msg x)
-
-type alias LoadersRecord msg x =
-    { templateLoader : String -> Loaders msg x -> Cmd msg
-    , templatesToLoad : Set String
-    , pageLoader : String -> Loaders msg x -> Cmd msg
-    , pagesToLoad : Set String
-    , dicts : TemplateDicts msg
-    , pageProcessors : Dict String (String -> Atom msg -> Loaders msg x -> Loaders msg x)
-    , extra : x
-    }
 
 {-| Call `makeLoaders` in your `init` function to create the object that stores state for `HtmlTemplate`:
 

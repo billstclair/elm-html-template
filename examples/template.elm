@@ -1,7 +1,6 @@
 module Main exposing (..)
 
-import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
-                             , makeLoaders, insertFunctions, insertMessages
+import HtmlTemplate exposing ( makeLoaders, insertFunctions, insertMessages
                              , addPageProcessors
                              , getExtra, setExtra, getDicts
                              , addOutstandingPagesAndTemplates
@@ -16,6 +15,8 @@ import HtmlTemplate exposing ( Loaders, Atom(..), Dicts
                              , decodeAtom, eval, encodeAtom, customEncodeAtom
                              , cantFuncall
                              )
+
+import HtmlTemplate.Types exposing ( Loaders, Atom(..), Dicts )
 
 import Html exposing ( Html, Attribute
                      , div, p, text, a, textarea, pre

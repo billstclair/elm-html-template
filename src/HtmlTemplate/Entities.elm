@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------
 --
--- Entities.elm
+-- HtmlTemplate/Entities.elm
 -- HTML entities, for fun and profit.
 -- Copyright (c) 2016 Bill St. Clair <billstclair@gmail.com>
 -- Some rights reserved.
@@ -9,7 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Entities exposing ( entities, entitiesDict )
+module HtmlTemplate.Entities exposing ( entities, entitiesDict )
 
 import String
 import Char

@@ -16,7 +16,13 @@
         ["Hover to see error title for missing message function."]
        ],
        ["4 * (1.1 + 2) = ", ["_*", 4, ["_+", 1.1, 2]]],
-       ["Table illustrates integer (\"colspan\") attribute values.",
+       ["The image below illustrates implicit conversion of a plist to an ",
+        ["code",{},["<img>"]],
+        " element.",
+        ["br",{},[]],
+        {"src":"page/images/mountain-man-192x192.png"}
+       ],
+       ["The table below illustrates integer (\"colspan\") attribute values.",
         ["br",{},[]],
         ["table",{"class":"bordered"},
          [["tr",{},
