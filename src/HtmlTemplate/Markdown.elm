@@ -13,6 +13,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction
                                       , run, markdownParser --for debugging
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
+import HtmlTemplate.Utility as Utility
 
 import Dict exposing ( Dict )
 import Parser exposing ( Parser, Error, Count(..)
@@ -26,7 +27,7 @@ log = Debug.log
 mdFunction : List (Atom msg) -> d -> Atom msg
 mdFunction args _ =
     -- Could flatten the list here, but it doesn't matter to rendering
-    ListAtom <| List.map parseIfString args
+    Utility.walkAtom parseIfString <| ListAtom args
 
 parseIfString : Atom msg -> Atom msg
 parseIfString atom =
