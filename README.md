@@ -4,5 +4,7 @@ The [billstclair/elm-html-template](http://package.elm-lang.org/packages/billstc
 
 One of the problems I find with Elm is that the HTML is compiled into the JavaScript code for a web site. This package is the basis of a much more data-driven HTML generation mechanism.
 
+The included example application is live at [lisplog.org/elm-html-template](https://lisplog.org/elm-html-template/).
+
 Bill St. Clair &lt;<billstclair@gmail.com>&gt;<br/>
 3 March 2017
