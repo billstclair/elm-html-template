@@ -286,7 +286,7 @@ functionData =
     , ( """
          ["#if", false, 1]
         """
-      , Ok <| StringAtom ""
+      , Ok <| ListAtom []
       )
     , ( """
          ["#if", true, 1, 2]
