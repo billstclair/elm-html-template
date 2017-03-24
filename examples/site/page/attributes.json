@@ -1,6 +1,6 @@
 {"title":"Attributes",
  "ps":["This is a test page for unusual attributes.",
-       ["_--",
+       ["#--",
         "Look, Ma. A comment.",
         "With multiple lines, each inside double quotes.",
         "Sorta like this."
@@ -20,10 +20,10 @@
             },
         ["Hover to see error title for missing message function."]
        ],
-       ["4 * (1.1 + 2) = ", ["_*", 4, ["_+", 1.1, 2]]],
-       ["_md",
+       ["4 * (1.1 + 2) = ", ["#*", 4, ["#+", 1.1, 2]]],
+       ["#md",
         "The image below illustrates implicit conversion of a plist to an `<img>` element.\n ",
-        "This sentence illustrates the `__md` macro's `code`, _italics_, and *bold*. ",
+        "This sentence illustrates the `\"#md\"` macro's `code`, _italics_, and *bold*. ",
         "Remember two formatting chars in a row is how to quote them: **foo**, __bar__, ``bletch``."
        ],
        {"src":"page/images/mountain-man-192x192.png"},

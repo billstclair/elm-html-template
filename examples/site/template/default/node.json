@@ -1,9 +1,9 @@
 [ "div", {},
   [[ "h4", {},
-     [["_pageLink","$node.page","$node.title"]
+     [["#pageLink","$node.page","$node.title"]
      ]
    ],
-   [ "_apply","_ps","$node.ps" ],
-   ["_if",["_==","$page","$node.page"],"?refererlink"]
+   [ "#apply","ps","$node.ps" ],
+   ["#if",["#==","$page","$node.page"],"?refererlink"]
   ]
 ]

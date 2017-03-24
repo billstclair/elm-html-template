@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------
 --
 -- HtmlTemplate/Utility.elm
--- Simple Markdown parsing function for billstclair/elm-html-template package.
+-- Utility Functions.
 -- Copyright (c) 2017 Bill St. Clair <billstclair@gmail.com>
 -- Some rights reserved.
 -- Distributed under the MIT License
@@ -14,6 +14,9 @@ module HtmlTemplate.Utility exposing ( walkAtom
 
 import HtmlTemplate.Types exposing ( Atom(..) )
 
+{-| Call a function on every leaf of the `Atom` arg,
+and replace it with the returned value.
+-}
 walkAtom : (Atom msg -> Atom msg) -> Atom msg -> Atom msg
 walkAtom function atom =
     case atom of

@@ -107,7 +107,7 @@ atomData =
       , Ok <| LookupTemplateAtom "foo"
       )
     , ( """
-         ["_gotoPage","home"]
+         ["#gotoPage","home"]
         """
       , Ok <| FuncallAtom
             { function = "gotoPage"
@@ -227,26 +227,26 @@ functionTest ( json, expected ) =
 functionData : List ( String, Result String (Atom msg) )
 functionData =
     [ ( """
-         ["_+",1, 2]
+         ["#+",1, 2]
         """
       , Ok <| IntAtom 3
       )
     , ( """
-         ["_*",3,["_+",1.2, 2]]
+         ["#*",3,["#+",1.2, 2]]
         """
       , Ok <| FloatAtom 9.6
       )
     , ( """
-         ["_apply","_+",1,[2, 3]]
+         ["#apply","#+",1,[2, 3]]
         """
       , Ok <| IntAtom 6
       )
     , ( """
-         ["_let",{"x":[1,2,3]},
-          ["_loop",{"x":"$x"},
-           ["_let",{"x":["_+","$x",["_*","$x",3]],
+         ["#let",{"x":[1,2,3]},
+          ["#loop",{"x":"$x"},
+           ["#let",{"x":["#+","$x",["#*","$x",3]],
                     "y":1},
-            ["_+","$x","$y"]
+            ["#+","$x","$y"]
            ]
           ]
          ]
@@ -254,202 +254,202 @@ functionData =
       , Ok <| ListAtom [IntAtom 5, IntAtom 9, IntAtom 13]
       )
     , ( """
-         ["_loop",{"x":[1,2,3],
+         ["#loop",{"x":[1,2,3],
                    "y":[4,5,6,7]
                   },
-          ["_+","$x","$y"]
+          ["#+","$x","$y"]
          ]
         """
       , Ok <| ListAtom [IntAtom 5, IntAtom 7, IntAtom 9]
       )
     -- if & logical predicates
     , ( """
-         ["_if", true, 1]
+         ["#if", true, 1]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", false, 1]
+         ["#if", false, 1]
         """
       , Ok <| StringAtom ""
       )
     , ( """
-         ["_if", true, 1, 2]
+         ["#if", true, 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", false, 1, 2]
+         ["#if", false, 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_==",3,3,3], 1, 2]
+         ["#if", ["#==",3,3,3], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_==",3,3,2], 1, 2]
+         ["#if", ["#==",3,3,2], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_<>",3,3,2], 1, 2]
+         ["#if", ["#<>",3,3,2], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_<>",3,3,3], 1, 2]
+         ["#if", ["#<>",3,3,3], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_>",3,2,1], 1, 2]
+         ["#if", ["#>",3,2,1], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_>",3,2,2], 1, 2]
+         ["#if", ["#>",3,2,2], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_<",1,2], 1, 2]
+         ["#if", ["#<",1,2], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_<=",1,2], 1, 2]
+         ["#if", ["#<=",1,2], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_<=",1,1], 1, 2]
+         ["#if", ["#<=",1,1], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_<=",2,1], 1, 2]
+         ["#if", ["#<=",2,1], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_>=",2,1], 1, 2]
+         ["#if", ["#>=",2,1], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_>=",1,1], 1, 2]
+         ["#if", ["#>=",1,1], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_>=",1,2], 1, 2]
+         ["#if", ["#>=",1,2], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_<","a","b"], 1, 2]
+         ["#if", ["#<","a","b"], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_<","b","a"], 1, 2]
+         ["#if", ["#<","b","a"], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", ["_<",1.2,2.3], 1, 2]
+         ["#if", ["#<",1.2,2.3], 1, 2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if", ["_<",2.3,1.2], 1, 2]
+         ["#if", ["#<",2.3,1.2], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     -- Logical operators
     , ( """
-         ["_if",["_&&"],1,2]
+         ["#if",["#&&"],1,2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if",["_&&",true,true,true],1,2]
+         ["#if",["#&&",true,true,true],1,2]
         """
       , Ok <| IntAtom 1
       )
     -- If you see "shortcut bug" in the output when running elm-test,
     -- that means too much is being evaluated.
     , ( """
-         ["_if",["_&&",true,false,["_log","shortcut bug 1",true]],1,2]
+         ["#if",["#&&",true,false,["#log","shortcut bug 1",true]],1,2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if",["_||"],1,2]
+         ["#if",["#||"],1,2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if",["_||",false,false,true],1,2]
+         ["#if",["#||",false,false,true],1,2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if",["_||",false,true,["_log","shortcut bug 2",false]],1,2]
+         ["#if",["#||",false,true,["#log","shortcut bug 2",false]],1,2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if",["_xor"],1,2]
+         ["#if",["#xor"],1,2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if",["_xor",false,false,true],1,2]
+         ["#if",["#xor",false,false,true],1,2]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_if",["_xor",false,true,true],1,2]
+         ["#if",["#xor",false,true,true],1,2]
         """
       , Ok <| IntAtom 2
       )
     -- These error strings are likely to change to encoded JSON
     , let str = """
-                 ["_if", 1, 2]
+                 ["#if", 1, 2]
                 """
       in
           ( str
           , Ok <| encodeDecode str
       )
     , let str = """
-                 ["_frobulate"]
+                 ["#frobulate"]
                 """
       in
           ( str
           , Ok <| encodeDecode str
       )
     , ( """
-         ["_if", ["_<",2,1,["_log","shortcut bug",3]], 1, 2]
+         ["#if", ["#<",2,1,["#log","shortcut bug",3]], 1, 2]
         """
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_if", true, 1, ["_log","shortcut bug 4",2]]
+         ["#if", true, 1, ["#log","shortcut bug 4",2]]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_let",{},1]
+         ["#let",{},1]
         """
       , Ok <| IntAtom 1
       )
     , ( """
-         ["_let",{"x":5},
-          ["_let",{"x":1,
-                   "y":["_+","$x",1]
+         ["#let",{"x":5},
+          ["#let",{"x":1,
+                   "y":["#+","$x",1]
                   },
            ["$x","$y"]
           ]
@@ -458,8 +458,8 @@ functionData =
       , Ok <| ListAtom [IntAtom 1, IntAtom 6]
       )
     , ( """
-         ["_let*",{"x":1,
-                   "y":["_+","$x",1]
+         ["#let*",{"x":1,
+                   "y":["#+","$x",1]
                   },
           "$y"
          ]
@@ -467,7 +467,7 @@ functionData =
       , Ok <| IntAtom 2
       )
     , ( """
-         ["_md","*b*_i_`c`"]
+         ["#md","*b*_i_`c`"]
         """
       , Ok <|
           ListAtom
@@ -527,7 +527,7 @@ templateData =
       , Ok <| LookupAtom "atom"
       )
     , ( """
-         ["_loop",{"p":"$ps"},["p",{},["$p"]]]
+         ["#loop",{"p":"$ps"},["p",{},["$p"]]]
         """
       , Ok
             <| FuncallAtom

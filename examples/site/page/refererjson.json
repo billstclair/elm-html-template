@@ -1,5 +1,5 @@
 { "title": "Page JSON",
-  "ps" : [["Page: ",["_pageLink","$referer"]],
-          ["iframe",{"src":["_append","page/","$referer",".json"]},[]]
+  "ps" : [["Page: ",["#pageLink","$referer"]],
+          ["iframe",{"src":["#append","page/","$referer",".json"]},[]]
          ]
 }

@@ -94,7 +94,7 @@ templateFilename : String -> String
 templateFilename name =
     name ++ templateFileType
 
-gotoPageFunction : List (Atom Msg) -> Dicts Msg -> Msg
+gotoPageFunction : List (Atom Msg) -> d -> Msg
 gotoPageFunction args _ =
     case args of
         [StringAtom page] ->
@@ -107,7 +107,7 @@ messages =
     [ ( "gotoPage", gotoPageFunction )
     ]
 
-pageLinkFunction : List (Atom Msg) -> Dicts Msg -> Atom Msg
+pageLinkFunction : List (Atom Msg) -> d -> Atom Msg
 pageLinkFunction args _ =
     case normalizePageLinkArgs args of
         Just ( page, title ) ->

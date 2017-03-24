@@ -77,7 +77,7 @@ type alias LoadersRecord msg x =
 type Dicts msg
     = TheDicts (TemplateDicts msg)
 
-{-| The dictionaries for looking up atoms (`"$foo"`), templates (`"?foo"`), pages (`"@foo"`, and functions/delayed bindings/messages (`"_foo"`).
+{-| The dictionaries for looking up atoms (`"$foo"`), templates (`"?foo"`), pages (`"@foo"`, and functions/delayed bindings/messages (`"#foo"`).
 -}
 type alias TemplateDicts msg =
     { atoms : Dict String (Atom msg)
@@ -89,8 +89,8 @@ type alias TemplateDicts msg =
     }
 
 {-| Storage for JSON:
-    [ "<tag>"
-     , {"<name>":"<value>", ...}
+    [ "&lt;tag>"
+     , {"&lt;name>":"&lt;value>", ...}
      , [...]
     ]
 -}
@@ -101,7 +101,7 @@ type alias HtmlTemplateRecord msg =
     }
 
 {-| Storage for JSON:
-    [ "/<function name>"
+    [ "/&lt;function name>"
      , arg
      , ...
     ]

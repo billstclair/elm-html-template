@@ -228,7 +228,7 @@ varLookupPrefix =
 
 functionLookupPrefix : String
 functionLookupPrefix =
-    "_"
+    "#"
 
 templateLookupPrefix : String
 templateLookupPrefix =
@@ -1425,14 +1425,10 @@ applyFunction args (TheDicts dicts) =
                     doFuncall name
                         (flattenApplyArgs functionArgs [])
                         dicts
-                StringAtom s ->
-                    case extractLookupString functionLookupPrefix s of
-                        Nothing ->
-                            cantApply function args
-                        Just f ->
-                            doFuncall f
-                                (flattenApplyArgs functionArgs [])
-                                dicts
+                StringAtom name ->
+                    doFuncall name
+                        (flattenApplyArgs functionArgs [])
+                            dicts
                 _ ->
                     cantApply function args
         _ ->
@@ -1817,7 +1813,7 @@ getDictsAtom : String -> Dicts msg -> Maybe (Atom msg)
 getDictsAtom name (TheDicts dicts) =
     Dict.get name dicts.atoms
 
-{-| Store an atom with the given name. Done with `"_let"` in a JSON file.
+{-| Store an atom with the given name. Done with `"#let"` in a JSON file.
 -}
 setAtom : String -> Atom msg -> Loaders msg x -> Loaders msg x
 setAtom name atom (TheLoaders loaders) =
@@ -1848,7 +1844,7 @@ insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
 insertPair (k, v) dict =
     Dict.insert k v dict
 
-{-| If you want to define your own function to be available via "_foo" in your JSON files, you can do so with `insertFunctions` (or `insertMessages`).
+{-| If you want to define your own function to be available via "#foo" in your JSON files, you can do so with `insertFunctions` (or `insertMessages`).
 
 There is more information about defining functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md).
 -}
@@ -1872,7 +1868,7 @@ insertMessages pairs (TheLoaders loaders) =
         TheLoaders
             { loaders | dicts = { dicts | messages = messages } }
 
-{-| Some functions, e.g. variable binding functions like `"_let"` and `"_loop"`, and short-circuiting functions like `_if`, `"_&&"` and `"_||"`, need to delay evaluation of their arguments. If one of the functions you add with `insertFunctions` (or `insertMessages`) needs to be called with unevaluated arguments, declare that with `insertDelayedBindingsFunctions`.
+{-| Some functions, e.g. variable binding functions like `"#let"` and `"#loop"`, and short-circuiting functions like `_if`, `"#&&"` and `"#||"`, need to delay evaluation of their arguments. If one of the functions you add with `insertFunctions` (or `insertMessages`) needs to be called with unevaluated arguments, declare that with `insertDelayedBindingsFunctions`.
 -}
 insertDelayedBindingsFunctions : List String -> Loaders msg x -> Loaders msg x
 insertDelayedBindingsFunctions strings (TheLoaders loaders) =
