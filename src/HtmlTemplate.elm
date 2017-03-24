@@ -1275,10 +1275,15 @@ argArith operator atoms =
                        arith operator x a
             )
     in
-        case Dict.get operator firstArgTable of
-            Nothing -> Nothing
-            firstArg ->
-                List.foldl f firstArg atoms
+        case atoms of
+            x :: y :: rest ->
+                List.foldl f (Just x) <| List.drop 1 atoms
+            _ ->
+                case Dict.get operator firstArgTable of
+                    Nothing ->
+                        Nothing
+                    firstArg ->
+                        List.foldl f firstArg atoms
 
 arithFunction : String -> List (Atom msg) -> Dicts msg -> Atom msg
 arithFunction operator args dicts =
