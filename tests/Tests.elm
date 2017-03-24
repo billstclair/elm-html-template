@@ -466,7 +466,31 @@ functionData =
         """
       , Ok <| IntAtom 2
       )
-      -- This loops forever if somebody breaks the detection code
+    , ( """
+         ["_md","*b*_i_`c`"]
+        """
+      , Ok <|
+          ListAtom
+          ([ListAtom
+                ( [RecordAtom
+                       { tag = "b",
+                         attributes = [],
+                         body = [StringAtom "b"]
+                       }
+                 , RecordAtom
+                       { tag = "i"
+                       , attributes = []
+                       , body = [StringAtom "i"]
+                       }
+                  , RecordAtom
+                       { tag = "code"
+                       , attributes = []
+                       , body = [StringAtom "c"]
+                       }
+                  ]
+                )
+           ])
+      )          
     ]
 
 encodeDecode : String -> Atom msg

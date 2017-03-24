@@ -92,6 +92,8 @@ import HtmlTemplate.Types exposing
     , LoadersRecord, AttributeFunction(..)
     )
 
+import HtmlTemplate.Markdown exposing ( mdFunction )
+
 import HtmlTemplate.Entities as Entities
 
 import Html exposing ( Html, Attribute
@@ -1536,6 +1538,7 @@ defaultFunctionsDict =
                   , ( "not", notFunction )
                   , ( "log", logFunction )
                   , ( "--", commentFunction )
+                  , ( "md", mdFunction )
                   ]
 
 defaultDelayedBindingsFunctions : Set String

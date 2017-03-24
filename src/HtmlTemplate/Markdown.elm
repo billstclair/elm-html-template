@@ -21,17 +21,27 @@ import Parser exposing ( Parser, Error, Count(..)
                        , zeroOrMore, oneOrMore, keep, repeat
                        )
 
+log = Debug.log
+
 mdFunction : List (Atom msg) -> d -> Atom msg
 mdFunction args _ =
-  ListAtom args
+    -- Could flatten the list here, but it doesn't matter to rendering
+    ListAtom <| List.map parseIfString args
+
+parseIfString : Atom msg -> Atom msg
+parseIfString atom =
+    case atom of
+        StringAtom string ->
+            run string
+        _ ->
+            atom
 
 type State msg =
     TheState (StateRecord msg)
 
 type alias StateRecord msg =
-    { lookingFor : Maybe String
-    , collected : List (Atom msg)
-    , stack : List State
+    { lookingFor : Maybe Token
+    , stack : Maybe (State msg)
     , result : List (Atom msg)
     }
 
@@ -50,21 +60,61 @@ unpairedConverters =
     [ ( "\n", newlineConverter )
     ]
 
+popStack : StateRecord msg -> StateRecord msg
+popStack state =
+    case state.stack of
+        Just (TheState res) ->
+            res
+        Nothing ->
+            -- Shouldn't happen
+            { state | result = [] }
+
+pairedConverter : ( List (Atom msg) -> Atom msg) -> Token -> State msg -> State msg
+pairedConverter wrapper token (TheState state) =
+    case state.lookingFor of
+        Nothing ->
+            TheState { state
+                         | stack = Just <| TheState state
+                         , result = []
+                         , lookingFor = Just token
+                     }
+        Just lookingFor ->
+            if lookingFor == token then
+                let atom = wrapper <| List.reverse state.result
+                    res = popStack state
+                in
+                    TheState { res | result = atom :: res.result }
+            else
+                TheState { state
+                             | lookingFor = Just token
+                             , result = []
+                             , stack = Just <| TheState state
+                         }
+
+wrapTag : String -> List (Atom msg) -> Atom msg
+wrapTag tag body =
+    RecordAtom { tag = tag
+               , attributes = []
+               , body = body
+               }
+
 backtickConverter : Converter msg
 backtickConverter token state =
-    state
+    pairedConverter (wrapTag "code") token state
 
 underscoreConverter : Converter msg
 underscoreConverter token state =
-    state
+    pairedConverter (wrapTag "i") token state
 
 asteriskConverter : Converter msg
 asteriskConverter token state =
-    state
+    pairedConverter (wrapTag "b") token state
 
 newlineConverter : Converter msg
-newlineConverter token state =
-    state
+newlineConverter token (TheState state) =
+    let br = wrapTag "br" []
+    in
+        TheState { state | result = br :: state.result }
 
 conversionDict : Dict String (Converter msg)
 conversionDict =
@@ -77,8 +127,7 @@ initialState : State msg
 initialState =
     TheState
         { lookingFor = Nothing
-        , collected = []
-        , stack = []
+        , stack = Nothing
         , result = []
         }
 
@@ -89,7 +138,25 @@ initialState =
 -- "...\n..." -> ["...",["br",{},[]],"..."],...]
 processTokens : List Token -> Atom msg
 processTokens tokens =
-    processLoop tokens initialState
+    processLoop (doubleTokensToStrings tokens) initialState
+
+doubleTokensToStrings : List Token -> List Token
+doubleTokensToStrings strings =
+    let loop : List Token -> List Token -> List Token
+        loop = (\ss res ->
+                    case ss of
+                        [] ->
+                            List.reverse res
+                        (SymbolToken s1) :: (SymbolToken s2) :: rest ->
+                            if s1 == s2 then
+                                loop rest <| (StringToken s1) :: res
+                            else
+                                loop (List.drop 1 ss) <| (SymbolToken s1) :: res
+                        head :: tail ->
+                            loop tail <| head :: res
+               )
+    in
+        loop strings []
 
 processLoop : List Token -> State msg -> Atom msg
 processLoop tokens state =
@@ -101,7 +168,24 @@ processLoop tokens state =
 
 finishProcessing : State msg -> Atom msg
 finishProcessing (TheState state) =
-    ListAtom <| List.reverse state.result
+    case state.lookingFor of
+        Nothing ->
+            ListAtom <| List.reverse state.result
+        Just token ->
+            case state.stack of
+                Nothing ->
+                    finishProcessing <| TheState { state | lookingFor = Nothing }
+                Just (TheState parent) ->
+                    finishProcessing
+                        <| TheState
+                            { parent
+                                | result =
+                                  List.append
+                                      (List.reverse
+                                           <| (StringAtom <| tokenToString token)
+                                               :: state.result)
+                                      parent.result
+                            }
 
 pushStringOnResult : String -> State msg -> State msg
 pushStringOnResult string (TheState state) =
@@ -140,25 +224,25 @@ type Token
     = SymbolToken String
     | StringToken String
 
-string : Parser Token
-string =
+stringParser : Parser Token
+stringParser =
     succeed StringToken
         |= keep oneOrMore (\x -> not <| isSymbol x)
 
-symbol : Parser Token
-symbol =
+symbolParser : Parser Token
+symbolParser =
     succeed SymbolToken
         |= keep (Exactly 1) isSymbol
 
-token : Parser Token
-token =
-    oneOf [ symbol, string ]
+tokenParser : Parser Token
+tokenParser =
+    oneOf [ symbolParser, stringParser ]
 
 -- Tokenize a string into special characters and the strings between them.
 markdownParser : Parser (Atom msg)
 markdownParser =
     succeed processTokens
-        |= repeat zeroOrMore token
+        |= repeat zeroOrMore tokenParser
 
 run : String -> Atom msg
 run string =

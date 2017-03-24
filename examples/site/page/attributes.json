@@ -21,12 +21,12 @@
         ["Hover to see error title for missing message function."]
        ],
        ["4 * (1.1 + 2) = ", ["_*", 4, ["_+", 1.1, 2]]],
-       ["The image below illustrates implicit conversion of a plist to an ",
-        ["code",{},["<img>"]],
-        " element.",
-        ["br",{},[]],
-        {"src":"page/images/mountain-man-192x192.png"}
+       ["_md",
+        "The image below illustrates implicit conversion of a plist to an `<img>` element.\n ",
+        "This sentence illustrates the `__md` macro's `code`, _italics_, and *bold*. ",
+        "Remember two formatting chars in a row is how to quote them: **foo**, __bar__, ``bletch``."
        ],
+       {"src":"page/images/mountain-man-192x192.png"},
        "The table below illustrates integer (\"colspan\") attribute values.",
        ["table",{"class":"bordered"},
         [["tr",{},
