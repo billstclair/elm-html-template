@@ -1072,7 +1072,7 @@ firstFunction args _ =
                         Just res ->
                             res
                         Nothing ->
-                            StringAtom ""
+                            ListAtom []
                 Nothing ->
                     cantFuncall "rest" args
         _ ->
@@ -1102,9 +1102,9 @@ consFunction args _ =
                 Just l ->
                     ListAtom <| x :: l
                 Nothing ->
-                    cantFuncall "rest" args
+                    cantFuncall "cons" args
         _ ->
-            cantFuncall "rest" args
+            cantFuncall "cons" args
 
 makeRecordFunction : List (Atom msg) -> d -> Atom msg
 makeRecordFunction args _ =
@@ -1374,7 +1374,7 @@ ifFunction args dicts =
                     if b then
                         eval consequent dicts
                     else
-                        StringAtom ""
+                        ListAtom []
                 _ ->
                     cantFuncall "if" args
         [ bool, consequent, alternative ] ->

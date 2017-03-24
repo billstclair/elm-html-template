@@ -10,35 +10,35 @@ The master copy is at [github.com/billstclair/elm-html-template/blob/master/JSON
 
 JSON | Elm object | Elm types
 ---- | ---- | ----
-"foo" | StringAtom "foo" | StringAtom String
-1 | IntAtom 1 | IntAtom Int
-1.2 | FloatAtom 1.2 | FloatAtom Float
-True | BoolAtom True | BoolAtom Bool
-"$x" | LookupAtom "x" | LookupAtom String
-"@about" | LookupPageAtom "about" | LookupPageAtom String
-"?page" | LookupTemplateAtom "page" | LookupTemplateAtom String
-"\_+" | text "\\"_+\\""
-["_+",1,2] | FuncallAtom<br/>  { function = "+", args = [ IntAtom 1, IntAtom 2 ] } | FuncallAtom<br/>  { function : String, args: List (Atom msg) }
-[1, 2] | ListAtom [ IntAtom 1, IntAtom 2 ] | ListAtom (List (Atom msg))
-{"x":1,"y":2} | PListAtom<br/> [ ("x", IntAtom 1), ("y", IntAtom 2) ] | PListAtom<br/> List (String, Atom msg)
-[ "a",{"href":"http://foo.com"}["foo.com"]] | RecordAtom<br/> { tag = "a", attributes = [ ("href", StringAtom "http://foo.com") ], body = [ StringAtom "foo.com" ] | RecordAtom<br/> { tag : String, attributes : List (String, Atom msg), body: List (Atom msg)
+`"foo"` | `StringAtom "foo"` | `StringAtom String`
+`1` | `IntAtom 1` | `IntAtom Int`
+`1.2` | `FloatAtom 1.2` | `FloatAtom Float`
+`True` | `BoolAtom True` | `BoolAtom Bool`
+`"$x"` | `LookupAtom "x"` | `LookupAtom String`
+`"@about"` | `LookupPageAtom "about"` | `LookupPageAtom String`
+`"?page"` | `LookupTemplateAtom "page"` | `LookupTemplateAtom String`
+`"#+"` | `text "\\"#+\\""`
+`["#+",1,2]` | `FuncallAtom`<br/>`  { function = "+"`<br/>`,   args = [ IntAtom 1, IntAtom 2 ]`<br/>`  }` | `FuncallAtom`<br/>`  { function : String`<br/>`  , args: List (Atom msg)`<br/>`  }`
+`[1, 2]` | `ListAtom`<br/>`  [ IntAtom 1, IntAtom 2 ]` | `ListAtom`<br/>`  (List (Atom msg))`
+`{"x":1,"y":2}` | `PListAtom`<br/>`  [ ("x", IntAtom 1), ("y", IntAtom 2) ]` | `PListAtom`<br/>`  List (String, Atom msg)`
+`[ "a",{"href":"http://foo.com"},`<br/>`  ["foo.com"]]` | `RecordAtom`<br/>`  { tag = "a"`<br/>`  , attributes = [ ("href", StringAtom "http://foo.com") ]`<br/>`  , body = [ StringAtom "foo.com" ]`<br/>`  }` | `RecordAtom`<br/>`  { tag : String`<br/>`  , attributes : List (String, Atom msg)`<br/>`  , body: List (Atom msg)`<br/>`  }`
 
 `HtmlTemplate.render` turns an `Atom msg` into an `Html msg`. It works as follows, omitting the `Loaders` args to functions. `text` below means `Html.text`, `span` means `Html.span`, `a` means `Html.a`, `img` means `Html.img`, `href` means `Html.Attributes.href`, `src` means `Html.Attributes.src`. `render` means `HtmlTemplate.render`, but I left out the `Loaders msg x` arg. Likewise for `getAtom`, `getPage`, and `getTemplate`.
 
 JSON | Equivalent Elm Code
 ---- | ----
-"foo" | text "foo"
-1 | text (toString 1)
-1.2 | text (toString 1.2)
-True | text (toString True)
-"$x" | render (getAtom "x")
-"@about" | render (getPage "about")
-"?page" | render (getTemplate "page")
-"\_+" | text "\\"_+\\""
-["_+",1,2] | text (toString (1 + 2))
-[1, 2] | span [] [ text (toString 1), text (toString 2) ]
-{"src":"images/foo.jpg"} | img [ src "images/foo.jpg" ] []
-["a",{"href":"http://foo.com"}["Foo"]] | a [ href "http://foo.com" ] [ text "Foo" ]
+`"foo"` | `text "foo"`
+`1` | `text (toString 1)`
+`1.2` | `text (toString 1.2)`
+`true` | `text (toString True)`
+`"$x"` | `render (getAtom "x")`
+`"@about"` | `render (getPage "about")`
+`"?page"` | `render (getTemplate "page")`
+`"#+"` | `text "\\"#+\\""`
+`["#+",1,2]` | `text (toString (1 + 2))`
+`[1, 2]` | `span [] [ text (toString 1), text (toString 2) ]`
+`{"src":"images/foo.jpg"}` | `img [ src "images/foo.jpg" ] []`
+`["a",{"href":"http://foo.com"}["Foo"]]` | `a [ href "http://foo.com" ] [ text "Foo" ]`
 
 Note the implicit `span` when rendering a list and the implicit `img` when rendering a plist. The implicit `img` is only done if the plist has a `src` property. Otherwise, a plist is rendered as a debugging string.
 
@@ -77,7 +77,7 @@ In order for the JSON for Html.Event attributes to send messages to your applica
 
 A message function takes two args, a list of `Atom msg` instances, the arguments to the function call, and a dictionary, which you usually don't need. It returns a `Msg`. Here's the JSON for using it:
 
-    [ "a", { "href": "#", "onClick" : ["_gotoPage", "attributes" ] }
+    [ "a", { "href": "#", "onClick" : ["#gotoPage", "attributes" ] }
       [ "attributes" ]
     ]
 
@@ -95,7 +95,7 @@ Use `installFunctions` to install these in a `Loader msg`.
 
 The args to a scripting function are normally evaluated before the function is called, so you don't have to do anything about that. Sometimes a function wants to delay evaluation, mostly as a performance enhancement, but sometimes evaluation results in rendered Html, which is opaque. In this case, you have to call `eval` yourself on the args that need to be evaluated.
 
-Here's the definition of the `"_pageLink"` function, used in the example:
+Here's the definition of the `"#pageLink"` function, used in the example:
 
     pageLinkFunction : List (Atom Msg) -> d -> Atom Msg
     pageLinkFunction args _ =
@@ -116,14 +116,14 @@ This allows you to say:
 instead of:
 
     ["a",{ "href": "#"
-         , onClick: ["_gotoPage","attributes"]
+         , onClick: ["#gotoPage","attributes"]
          },
       ["attributes"]
     ]
     
 It also begs for the ability to define functions in the scripting language, instead of in your Elm code. Planned, but not yet done.
 
-I use `"_pageLink"` all over [the example](https://lisplog.org/elm-html-template/), especially on the `settings` page.
+I use `"#pageLink"` all over [the example](https://lisplog.org/elm-html-template/), especially on the `settings` page.
 
 In order to declare a function to take unevaluated args, call `insertDelayedBindingsFunctions` with its name (as defined in yur `installFunctions` call).
 
@@ -167,37 +167,38 @@ Function Call | Description
 `["#loop",{"name":<value>,...},<body>]` | Evaluates `<body>` with each `name` bound to each of the elements of its `<value>` list, returning a list of the results. If the lists are different lengths, stops when the shortest one runs out.
 `["#let",{"name":<value>,...},<body>]` | Evaluates `<body>` with each `name` bound to its `<value>`. The bindings are done in parallel.
 `["#let*",{"name":<value>,...},<body>]` | Same as `"#let"`, but the bindings are done serially, with the `<value>` for each one seeing the values for the previous names.
-**Conditionals** | There's only one right now
-`["#if",<condition>,<consequent>,<antecendent>]` | If `<condition>` evaluates to true (`BoolAtom True`), then returns the value of `<consequence>`. Otherwise, returns the value of `<antecedent>`. `<antecedent>` is optional, and defaults to the empty string (which renders as nothing).
-`["#let",{"x","+"},["#apply","$x",1,[2,3]]]` | Applies a function to some arguments, the last of which will be "spread" if it is a list. This example evals to 6.
-**Rendering** | Functions useful for creating Html output
-`"ps"
-"md"
-"makeRecord"
-
-**List Functions** | The names are mostly taken from Lisp
-
-"length"
-"nth"
-"makeList"
-"first"
-"rest"
-"cons"
-"append"
-"=="
-"<>"
-"<"
-">"
-"<="
-">="
-"+"
-"-"
-"*"
-"/"
-"//"
-"&&"
-"||"
-"xor"
-"not"
-"log"
-=================================== | =
+**Conditionals** | There's only one right now.
+`["#if",<condition>,<consequent>,<antecendent>]` | If `<condition>` evaluates to true (`BoolAtom True`), then returns the value of `<consequence>`. Otherwise, returns the value of `<antecedent>`. `<antecedent>` is optional, and defaults to the empty list (which renders as nothing).
+**Rendering** | Functions useful for creating Html output.
+`["#ps",<arg>,...]` | Wrap a paragraph tag around the arguments. Same as `["p",{},[<arg>,...]]`, but saves a few keystrokes.
+`["#md",<arg>,...]` | Does "Markdown" processing on the args, converting `_` to italics, `*` to bold, and back-tick to code.
+`["#makeRecord",<tag>,<attributes>,<body>]` | Same as [<tag>,<attributes>,<body>], but evaluates `<tag>` and `<attributes>`, which the parser doesn't do.
+**List Functions** | The names are mostly taken from Lisp.
+`["#length",<list>]` | The length of a list.
+`["#nth",<n>,<list>]` | The nth element of a list, beginning at 0.
+`["#makeList",<length>,<value>]` | Makes a list with the given length and all elements the same value.
+`["#first",<list>]` | Returns the first element of the list or the empty list if it is empty.
+`["#rest",<list>]` | Returns the tail of the list, which will be empty if the list is empty or has only one element.
+`["#cons",<element>,<list>]` | Adds an element to the front of a list.
+`["#append",...]` | Appends all of its arguments. If they are all lists, the result will be a list, otherwise converts each to a string and appends those strings.
+**Arithmetic functions** | All of these work on zero or more arguments, doing the right thing for one argument division (reciprocal). All unify the argument types, converting all to float if any one is. `"#/"` is floating point division, and `"#//"` is integer division, as in Elm.
+`["#+",...]` | Addition
+`["#-",...]` | Subtraction
+`["#*",...]` | Multiplcation
+`["#/",...]` | Floating point divistion
+`["#//",...]` | Integer division
+**Boolean functions** | These all take zero or more arguments, and are always true if given fewer than two.
+`["#==",<x>,<y>]` | Equal
+`["#<>",<x>,<y>]` | Not equal
+`["#<",<x>,<y>]` | Less than
+`["#>",<x>,<y>]` | Greater than
+`["#<=",<x>,<y>]` | Less than or equal
+`["#>=",<x>,<y>]` | Greater than or equal
+**Logical functions** | Operations on booleans. All (except `"#not"`) take zero or more arguments, and operate just as the Elm operators with the same names. `"#&&"` and `"#||"` "shortcut" their arguments, not evaluating any that aren't necessary once the result is known. Since this is functional, that doesn't change the result, but it can make it faster.
+`["#&&",...]` | Logical AND
+`["#||",...]` | Logical OR
+`["#xor",...]` | Logical XOR, true if an odd number of the arguments are true.
+`["#not",<x>]` | Logical NOT
+**Debugging Functions** | Helpful for figuring out what a script is doing
+`["#log",<label>,<form>]` | Just like Elm's `Debug.log`. Prints to the console the labelled result of evaluating `<form>`, and returns that value.
+=================================== | (This line is here to widen the first column)
