@@ -237,6 +237,21 @@ functionData =
       , Ok <| FloatAtom 9.6
       )
     , ( """
+         ["#/",10]
+        """
+      , Ok <| FloatAtom 0.1
+      )
+    , ( """
+         ["#/",10,2]
+        """
+      , Ok <| FloatAtom 5.0
+      )
+    , ( """
+         ["#//",10,2]
+        """
+      , Ok <| IntAtom 5
+      )
+    , ( """
          ["#apply","#+",1,[2, 3]]
         """
       , Ok <| IntAtom 6
