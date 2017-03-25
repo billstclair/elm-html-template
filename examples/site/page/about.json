@@ -1,6 +1,6 @@
 {"title":"About",
  "ps":[["This site is an example of using the ",
-        ["a",{"href":"http://package.elm-lang.org/packages/billstclair/elm-html-tempate/latest"},
+        ["a",{"href":"http://package.elm-lang.org/packages/billstclair/elm-html-template/latest"},
          ["HtmlTemplate module"]
          ],
         " to create a web site."
