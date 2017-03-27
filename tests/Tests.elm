@@ -181,6 +181,11 @@ atomData =
         """
       , Ok <| ListAtom [ StringAtom "p", PListAtom [], IntAtom 1, IntAtom 2 ]
       )
+    , ( """
+         "#"
+        """
+      , Ok <| StringAtom "#"
+      )
     ]
 
 circular : String

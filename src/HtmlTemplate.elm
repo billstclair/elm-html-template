@@ -258,7 +258,7 @@ stripQuoteDecoder =
 
 extractLookupString : String -> String -> Maybe String
 extractLookupString prefix string =
-    if String.startsWith prefix string then
+    if String.startsWith prefix string && (1 < (String.length string)) then
         let lookup = String.dropLeft 1 string
         in
             if String.startsWith prefix lookup then
