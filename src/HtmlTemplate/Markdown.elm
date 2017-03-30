@@ -15,6 +15,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.Utility as Utility
 
+import Maybe exposing (withDefault)
 import Dict exposing ( Dict )
 import Parser exposing ( Parser, Error, Count(..)
                        , (|.), (|=)
@@ -42,6 +43,8 @@ type State msg =
 
 type alias StateRecord msg =
     { lookingFor : Maybe Token
+    , startingWith : Maybe Token
+    , linkBody : Maybe (List (Atom msg))
     , stack : Maybe (State msg)
     , result : List (Atom msg)
     }
@@ -59,6 +62,8 @@ pairedConverters =
 unpairedConverters : List (String, Converter msg)
 unpairedConverters =
     [ ( "\n", newlineConverter )
+    , ( "[", linkStartConverter )
+    , ( ")", closeParenConverter )
     ]
 
 popStack : StateRecord msg -> StateRecord msg
@@ -111,11 +116,158 @@ asteriskConverter : Converter msg
 asteriskConverter token state =
     pairedConverter (wrapTag "b") token state
 
+pushAtomOnResult : Atom msg -> StateRecord msg -> State msg
+pushAtomOnResult atom state =
+    TheState
+        { state | result = atom :: state.result }
+
 newlineConverter : Converter msg
 newlineConverter token (TheState state) =
-    let br = wrapTag "br" []
+    pushAtomOnResult (wrapTag "br" []) state
+
+closeParenToken : Token
+closeParenToken =
+    SeparatorToken ")"
+
+amLookingForCloseParen : StateRecord msg -> Bool
+amLookingForCloseParen state =
+    if state.lookingFor == Just closeParenToken then
+        True
+    else
+        case state.stack of
+            Nothing ->
+                False
+            Just (TheState s) ->
+                amLookingForCloseParen s
+
+pushTokenOnResult : Token -> StateRecord msg -> State msg
+pushTokenOnResult token state =
+    pushAtomOnResult (StringAtom <| tokenToString token) state
+
+linkStartConverter : Converter msg
+linkStartConverter token (TheState state) =
+    if amLookingForCloseParen state then
+        pushTokenOnResult token state
+    else
+        TheState
+        { state
+            | lookingFor = Just <| closeParenToken
+            , startingWith = Just token
+            , linkBody = Nothing
+            , stack = Just <| TheState state
+        }
+
+unzipUntil : ((StateRecord msg) -> Bool) -> StateRecord msg -> Maybe (StateRecord msg, List (StateRecord msg))
+unzipUntil predicate state =
+    let loop : StateRecord msg -> List (StateRecord msg) -> Maybe (StateRecord msg, List (StateRecord msg))
+        loop = (\s res ->
+                    if predicate s then
+                        Just (s, res)
+                    else
+                        case s.stack of
+                            Nothing ->
+                                Nothing
+                            Just (TheState nexts) ->
+                                loop nexts <| s :: res
+               )
     in
-        TheState { state | result = br :: state.result }
+        loop state []
+
+zip : StateRecord msg -> List (StateRecord msg) -> State msg
+zip state states =
+    case states of
+        [] ->
+            TheState state
+        s :: rest ->
+            zip { s | stack = Just <| TheState state } rest
+
+isLinkStartState : StateRecord msg -> Bool
+isLinkStartState state =
+    state.lookingFor == Just closeParenToken
+
+processLinkMiddle : Token -> State msg -> State msg
+processLinkMiddle token (TheState state) =
+    let states = unzipUntil isLinkStartState state
+    in
+        case states of
+            Nothing ->
+                pushTokenOnResult token state
+            Just (startState, intermediates) ->
+                zip {startState
+                        | linkBody = Just <| List.reverse state.result
+                        , result = []
+                    }
+                    intermediates
+
+processUrlResult : List (Atom msg) -> (String, Maybe String)
+processUrlResult atoms =
+    case atoms of
+        [ StringAtom string ] ->
+            (string, Nothing)
+        _ ->
+            ("#", Just <| toString atoms)
+
+closeParenConverter : Converter msg
+closeParenConverter token (TheState state) =
+    if state.lookingFor /= Just closeParenToken then
+        pushTokenOnResult token state
+    else
+        let body = state.linkBody
+            (url, title) = processUrlResult state.result
+        in
+            let result =
+                    case state.startingWith of
+                        Nothing ->
+                            ListAtom
+                            <| List.append
+                                (List.reverse
+                                     <| withDefault [] state.linkBody
+                                )
+                                state.result
+                        Just ImageToken ->
+                            let (a, altTitle)
+                                    = processUrlResult
+                                      <| withDefault [] state.linkBody
+                                alt = case altTitle of
+                                          Nothing -> a
+                                          Just t -> t
+                            in
+                                RecordAtom
+                                { tag = "img"
+                                , attributes = List.append
+                                               [ ("alt", StringAtom alt)
+                                               , ("src", StringAtom url)
+                                               ]
+                                               <| case title of
+                                                      Nothing -> []
+                                                      Just t ->
+                                                          [("title", StringAtom t)]
+                                , body = []
+                                }
+                        _ ->
+                            RecordAtom
+                            { tag = "a"
+                            , attributes = case title of
+                                               Nothing ->
+                                                   [ ("href", StringAtom url) ]
+                                               Just t ->
+                                                   [ ("href", StringAtom url)
+                                                   , ("title", StringAtom t)
+                                                   ]
+                            , body = state.result
+                            }
+            in
+                TheState
+                    <| case state.stack of
+                           Nothing ->
+                               { state
+                                   | lookingFor = Nothing
+                                   , startingWith = Nothing
+                                   , linkBody = Nothing
+                                   , result = [result]
+                               }
+                           Just (TheState stack) ->
+                               { stack | result = result :: stack.result }
 
 conversionDict : Dict String (Converter msg)
 conversionDict =
@@ -128,6 +280,8 @@ initialState : State msg
 initialState =
     TheState
         { lookingFor = Nothing
+        , startingWith = Nothing
+        , linkBody = Nothing
         , stack = Nothing
         , result = []
         }
@@ -148,11 +302,11 @@ doubleTokensToStrings strings =
                     case ss of
                         [] ->
                             List.reverse res
-                        (SymbolToken s1) :: (SymbolToken s2) :: rest ->
+                        (SeparatorToken s1) :: (SeparatorToken s2) :: rest ->
                             if s1 == s2 then
                                 loop rest <| (StringToken s1) :: res
                             else
-                                loop (List.drop 1 ss) <| (SymbolToken s1) :: res
+                                loop (List.drop 1 ss) <| (SeparatorToken s1) :: res
                         head :: tail ->
                             loop tail <| head :: res
                )
@@ -168,25 +322,32 @@ processLoop tokens state =
             processLoop tail <| processToken token state
 
 finishProcessing : State msg -> Atom msg
-finishProcessing (TheState state) =
-    case state.lookingFor of
-        Nothing ->
-            ListAtom <| List.reverse state.result
-        Just token ->
-            case state.stack of
-                Nothing ->
-                    finishProcessing <| TheState { state | lookingFor = Nothing }
-                Just (TheState parent) ->
-                    finishProcessing
-                        <| TheState
-                            { parent
-                                | result =
-                                  List.append
-                                      (List.reverse
-                                           <| (StringAtom <| tokenToString token)
-                                               :: state.result)
-                                      parent.result
-                            }
+finishProcessing (TheState st) =
+    let state = case st.linkBody of
+                    Nothing -> st
+                    Just atoms ->
+                        { st
+                            | result =
+                                List.append (List.reverse atoms) st.result
+                        }
+    in
+        case state.lookingFor of
+            Nothing ->
+                ListAtom <| List.reverse state.result
+            Just token ->
+                case state.stack of
+                    Nothing ->
+                        finishProcessing <| TheState { state | lookingFor = Nothing }
+                    Just (TheState parent) ->
+                        finishProcessing
+                            <| TheState { parent
+                                            | result =
+                                              List.concat
+                                              [ state.result
+                                              , [StringAtom <| tokenToString token]
+                                              , parent.result
+                                              ]
+                                        }
 
 pushStringOnResult : String -> State msg -> State msg
 pushStringOnResult string (TheState state) =
@@ -200,44 +361,67 @@ processToken token state =
     case token of
         StringToken string ->
             pushStringOnResult string state
-        SymbolToken symbol ->
-            case Dict.get symbol conversionDict of
+        SeparatorToken separator ->
+            case Dict.get separator conversionDict of
                 Nothing ->
-                    pushStringOnResult symbol state
+                    pushStringOnResult separator state
                 Just converter ->
                     converter token state
+        ImageToken ->
+            linkStartConverter token state
+        LinkMiddleToken ->
+            processLinkMiddle token state    
 
 tokenToString : Token -> String
 tokenToString token =
     case token of
         StringToken s -> s
-        SymbolToken s -> s
+        ImageToken -> "!["
+        LinkMiddleToken -> "]("
+        SeparatorToken s -> s
 
-symbols : List (Char)
-symbols =
-    [ '`', '_', '*', '\n' ]
+separators : List Char
+separators =
+    [ '`', '_', '*', '\n'
+    , '[', ')'
+    ]
 
-isSymbol : Char -> Bool
-isSymbol s =
-    List.member s symbols
+isSeparator : Char -> Bool
+isSeparator s =
+    List.member s separators
 
 type Token
-    = SymbolToken String
+    = ImageToken
+    | LinkMiddleToken
+    | SeparatorToken String
     | StringToken String
 
 stringParser : Parser Token
 stringParser =
     succeed StringToken
-        |= keep oneOrMore (\x -> not <| isSymbol x)
+        |= keep oneOrMore (\x -> not <| isSeparator x)
 
-symbolParser : Parser Token
-symbolParser =
-    succeed SymbolToken
-        |= keep (Exactly 1) isSymbol
+separatorParser : Parser Token
+separatorParser =
+    succeed SeparatorToken
+        |= keep (Exactly 1) isSeparator
+
+imageParser : Parser Token
+imageParser =
+    succeed (\_ -> ImageToken)
+        |= symbol "!["
+
+linkMiddleParser : Parser Token
+linkMiddleParser =
+    succeed (\_ -> LinkMiddleToken)
+        |= symbol "]("
 
 tokenParser : Parser Token
 tokenParser =
-    oneOf [ symbolParser, stringParser ]
+    oneOf [ imageParser
+          , linkMiddleParser
+          , separatorParser
+          , stringParser ]
 
 -- Tokenize a string into special characters and the strings between them.
 markdownParser : Parser (Atom msg)
