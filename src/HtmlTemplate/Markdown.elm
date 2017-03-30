@@ -150,11 +150,11 @@ linkStartConverter token (TheState state) =
         pushTokenOnResult token state
     else
         TheState
-        { state
-            | lookingFor = Just <| closeParenToken
-            , startingWith = Just token
-            , linkBody = Nothing
-            , stack = Just <| TheState state
+        { lookingFor = Just <| closeParenToken
+        , startingWith = Just token
+        , linkBody = Nothing
+        , stack = Just <| TheState state
+        , result = []
         }
 
 unzipUntil : ((StateRecord msg) -> Bool) -> StateRecord msg -> Maybe (StateRecord msg, List (StateRecord msg))
@@ -193,11 +193,15 @@ processLinkMiddle token (TheState state) =
             Nothing ->
                 pushTokenOnResult token state
             Just (startState, intermediates) ->
-                zip {startState
-                        | linkBody = Just <| List.reverse state.result
-                        , result = []
-                    }
-                    intermediates
+                let res = case state.result of
+                              [] -> [StringAtom ""] --marker for closeParenConverter
+                              r -> r
+                in
+                    zip { startState
+                            | linkBody = Just <| List.reverse res
+                            , result = []
+                        }
+                        intermediates
 
 processUrlResult : List (Atom msg) -> (String, Maybe String)
 processUrlResult atoms =
@@ -212,50 +216,58 @@ closeParenConverter token (TheState state) =
     if state.lookingFor /= Just closeParenToken then
         pushTokenOnResult token state
     else
-        let body = state.linkBody
-            (url, title) = processUrlResult state.result
+        let (url, title) = processUrlResult state.result
+            body = withDefault [] state.linkBody
         in
             let result =
-                    case state.startingWith of
-                        Nothing ->
-                            ListAtom
-                            <| List.append
-                                (List.reverse
-                                     <| withDefault [] state.linkBody
-                                )
-                                state.result
-                        Just ImageToken ->
-                            let (a, altTitle)
-                                    = processUrlResult
-                                      <| withDefault [] state.linkBody
-                                alt = case altTitle of
-                                          Nothing -> a
-                                          Just t -> t
-                            in
+                    if body == [] then
+                        ListAtom
+                            <| List.concat
+                                [ [ case state.startingWith of
+                                        Nothing -> StringAtom ""
+                                        Just t -> StringAtom <| tokenToString t
+                                  ]
+                                , state.result
+                                , [ StringAtom <| tokenToString token ]
+                                ]
+                    else
+                        case state.startingWith of
+                            Nothing ->
+                                ListAtom
+                                <| List.append
+                                    (List.reverse body)
+                                        state.result
+                            Just ImageToken ->
+                                let (a, altTitle) = processUrlResult body
+                                    alt = case altTitle of
+                                              Nothing -> a
+                                              Just t -> t
+                                in
+                                    RecordAtom
+                                    { tag = "img"
+                                    , attributes
+                                          = List.append
+                                            [ ("alt", StringAtom alt)
+                                            , ("src", StringAtom url)
+                                            ]
+                                          <| case title of
+                                                 Nothing -> []
+                                                 Just t ->
+                                                     [("title", StringAtom t)]
+                                    , body = []
+                                    }
+                            _ ->
                                 RecordAtom
-                                { tag = "img"
-                                , attributes = List.append
-                                               [ ("alt", StringAtom alt)
-                                               , ("src", StringAtom url)
-                                               ]
-                                               <| case title of
-                                                      Nothing -> []
-                                                      Just t ->
-                                                          [("title", StringAtom t)]
-                                , body = []
+                                { tag = "a"
+                                , attributes = case title of
+                                                   Nothing ->
+                                                       [ ("href", StringAtom url) ]
+                                                   Just t ->
+                                                       [ ("href", StringAtom url)
+                                                       , ("title", StringAtom t)
+                                                       ]
+                                , body = body
                                 }
-                        _ ->
-                            RecordAtom
-                            { tag = "a"
-                            , attributes = case title of
-                                               Nothing ->
-                                                   [ ("href", StringAtom url) ]
-                                               Just t ->
-                                                   [ ("href", StringAtom url)
-                                                   , ("title", StringAtom t)
-                                                   ]
-                            , body = state.result
-                            }
             in
                 TheState
                     <| case state.stack of
@@ -267,7 +279,9 @@ closeParenConverter token (TheState state) =
                                    , result = [result]
                                }
                            Just (TheState stack) ->
-                               { stack | result = result :: stack.result }
+                               { stack
+                                   | result = result :: stack.result
+                               }
 
 conversionDict : Dict String (Converter msg)
 conversionDict =
@@ -326,9 +340,13 @@ finishProcessing (TheState st) =
     let state = case st.linkBody of
                     Nothing -> st
                     Just atoms ->
+                        -- Need to work startingWith in here
                         { st
                             | result =
-                                List.append (List.reverse atoms) st.result
+                                List.concat [ st.result
+                                            , [StringAtom "]("]
+                                            ,  (List.reverse atoms)
+                                            ]
                         }
     in
         case state.lookingFor of
@@ -339,12 +357,16 @@ finishProcessing (TheState st) =
                     Nothing ->
                         finishProcessing <| TheState { state | lookingFor = Nothing }
                     Just (TheState parent) ->
-                        finishProcessing
+                        let opener = case state.startingWith of
+                                         Nothing -> token
+                                         Just t -> t
+                        in
+                            finishProcessing
                             <| TheState { parent
                                             | result =
                                               List.concat
                                               [ state.result
-                                              , [StringAtom <| tokenToString token]
+                                              , [StringAtom <| tokenToString opener]
                                               , parent.result
                                               ]
                                         }
@@ -384,6 +406,7 @@ separators : List Char
 separators =
     [ '`', '_', '*', '\n'
     , '[', ')'
+    , '(', ']'                  --these are here only so doubles will be eliminated.
     ]
 
 isSeparator : Char -> Bool

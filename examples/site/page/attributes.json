@@ -22,11 +22,25 @@
        ],
        ["4 * (1.1 + 2) = ", ["#*", 4, ["#+", 1.1, 2]]],
        ["#md",
-        "The image below illustrates implicit conversion of a plist to an `<img>` element.\n ",
-        "This sentence illustrates the `\"#md\"` macro's `code`, _italics_, and *bold*. ",
-        "Remember two formatting chars in a row is how to quote them: **foo**, __bar__, ``bletch``."
+        "This sentence illustrates the `\"#md\"` macro's `code`, _italics_, *bold*, and [*bold* _italic_ link](http://google.com/) features. ",
+        "Remember two formatting chars in a row is how to quote them: **foo**, __bar__, ``bletch``, ((gronk)), [[harumph]]."
        ],
-       {"src":"page/images/mountain-man-192x192.png"},
+       "The images below illustrate implicit conversion of a plist to an `<img>` element, and the `\"#md\"` image feature.\n ",
+       [{"src":"page/images/mountain-man-192x192.png"},
+        " ",
+        ["#md","![Mountain Man](page/images/mountain-man-192x192.png)"
+        ]
+       ],
+       ["Errors in links:",
+        ["ul",{},
+         [["li",{},["#md","[unclosed left square bracket"]],
+          ["li",{},["#md","[link text](but unclosed url"]],
+          ["li",{},["#md","Missing](left square bracket)"]],
+          ["li",{},["#md","[Missing middle)"]],
+          ["li",{},["#md","No start link at all)"]]
+         ]
+        ]
+       ],
        "The table below illustrates integer (\"colspan\") attribute values.",
        ["table",{"class":"bordered"},
         [["tr",{},
