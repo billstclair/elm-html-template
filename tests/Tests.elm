@@ -511,7 +511,7 @@ functionData =
       )
     , ( """
          ["#md","_[example](http://example.com/)_"]
-         """
+        """
       , Ok <|
           RecordAtom
           { tag = "i"
@@ -525,6 +525,28 @@ functionData =
                         }
                   ]
           }
+    )
+    , ( """
+         ["#md","[_example_](http://example.com/)"]
+        """
+      , Ok <|
+          RecordAtom
+          { tag = "a"
+          , attributes =
+                [("href",StringAtom "http://example.com/")]
+          , body = [ RecordAtom
+                         { tag = "i"
+                         , attributes = []
+                         , body = [StringAtom "example"]
+                         }
+                   ]
+          }
+    )
+    , ( """
+         ["#md","[_example](http://example.com/)"]
+        """
+      , Ok <|
+          StringAtom "[_example](http://example.com/)"
     )
     , ( """
          ["#md","![foo](foo.jpg)"]

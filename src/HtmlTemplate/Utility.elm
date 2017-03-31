@@ -54,7 +54,9 @@ mergeStrings atom =
             RecordAtom
             { tag = tag
             , attributes = List.map (\(k, v) -> (k, mergeStrings v)) attributes
-            , body = List.map mergeStrings body
+            , body = case mergeListStrings body of
+                         ListAtom l -> l
+                         a -> [a]
             }
         _ ->
             atom

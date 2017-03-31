@@ -83,6 +83,7 @@ pairedConverter wrapper token (TheState state) =
                          | stack = Just <| TheState state
                          , result = []
                          , lookingFor = Just token
+                         , startingWith = Nothing
                      }
         Just lookingFor ->
             if lookingFor == token then
@@ -93,6 +94,7 @@ pairedConverter wrapper token (TheState state) =
             else
                 TheState { state
                              | lookingFor = Just token
+                             , startingWith = Nothing
                              , result = []
                              , stack = Just <| TheState state
                          }
@@ -157,51 +159,20 @@ linkStartConverter token (TheState state) =
         , result = []
         }
 
-unzipUntil : ((StateRecord msg) -> Bool) -> StateRecord msg -> Maybe (StateRecord msg, List (StateRecord msg))
-unzipUntil predicate state =
-    let loop : StateRecord msg -> List (StateRecord msg) -> Maybe (StateRecord msg, List (StateRecord msg))
-        loop = (\s res ->
-                    if predicate s then
-                        Just (s, res)
-                    else
-                        case s.stack of
-                            Nothing ->
-                                Nothing
-                            Just (TheState nexts) ->
-                                loop nexts <| s :: res
-               )
-    in
-        loop state []
-
-zip : StateRecord msg -> List (StateRecord msg) -> State msg
-zip state states =
-    case states of
-        [] ->
-            TheState state
-        s :: rest ->
-            zip { s | stack = Just <| TheState state } rest
-
-isLinkStartState : StateRecord msg -> Bool
-isLinkStartState state =
-    state.lookingFor == Just closeParenToken
-
 processLinkMiddle : Token -> State msg -> State msg
 processLinkMiddle token (TheState state) =
-    let states = unzipUntil isLinkStartState state
-    in
-        case states of
-            Nothing ->
-                pushTokenOnResult token state
-            Just (startState, intermediates) ->
-                let res = case state.result of
-                              [] -> [StringAtom ""] --marker for closeParenConverter
-                              r -> r
-                in
-                    zip { startState
-                            | linkBody = Just <| List.reverse res
-                            , result = []
-                        }
-                        intermediates
+    if state.lookingFor /= Just closeParenToken then
+        pushTokenOnResult token state
+    else
+        let res = case state.result of
+                      [] -> [StringAtom ""] --marker for closeParenConverter
+                      r -> r
+        in
+            TheState
+            { state
+                | linkBody = Just <| List.reverse res
+                , result = []
+            }
 
 processUrlResult : List (Atom msg) -> (String, Maybe String)
 processUrlResult atoms =
@@ -358,7 +329,12 @@ finishProcessing (TheState st) =
             Just token ->
                 case state.stack of
                     Nothing ->
-                        finishProcessing <| TheState { state | lookingFor = Nothing }
+                        finishProcessing
+                        <| TheState
+                            { state
+                                | lookingFor = Nothing
+                                , startingWith = Nothing
+                            }
                     Just (TheState parent) ->
                         let opener = case state.startingWith of
                                          Nothing -> token
