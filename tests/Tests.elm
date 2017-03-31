@@ -487,34 +487,42 @@ functionData =
       , Ok <| IntAtom 2
       )
     , ( """
-         ["#md","*b*_i_`c`"]
+         ["#md","*em1*__strong1___em2_**strong2**`code`"]
         """
       , Ok <|
-          ListAtom
-                ( [RecordAtom
-                       { tag = "b",
-                         attributes = [],
-                         body = [StringAtom "b"]
-                       }
-                 , RecordAtom
-                       { tag = "i"
-                       , attributes = []
-                       , body = [StringAtom "i"]
-                       }
-                  , RecordAtom
-                       { tag = "code"
-                       , attributes = []
-                       , body = [StringAtom "c"]
-                       }
-                  ]
-                )
+          ListAtom [ RecordAtom
+                         { tag = "em",
+                               attributes = [],
+                               body = [StringAtom "em1"]
+                         }
+                   , RecordAtom
+                         { tag = "strong",
+                               attributes = [],
+                               body = [StringAtom "strong1"]
+                         }
+                   , RecordAtom
+                         { tag = "em"
+                         , attributes = []
+                         , body = [StringAtom "em2"]
+                         }
+                   , RecordAtom
+                         { tag = "strong"
+                         , attributes = []
+                         , body = [StringAtom "strong2"]
+                         }
+                   , RecordAtom
+                         { tag = "code"
+                         , attributes = []
+                         , body = [StringAtom "code"]
+                         }
+                   ]
       )
     , ( """
          ["#md","_[example](http://example.com/)_"]
         """
       , Ok <|
           RecordAtom
-          { tag = "i"
+          { tag = "em"
           , attributes = []
           , body
                 = [ RecordAtom
@@ -535,7 +543,7 @@ functionData =
           , attributes =
                 [("href",StringAtom "http://example.com/")]
           , body = [ RecordAtom
-                         { tag = "i"
+                         { tag = "em"
                          , attributes = []
                          , body = [StringAtom "example"]
                          }

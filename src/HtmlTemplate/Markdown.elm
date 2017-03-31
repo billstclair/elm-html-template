@@ -17,9 +17,10 @@ import HtmlTemplate.Utility as Utility
 
 import Maybe exposing (withDefault)
 import Dict exposing ( Dict )
+import Set exposing ( Set )
 import Parser exposing ( Parser, Error, Count(..)
                        , (|.), (|=)
-                       , oneOf, succeed, symbol, lazy, ignore, source
+                       , oneOf, andThen, succeed, fail, source
                        , zeroOrMore, oneOrMore, keep, repeat
                        )
 
@@ -55,16 +56,54 @@ type alias Converter msg =
 pairedConverters : List (String, Converter msg)
 pairedConverters =
     [ ( "`", backtickConverter )
-    , ( "_", underscoreConverter )
-    , ( "*", asteriskConverter )
+    , ( "_", emConverter )
+    , ( "*", emConverter )
+    , ( "__", strongConverter )
+    , ( "**", strongConverter )
     ]
+
+closeParen : String
+closeParen =
+    ")"
+
+imageStart : String
+imageStart =
+    "!["
+
+linkMiddle : String
+linkMiddle =
+    "]("
 
 unpairedConverters : List (String, Converter msg)
 unpairedConverters =
     [ ( "\n", newlineConverter )
     , ( "[", linkStartConverter )
-    , ( ")", closeParenConverter )
+    , ( imageStart, linkStartConverter )
+    , ( linkMiddle, processLinkMiddle )
+    , ( closeParen, closeParenConverter )
+    -- These don't do anything, but the first character
+    -- of any two-character symbol has to parse, so that
+    -- we'll stop on it when parsing non-symbol strings.
+    , ( "\\", stringConverter )
+    , ( "]", stringConverter )
+    , ( "!", stringConverter )
     ]
+
+backslashQuotedChars : List String
+backslashQuotedChars =
+    [ "\\", "`", "*", "_", "{", "}", "[", "]", "(", ")", "#", "+", "-", ".", "!" ]
+
+backslashConverters : List (String, Converter msg)
+backslashConverters =
+    List.map (\c -> ( "\\" ++ c, backslashQuotedConverter))
+        backslashQuotedChars
+
+allConverters : List (String, Converter msg)
+allConverters =
+    List.concat [ pairedConverters
+                , unpairedConverters
+                , backslashConverters
+                ]
 
 popStack : StateRecord msg -> StateRecord msg
 popStack state =
@@ -74,6 +113,15 @@ popStack state =
         Nothing ->
             -- Shouldn't happen
             { state | result = [] }
+
+backslashQuotedConverter : Converter msg
+backslashQuotedConverter token state =
+    pushStringOnResult
+    (String.dropLeft 1 <| tokenToString token) state
+
+stringConverter : Converter msg
+stringConverter token state =
+    pushStringOnResult (tokenToString token) state
 
 pairedConverter : ( List (Atom msg) -> Atom msg) -> Token -> State msg -> State msg
 pairedConverter wrapper token (TheState state) =
@@ -110,13 +158,13 @@ backtickConverter : Converter msg
 backtickConverter token state =
     pairedConverter (wrapTag "code") token state
 
-underscoreConverter : Converter msg
-underscoreConverter token state =
-    pairedConverter (wrapTag "i") token state
+emConverter : Converter msg
+emConverter token state =
+    pairedConverter (wrapTag "em") token state
 
-asteriskConverter : Converter msg
-asteriskConverter token state =
-    pairedConverter (wrapTag "b") token state
+strongConverter : Converter msg
+strongConverter token state =
+    pairedConverter (wrapTag "strong") token state
 
 pushAtomOnResult : Atom msg -> StateRecord msg -> State msg
 pushAtomOnResult atom state =
@@ -129,7 +177,7 @@ newlineConverter token (TheState state) =
 
 closeParenToken : Token
 closeParenToken =
-    SeparatorToken ")"
+    SymbolToken closeParen
 
 amLookingForCloseParen : StateRecord msg -> Bool
 amLookingForCloseParen state =
@@ -182,6 +230,48 @@ processUrlResult atoms =
         _ ->
             ("#", Just <| toString atoms)
 
+imageStartToken : Token
+imageStartToken =
+    SymbolToken imageStart
+
+makeImageRecord : List (Atom msg) -> String -> Maybe String -> Atom msg
+makeImageRecord body url title =
+    let (a, altTitle) = processUrlResult body
+        alt = case altTitle of
+                  Nothing -> a
+                  Just t -> t
+    in
+        RecordAtom
+        { tag = "img"
+        , attributes
+              = List.concat
+                [ [ ("src", StringAtom url) ]
+                , if alt == "" then
+                      []
+                  else
+                      [ ("alt", StringAtom alt) ]
+                , case title of
+                      Nothing -> []
+                      Just t ->
+                          [("title", StringAtom t)]
+                ]
+        , body = []
+        }
+
+makeLinkRecord : List (Atom msg) -> String -> Maybe String -> Atom msg
+makeLinkRecord body url title =
+    RecordAtom
+    { tag = "a"
+    , attributes = case title of
+                       Nothing ->
+                           [ ("href", StringAtom url) ]
+                       Just t ->
+                           [ ("href", StringAtom url)
+                           , ("title", StringAtom t)
+                           ]
+    , body = body
+    }
+
 closeParenConverter : Converter msg
 closeParenConverter token (TheState state) =
     if state.lookingFor /= Just closeParenToken then
@@ -208,40 +298,11 @@ closeParenConverter token (TheState state) =
                                 <| List.append
                                     (List.reverse body)
                                         state.result
-                            Just ImageToken ->
-                                let (a, altTitle) = processUrlResult body
-                                    alt = case altTitle of
-                                              Nothing -> a
-                                              Just t -> t
-                                in
-                                    RecordAtom
-                                    { tag = "img"
-                                    , attributes
-                                          = List.concat
-                                            [ [ ("src", StringAtom url) ]
-                                            , if alt == "" then
-                                                  []
-                                              else
-                                                  [ ("alt", StringAtom alt) ]
-                                            , case title of
-                                                 Nothing -> []
-                                                 Just t ->
-                                                     [("title", StringAtom t)]
-                                            ]
-                                    , body = []
-                                    }
-                            _ ->
-                                RecordAtom
-                                { tag = "a"
-                                , attributes = case title of
-                                                   Nothing ->
-                                                       [ ("href", StringAtom url) ]
-                                                   Just t ->
-                                                       [ ("href", StringAtom url)
-                                                       , ("title", StringAtom t)
-                                                       ]
-                                , body = body
-                                }
+                            Just token ->
+                                if token == imageStartToken then
+                                    makeImageRecord body url title
+                                else
+                                    makeLinkRecord body url title
             in
                 TheState
                     <| case state.stack of
@@ -259,10 +320,29 @@ closeParenConverter token (TheState state) =
 
 conversionDict : Dict String (Converter msg)
 conversionDict =
-    Dict.fromList
-        <| List.concat [ pairedConverters
-                       , unpairedConverters
-                       ]
+    Dict.fromList allConverters
+
+makeNCharSymbolSet : Int -> Set String
+makeNCharSymbolSet n =
+    List.map Tuple.first allConverters
+        |> List.filter (\s -> (n == 0) || (n == (String.length s)))
+        |> Set.fromList
+
+oneCharSymbolSet : Set String
+oneCharSymbolSet =
+    makeNCharSymbolSet 1
+
+twoCharSymbolSet : Set String
+twoCharSymbolSet =
+    makeNCharSymbolSet 2
+
+twoCharSymbols : List String
+twoCharSymbols =
+    Set.toList twoCharSymbolSet
+
+allSymbolSet : Set String
+allSymbolSet =
+    makeNCharSymbolSet 0
 
 initialState : State msg
 initialState =
@@ -274,32 +354,9 @@ initialState =
         , result = []
         }
 
--- Convert a tokenized string to the following:
--- "...`foo`..." -> ["code",{},["...foo..."]]
--- "..._foo_..." -> ["i",{},["...foo..."]]
--- "...*foo*..." -> ["b",{},["...foo..."]]
--- "...\n..." -> ["...",["br",{},[]],"..."],...]
 processTokens : List Token -> Atom msg
 processTokens tokens =
-    processLoop (doubleTokensToStrings tokens) initialState
-
-doubleTokensToStrings : List Token -> List Token
-doubleTokensToStrings strings =
-    let loop : List Token -> List Token -> List Token
-        loop = (\ss res ->
-                    case ss of
-                        [] ->
-                            List.reverse res
-                        (SeparatorToken s1) :: (SeparatorToken s2) :: rest ->
-                            if s1 == s2 then
-                                loop rest <| (StringToken s1) :: res
-                            else
-                                loop (List.drop 1 ss) <| (SeparatorToken s1) :: res
-                        head :: tail ->
-                            loop tail <| head :: res
-               )
-    in
-        loop strings []
+    processLoop tokens initialState
 
 processLoop : List Token -> State msg -> Atom msg
 processLoop tokens state =
@@ -318,7 +375,7 @@ finishProcessing (TheState st) =
                         { st
                             | result =
                                 List.concat [ st.result
-                                            , [StringAtom "]("]
+                                            , [StringAtom linkMiddle]
                                             ,  (List.reverse atoms)
                                             ]
                         }
@@ -362,67 +419,65 @@ processToken token state =
     case token of
         StringToken string ->
             pushStringOnResult string state
-        SeparatorToken separator ->
-            case Dict.get separator conversionDict of
+        SymbolToken symbol ->
+            case Dict.get symbol conversionDict of
                 Nothing ->
-                    pushStringOnResult separator state
+                    pushStringOnResult symbol state
                 Just converter ->
                     converter token state
-        ImageToken ->
-            linkStartConverter token state
-        LinkMiddleToken ->
-            processLinkMiddle token state    
 
 tokenToString : Token -> String
 tokenToString token =
     case token of
         StringToken s -> s
-        ImageToken -> "!["
-        LinkMiddleToken -> "]("
-        SeparatorToken s -> s
+        SymbolToken s -> s
 
-separators : List Char
-separators =
-    [ '`', '_', '*', '\n'
-    , '[', ')'
-    , '(', ']'                  --these are here only so doubles will be eliminated.
-    ]
+isOneCharSymbolChar : Char -> Bool
+isOneCharSymbolChar c =
+    Set.member (String.fromChar c) oneCharSymbolSet
 
-isSeparator : Char -> Bool
-isSeparator s =
-    List.member s separators
+isTwoCharSymbol : String -> Bool
+isTwoCharSymbol s =
+    Set.member s twoCharSymbolSet
 
 type Token
-    = ImageToken
-    | LinkMiddleToken
-    | SeparatorToken String
+    = SymbolToken String
     | StringToken String
 
 stringParser : Parser Token
 stringParser =
     succeed StringToken
-        |= keep oneOrMore (\x -> not <| isSeparator x)
+        |= keep oneOrMore (\x -> not <| isOneCharSymbolChar x)
 
-separatorParser : Parser Token
-separatorParser =
-    succeed SeparatorToken
-        |= keep (Exactly 1) isSeparator
+validateTwoCharSymbol : String -> Parser String
+validateTwoCharSymbol s =
+    if isTwoCharSymbol s then
+        succeed s
+    else
+        fail "Not a two-char symbol"
 
-imageParser : Parser Token
-imageParser =
-    succeed (\_ -> ImageToken)
-        |= symbol "!["
+symbolParser : Parser Token
+symbolParser =
+    oneOf [ twoCharSymbolParser
+          , oneCharSymbolParser
+          ]
 
-linkMiddleParser : Parser Token
-linkMiddleParser =
-    succeed (\_ -> LinkMiddleToken)
-        |= symbol "]("
+twoCharSymbolParser : Parser Token
+twoCharSymbolParser =
+    succeed SymbolToken
+        |= (Parser.source
+                <| oneOf
+                <| List.map Parser.symbol twoCharSymbols
+           )
+
+oneCharSymbolParser : Parser Token
+oneCharSymbolParser =
+    succeed SymbolToken
+        |= keep (Exactly 1) isOneCharSymbolChar
 
 tokenParser : Parser Token
 tokenParser =
-    oneOf [ imageParser
-          , linkMiddleParser
-          , separatorParser
+    oneOf [ symbolParser
           , stringParser ]
 
 -- Tokenize a string into special characters and the strings between them.
@@ -430,6 +485,7 @@ markdownParser : Parser (Atom msg)
 markdownParser =
     succeed processTokens
         |= repeat zeroOrMore tokenParser
+        |. Parser.end
 
 run : String -> Atom msg
 run string =

@@ -22,10 +22,10 @@
        ],
        ["4 * (1.1 + 2) = ", ["#*", 4, ["#+", 1.1, 2]]],
        ["#md",
-        "This sentence illustrates the `\"#md\"` macro's `code`, _italics_, *bold*, and [*bold* _italic_ link](http://google.com/) features. ",
-        "Remember two formatting chars in a row is how to quote them: **foo**, __bar__, ``bletch``, ((gronk)), [[harumph]]."
+        "This sentence illustrates the `\"#md\"` macro's `code`, _italics_, **bold**, and [**bold** _italic_ link](http://example.com/) features. ",
+        "Markdown quotes special characters with a backslash: \\*foo*, \\_bar_, \\`bletch`, \\[label](url).",
+        "\n\nThe images below illustrate implicit conversion of a plist to an `<img>` element, and the `\"#md\"` image feature."
        ],
-       "The images below illustrate implicit conversion of a plist to an `<img>` element, and the `\"#md\"` image feature.\n ",
        [{"src":"page/images/mountain-man-192x192.png"},
         " ",
         ["#md","![Mountain Man](page/images/mountain-man-192x192.png)"
