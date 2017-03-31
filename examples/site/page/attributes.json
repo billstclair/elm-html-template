@@ -31,16 +31,6 @@
         ["#md","![Mountain Man](page/images/mountain-man-192x192.png)"
         ]
        ],
-       ["Errors in links:",
-        ["ul",{},
-         [["li",{},["#md","[unclosed left square bracket"]],
-          ["li",{},["#md","[link text](but unclosed url"]],
-          ["li",{},["#md","Missing](left square bracket)"]],
-          ["li",{},["#md","[Missing middle)"]],
-          ["li",{},["#md","No start link at all)"]]
-         ]
-        ]
-       ],
        "The table below illustrates integer (\"colspan\") attribute values.",
        ["table",{"class":"bordered"},
         [["tr",{},

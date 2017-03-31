@@ -27,8 +27,8 @@ log = Debug.log
 
 mdFunction : List (Atom msg) -> d -> Atom msg
 mdFunction args _ =
-    -- Could flatten the list here, but it doesn't matter to rendering
-    Utility.walkAtom parseIfString <| ListAtom args
+    Utility.mergeStrings
+        <| Utility.walkAtom parseIfString <| ListAtom args
 
 parseIfString : Atom msg -> Atom msg
 parseIfString atom =
@@ -246,14 +246,17 @@ closeParenConverter token (TheState state) =
                                     RecordAtom
                                     { tag = "img"
                                     , attributes
-                                          = List.append
-                                            [ ("alt", StringAtom alt)
-                                            , ("src", StringAtom url)
-                                            ]
-                                          <| case title of
+                                          = List.concat
+                                            [ [ ("src", StringAtom url) ]
+                                            , if alt == "" then
+                                                  []
+                                              else
+                                                  [ ("alt", StringAtom alt) ]
+                                            , case title of
                                                  Nothing -> []
                                                  Just t ->
                                                      [("title", StringAtom t)]
+                                            ]
                                     , body = []
                                     }
                             _ ->

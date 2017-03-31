@@ -491,7 +491,6 @@ functionData =
         """
       , Ok <|
           ListAtom
-          ([ListAtom
                 ( [RecordAtom
                        { tag = "b",
                          attributes = [],
@@ -509,8 +508,79 @@ functionData =
                        }
                   ]
                 )
-           ])
-      )          
+      )
+    , ( """
+         ["#md","_[example](http://example.com/)_"]
+         """
+      , Ok <|
+          RecordAtom
+          { tag = "i"
+          , attributes = []
+          , body
+                = [ RecordAtom
+                        { tag = "a"
+                        , attributes =
+                              [("href",StringAtom "http://example.com/")]
+                        , body = [StringAtom "example"]
+                        }
+                  ]
+          }
+    )
+    , ( """
+         ["#md","![foo](foo.jpg)"]
+        """
+      , Ok <|
+          RecordAtom
+          { tag = "img"
+          , attributes =
+                [ ("src",StringAtom "foo.jpg")
+                , ("alt",StringAtom "foo")
+                ]
+          , body = []
+          }
+      )
+    , ( """
+         ["#md","![](foo.jpg)"]
+        """
+      , Ok <|
+          RecordAtom
+          { tag = "img"
+          , attributes =
+                [ ("src",StringAtom "foo.jpg")
+                ]
+          , body = []
+          }
+      )
+    , ( """
+         ["#md","[unclosed left square bracket"]
+        """
+      , Ok <|
+          StringAtom "[unclosed left square bracket"
+      )
+    , ( """
+         ["#md","[link text](but unclosed url"]
+        """
+      , Ok <|
+          StringAtom "[link text](but unclosed url"
+      )
+    , ( """
+         ["#md","Missing](left square bracket)"]
+        """
+      , Ok <|
+          StringAtom "Missing](left square bracket)"
+      )
+    , ( """
+         ["#md","[Missing middle)"]
+        """
+      , Ok <|
+          StringAtom "[Missing middle)"
+      )
+    , ( """
+         ["#md","No start link at all)"]
+        """
+      , Ok <|
+          StringAtom "No start link at all)"
+      )
     ]
 
 encodeDecode : String -> Atom msg
