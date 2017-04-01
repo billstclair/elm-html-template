@@ -377,9 +377,17 @@ initialState =
         , result = []
         }
 
+processCodeblocks : List Token -> List Token
+processCodeblocks tokens =
+    tokens                      
+
+processPreformatted : List Token -> List Token
+processPreformatted tokens =
+    tokens
+
 processTokens : List Token -> Atom msg
 processTokens tokens =
-    processLoop tokens initialState
+    processLoop (processPreformatted <| processCodeblocks tokens) initialState
 
 processLoop : List Token -> State msg -> Atom msg
 processLoop tokens state =
@@ -432,14 +440,23 @@ finishProcessing (TheState st) =
 
 pushStringOnResult : String -> State msg -> State msg
 pushStringOnResult string (TheState state) =
-    let result = state.result
-    in
-        TheState { state |
-                       result = (StringAtom string) :: result }
+    pushAtomOnResult (StringAtom string) state
+
+pushAtomOnState : Atom msg -> State msg -> State msg
+pushAtomOnState atom (TheState state) =
+    pushAtomOnResult atom state
 
 processToken : Token -> State msg -> State msg
 processToken token state =
     case token of
+        Preformatted string ->
+            pushAtomOnState
+                (wrapTag "pre" [wrapTag "code" [StringAtom string]])
+                state
+        Codeblock string ->
+            pushAtomOnState
+                (wrapTag "code" [StringAtom string])
+                state
         StringToken string ->
             pushStringOnResult string state
         SymbolToken symbol ->
@@ -454,6 +471,8 @@ tokenToString token =
     case token of
         StringToken s -> s
         SymbolToken s -> s
+        Preformatted s -> s
+        Codeblock s -> s
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
@@ -466,6 +485,8 @@ isTwoCharSymbol s =
 type Token
     = SymbolToken String
     | StringToken String
+    | Preformatted String
+    | Codeblock String
 
 stringParser : Parser Token
 stringParser =
