@@ -14,6 +14,8 @@ module HtmlTemplate.Markdown exposing ( mdFunction
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.Utility as Utility
+    exposing ( hasWhitespacePrefix, hasWhitespaceSuffix )
+
 
 import Maybe exposing (withDefault)
 import Dict exposing ( Dict )
@@ -134,11 +136,32 @@ pairedConverter wrapper token (TheState state) =
                          , startingWith = Nothing
                      }
         Just lookingFor ->
-            if lookingFor == token then
-                let atom = wrapper <| List.reverse state.result
-                    res = popStack state
-                in
-                    TheState { res | result = atom :: res.result }
+            if (lookingFor == token) &&
+                -- This detects whitespace after the starting token
+                (case List.reverse state.result of
+                     (StringAtom s) :: _ ->
+                         not <| hasWhitespacePrefix s
+                     _ -> True
+                )
+            then
+                if (case state.result of
+                        (StringAtom s) :: _ ->
+                            hasWhitespaceSuffix s
+                        _ -> False
+                   )
+                then
+                    -- The closing token has whitespace before it.
+                    TheState
+                        { state |
+                              result = (StringAtom <| tokenToString token)
+                                       :: state.result
+                        }
+                else
+                    -- It's the end of the pair. Wrap the body.
+                    let atom = wrapper <| List.reverse state.result
+                        res = popStack state
+                    in
+                        TheState { res | result = atom :: res.result }
             else
                 TheState { state
                              | lookingFor = Just token

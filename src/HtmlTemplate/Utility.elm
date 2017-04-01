@@ -11,6 +11,7 @@
 
 module HtmlTemplate.Utility exposing ( walkAtom
                                      , mergeStrings, mergeListStrings
+                                     , hasWhitespacePrefix, hasWhitespaceSuffix
                                      )
 
 import HtmlTemplate.Types exposing ( Atom(..) )
@@ -84,3 +85,11 @@ mergeListStrings list =
                            a :: l
                        _ ->
                            [ a, restAtom ]
+
+hasWhitespacePrefix : String -> Bool
+hasWhitespacePrefix s =
+    (String.trimLeft s) /= s
+
+hasWhitespaceSuffix : String -> Bool
+hasWhitespaceSuffix s =
+    (String.trimRight s) /= s

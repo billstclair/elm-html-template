@@ -1,5 +1,5 @@
 {"title":"Play",
- "ps":["Type JSON into the box below to see how it parses and evaluates."
+ "ps":["Type JSON or Markdown into the box below to see how it parses and evaluates. Anything not beginning with a left square bracket (\"[\") will be parsed as Markdown."
        , ["#playDiv"]
       ]
 }

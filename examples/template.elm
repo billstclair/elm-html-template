@@ -358,9 +358,20 @@ encode atom =
         else
             encodeAtom atom
 
+decodePlayString : String -> Result String (Atom msg)
+decodePlayString string =
+    if String.startsWith "[" string then
+        decodeAtom string
+    else
+        Ok
+        <| FuncallAtom
+            { function = "md"
+            , args = [ StringAtom string ]
+            }
+
 updatePlayString : String -> Model -> ( Model, Cmd Msg )
 updatePlayString string model =
-    let decode = decodeAtom string
+    let decode = decodePlayString string
         decodeString = case decode of
                            Err err ->
                                "Parse error: " ++ err

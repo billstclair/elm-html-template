@@ -518,6 +518,29 @@ functionData =
                    ]
       )
     , ( """
+         ["#md","* foo*bar*"]
+        """
+      , Ok <|
+          ListAtom
+              [ StringAtom "* foo"
+              , RecordAtom
+                  { tag = "em"
+                  , attributes = []
+                  , body = [ StringAtom "bar"]
+                  }
+              ]
+      )
+    , ( """
+         ["#md","*foo *bar*"]
+        """
+      , Ok <|
+          RecordAtom
+          { tag = "em"
+          , attributes = []
+          , body = [ StringAtom "foo *bar"]
+          }
+      )
+    , ( """
          ["#md","_[example](http://example.com/)_"]
         """
       , Ok <|
