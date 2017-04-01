@@ -1,3 +1,14 @@
+----------------------------------------------------------------------
+--
+-- template.elm
+-- Example for HtmlTemplate module.
+-- Copyright (c) 2017 Bill St. Clair <billstclair@gmail.com>
+-- Some rights reserved.
+-- Distributed under the MIT License
+-- See LICENSE.txt
+--
+----------------------------------------------------------------------
+
 module Main exposing (..)
 
 import HtmlTemplate exposing ( makeLoaders, insertFunctions, insertMessages
@@ -17,6 +28,9 @@ import HtmlTemplate exposing ( makeLoaders, insertFunctions, insertMessages
                              )
 
 import HtmlTemplate.Types exposing ( Loaders, Atom(..), Dicts )
+import HtmlTemplate.PlayDiv exposing ( PlayState, emptyPlayState
+                                     , playDivFunction, updatePlayState
+                                     )
 
 import Html exposing ( Html, Attribute
                      , div, p, text, a, textarea, pre
@@ -39,10 +53,7 @@ type alias Model =
     { loaders: Loaders Msg Extra
     , page: Maybe String
     , pendingPage : Maybe String
-    , playString : String
-    , parsedPlayString : String
-    , evaluatedPlayString : String
-    , renderedPlayString : Html Msg
+    , playState : PlayState Msg
     , error : Maybe String
     }
 
@@ -167,10 +178,7 @@ init =
                      { loaders = initialLoaders
                      , page = Nothing
                      , pendingPage = Just indexPage
-                     , playString = ""
-                     , parsedPlayString = ""
-                     , evaluatedPlayString = ""
-                     , renderedPlayString = text ""
+                     , playState = emptyPlayState
                      , error = Nothing
                      }
     in
@@ -345,57 +353,14 @@ pageFetchDone name loaders result model =
                 Ok loaders2 ->
                     continueLoading loaders2 model
 
-maxOneLineEncodeLength : Int
-maxOneLineEncodeLength =
-    60
-
-encode : Atom msg -> String
-encode atom =
-    let res = customEncodeAtom 0 atom
-    in
-        if String.length res <= maxOneLineEncodeLength then
-            res
-        else
-            encodeAtom atom
-
-decodePlayString : String -> Result String (Atom msg)
-decodePlayString string =
-    if String.startsWith "[" string then
-        decodeAtom string
-    else
-        Ok
-        <| FuncallAtom
-            { function = "md"
-            , args = [ StringAtom string ]
-            }
-
 updatePlayString : String -> Model -> ( Model, Cmd Msg )
 updatePlayString string model =
-    let decode = decodePlayString string
-        decodeString = case decode of
-                           Err err ->
-                               "Parse error: " ++ err
-                           Ok atom ->
-                               encode atom
-        evalString = case decode of
-                         Err _ ->
-                             ""
-                         Ok atom ->
-                             encode <| eval atom <| getDicts model.loaders
-        rendered = case decode of
-                       Err _ ->
-                           text ""
-                       Ok atom ->
-                           render atom model.loaders
-    in
-        ( { model
-              | playString = string
-              , parsedPlayString = decodeString
-              , evaluatedPlayString = evalString
-              , renderedPlayString = rendered
-          }
-        , Cmd.none
-        )
+    ( { model
+          | playState
+              = updatePlayState string model.loaders model.playState
+      }
+    , Cmd.none
+    )
 
 ---
 --- view
@@ -415,7 +380,9 @@ view model =
                   text ""
               Just page ->
                   let loaders = insertFunctions
-                                [ ( "playDiv", playDivFunction model ) ]
+                                [ ( "playDiv"
+                                  , playDivFunction
+                                      UpdatePlayString model.playState ) ]
                                 model.loaders                                      
                       template = pageTemplate
                       content = (LookupTemplateAtom
@@ -460,26 +427,3 @@ dictsDiv thing page loaders =
 br : Html Msg
 br =
     Html.br [] []
-
-playDiv : Model -> Html Msg
-playDiv model =
-    div []
-        [ textarea [ rows 8
-                   , cols 80
-                   , onInput UpdatePlayString
-                   ]
-              [ text model.playString ]
-        , p [] [ text "Parsed:" ]
-        , pre []
-            [ text model.parsedPlayString ]
-        , p [] [ text "Rendered:" ]
-        , div [ class "rendered" ]
-            [ model.renderedPlayString ]
-        , p [] [ text "Evaluated:" ]
-        , pre []
-            [ text model.evaluatedPlayString ]
-        ]
-
-playDivFunction : Model -> a -> b -> Atom Msg
-playDivFunction model _ _ =
-    HtmlAtom <| playDiv model
