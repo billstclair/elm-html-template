@@ -17,6 +17,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , parseTokens
                                       , processPreformatted
                                       , processLists
+                                      , processParagraphs
                                       , startOfList
                                       , processTokens
                                       )
@@ -540,13 +541,9 @@ processPreformatted tokens =
                 _ ->
                   lines
 
-isSpaces : Token -> Bool
-isSpaces token =
-    case token of
-        StringToken s ->
-            String.all (\c -> c == ' ') s
-        _ ->
-            False
+isSpaces : String -> Bool
+isSpaces string =
+    String.all (\c -> c == ' ') string
 
 startsWith : String -> Token -> Bool
 startsWith prefix token =
@@ -556,8 +553,8 @@ startsWith prefix token =
         _ ->
             False
 
-isListToken : Token -> Bool
-isListToken token =
+isListStartToken : Token -> Bool
+isListStartToken token =
     case token of
         SymbolToken s ->
             List.member s [ "*", "+", "-" ]
@@ -578,49 +575,46 @@ tokenLength : Token -> Int
 tokenLength token =
     String.length <| tokenToString token
 
-countLeadingSpaces : Token -> (Int, String)
-countLeadingSpaces token =
-    case token of
-        StringToken s ->
-            let loop = (\count tail ->
-                            if String.startsWith " " tail then
-                                loop (count+1) <| String.dropLeft 1 tail
-                            else
-                                (count, tail)
-                       )
-            in
-                loop 0 s
-        _ ->
-            (0, "")
+countLeadingSpaces : String -> (Int, String)
+countLeadingSpaces string =
+    let loop = (\count tail ->
+                    if String.startsWith " " tail then
+                        loop (count+1) <| String.dropLeft 1 tail
+                    else
+                        (count, tail)
+               )
+    in
+        loop 0 string
     
-startOfList : List Token -> Maybe ListRecord
+startOfList : List Token -> Maybe (Bool, ListRecord)
 startOfList line =
-    let package = (\startLen token afterSpace tail ->
-                       if (isListToken token)
-                           && (startsWith " " afterSpace)
+    let package : Int -> Token -> String -> List Token -> Maybe (Bool, ListRecord)
+        package = (\startLen token afterSpace tail ->
+                       if (isListStartToken token)
+                           && (String.startsWith " " afterSpace)
                        then
                            let (afterLen, afterString) =
                                    countLeadingSpaces afterSpace
                            in
-                               Just { isNumeric = isNumberDot token
-                                    , indent = startLen
-                                    , textIndent = startLen
-                                                   + (tokenLength token)
-                                                   + afterLen
-                                    , parentIndent = Nothing
-                                    , lines = [ (StringToken afterString) :: tail ]
-                                    }
+                               Just ( isNumberDot token
+                                    , { indent = startLen
+                                      , textIndent = startLen
+                                                     + (tokenLength token)
+                                                     + afterLen
+                                      , lines = [ (StringToken afterString) :: tail ]
+                                      }
+                                    )
                        else
                            Nothing
                   )
     in
         case line of
-            startSpace :: token :: afterSpace :: tail ->
-                if (isSpaces startSpace) then
-                    package (tokenLength startSpace) token afterSpace tail
+            (StringToken startString) :: token :: (StringToken afterSpace) :: tail ->
+                if (isSpaces startString) then
+                    package (String.length startString) token afterSpace tail
                 else
                     Nothing
-            token :: afterSpace :: tail ->
+            token :: (StringToken afterSpace) :: tail ->
                 package 0 token afterSpace tail
             _ ->
                 Nothing
@@ -628,28 +622,29 @@ startOfList line =
 countLeadingLineSpaces : List Token -> (Int, String)
 countLeadingLineSpaces line =
     case line of
-        [] ->
+        (StringToken string) :: _ ->
+            countLeadingSpaces string
+        _ ->
             (0, "")
-        token :: _ ->
-            countLeadingSpaces token
+            
 
-fillListRecord :  ListRecord -> List (List Token) -> (List ListRecord, List (List Token))
-fillListRecord record lines =
+fillListRecord :  Bool -> ListRecord -> List (List Token) -> (List ListRecord, List (List Token))
+fillListRecord isNumeric record lines =
     let loop : ListRecord -> List (List Token) -> List ListRecord -> (List ListRecord, List (List Token))
         loop = (\rec lines recs ->
                     case lines of
                         [] ->
-                            (rec :: (List.reverse recs), [])
+                            (List.reverse <| rec :: recs, [])
                         [] :: line :: tail ->
                             case startOfList line of
-                                Just subrec ->
-                                    handleSubrec subrec lines tail rec recs
+                                Just (numeric, subrec) ->
+                                    handleSubrec numeric subrec lines tail rec recs
                                 Nothing ->
                                     handleLine True rec line lines tail recs
                         line :: tail ->
                             case startOfList line of
-                                Just subrec ->
-                                    handleSubrec subrec lines tail rec recs
+                                Just (numeric, subrec) ->
+                                    handleSubrec numeric subrec lines tail rec recs
                                 Nothing ->
                                     handleLine False rec line lines tail recs
                )
@@ -672,25 +667,26 @@ fillListRecord record lines =
                                       tail
                                       recs
                                    else
-                                       ( rec :: (List.reverse recs)
+                                       ( List.reverse <| rec :: recs
                                        , lines
                                        )
                      )                      
-        handleSubrec : ListRecord -> List (List Token) -> List (List Token) -> ListRecord -> List ListRecord -> (List ListRecord, List (List Token))
-        handleSubrec = (\subrec lines tail rec recs ->
+        handleSubrec : Bool -> ListRecord -> List (List Token) -> List (List Token) -> ListRecord -> List ListRecord -> (List ListRecord, List (List Token))
+        handleSubrec = (\numeric subrec lines tail rec recs ->
                             if subrec.indent < rec.indent then
-                                (rec :: (List.reverse recs), lines)
+                                (List.reverse <| rec :: recs, lines)
                             else if subrec.indent < (rec.indent + 2) then
-                                if subrec.isNumeric == rec.isNumeric then
+                                if isNumeric == numeric then
                                     loop subrec tail (rec :: recs)
                                 else
-                                    (rec :: (List.reverse recs), lines)
+                                    (List.reverse <| rec :: recs, lines)
                             else
-                                let (lis, rest) = fillListRecord subrec tail
+                                let (lis, rest) = fillListRecord
+                                                  numeric subrec tail
                                 in
                                     loop { rec | lines = List.append
                                                rec.lines
-                                               [[ ListToken lis ]]
+                                               [[ ListToken numeric lis ]]
                                          }
                                         rest
                                         recs
@@ -708,11 +704,13 @@ processLists lines =
                             case startOfList line of
                                 Nothing ->
                                     loop tail <| line :: res
-                                Just listRecord ->
+                                Just (isNumeric, listRecord) ->
                                     let (records, rest) =
-                                            fillListRecord listRecord tail
+                                            fillListRecord isNumeric listRecord tail
                                     in
-                                        loop rest <| [ ListToken records ] :: res
+                                        loop rest
+                                            <| [ ListToken isNumeric records ]
+                                                :: res
                )
     in
         loop lines []
@@ -942,9 +940,9 @@ pushAtomOnState : Atom msg -> State msg -> State msg
 pushAtomOnState atom (TheState state) =
     pushAtomOnResult atom state
 
-processList : List ListRecord -> State msg -> State msg
-processList records state =
-    pushStringOnState (tokenToString <| ListToken records) state
+processList : Bool -> List ListRecord -> State msg -> State msg
+processList isNumeric records state =
+    pushStringOnState (tokenToString <| ListToken isNumeric records) state
 
 processToken : Token -> State msg -> State msg
 processToken token state =
@@ -959,8 +957,8 @@ processToken token state =
                 state
         NumberDot string ->
             pushStringOnState string state
-        ListToken records ->
-            processList records state
+        ListToken isNumeric records ->
+            processList isNumeric records state
         Newline ->
             pushAtomOnState (wrapTag "br" []) state
         Backticks _ ->
@@ -986,12 +984,8 @@ tokenToString token =
         Codeblock s -> s
         NumberDot s ->
             s
-        ListToken records ->
-            listRecordsToString records
-
-listRecordsToString : List ListRecord -> String
-listRecordsToString records =
-    toString <| ListToken records
+        ListToken _ _ ->
+            toString token
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
@@ -1015,13 +1009,11 @@ type Token
     | Preformatted String
     | Codeblock String
     | NumberDot String
-    | ListToken (List ListRecord)
+    | ListToken Bool (List ListRecord)
 
 type alias ListRecord =
-    { isNumeric : Bool
-    , indent : Int
+    { indent : Int
     , textIndent : Int
-    , parentIndent : Maybe Int
     , lines : List (List Token)
     }
 
