@@ -24,13 +24,14 @@ import HtmlTemplate.Utility as Utility
     exposing ( hasWhitespacePrefix, hasWhitespaceSuffix )
 
 
+import Char
 import Maybe exposing (withDefault)
 import Dict exposing ( Dict )
 import Set exposing ( Set )
 import Parser exposing ( Parser, Error, Count(..)
                        , (|.), (|=)
                        , oneOf, andThen, succeed, fail, source
-                       , zeroOrMore, oneOrMore, keep, repeat, keyword
+                       , zeroOrMore, oneOrMore, keep, ignore, repeat, keyword
                        )
 
 log = Debug.log
@@ -782,6 +783,8 @@ processToken token state =
             pushAtomOnState
                 (wrapTag "code" [StringAtom string])
                 state
+        NumberDot string ->
+            pushStringOnState string state
         ListToken records ->
             processList records state
         Newline ->
@@ -807,6 +810,8 @@ tokenToString token =
             String.repeat count "`"
         Preformatted s -> s
         Codeblock s -> s
+        NumberDot s ->
+            s
         ListToken records ->
             listRecordToString records
 
@@ -816,7 +821,7 @@ listRecordToString records =
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
-    ( List.member c ['\n', '`'] )
+    ( List.member c ['\n', '`', '+', '-'] )
     || (Set.member (String.fromChar c) oneCharSymbolSet)
 
 isTwoCharSymbol : String -> Bool
@@ -830,6 +835,7 @@ type Token
     | Newline
     | Preformatted String
     | Codeblock String
+    | NumberDot String
     | ListToken (List ListRecord)
 
 type alias ListRecord =
@@ -881,9 +887,19 @@ backtickParser =
     succeed Backticks
         |= Parser.map List.length (repeat oneOrMore <| keyword "`")
 
+numberDotParser : Parser Token
+numberDotParser =
+    succeed NumberDot
+        |= source
+           (Parser.delayedCommit
+                (ignore oneOrMore Char.isDigit)
+                (ignore (Exactly 1) (\c -> c == '.'))
+           )
+
 tokenParser : Parser Token
 tokenParser =
     oneOf [ backtickParser
+          , numberDotParser
           , symbolParser
           , stringParser ]
 
