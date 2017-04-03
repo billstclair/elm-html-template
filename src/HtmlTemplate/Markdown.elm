@@ -593,7 +593,6 @@ countLeadingSpaces token =
         _ ->
             (0, "")
     
-
 startOfList : List Token -> Maybe ListRecord
 startOfList line =
     let package = (\startLen token afterSpace tail ->
@@ -607,7 +606,8 @@ startOfList line =
                                     , indent = startLen
                                     , textIndent = startLen
                                                    + (tokenLength token)
-                                          + afterLen
+                                                   + afterLen
+                                    , parentIndent = Nothing
                                     , lines = [ (StringToken afterString) :: tail ]
                                     }
                        else
@@ -625,9 +625,97 @@ startOfList line =
             _ ->
                 Nothing
 
+countLeadingLineSpaces : List Token -> (Int, String)
+countLeadingLineSpaces line =
+    case line of
+        [] ->
+            (0, "")
+        token :: _ ->
+            countLeadingSpaces token
+
+fillListRecord :  ListRecord -> List (List Token) -> (List ListRecord, List (List Token))
+fillListRecord record lines =
+    let loop : ListRecord -> List (List Token) -> List ListRecord -> (List ListRecord, List (List Token))
+        loop = (\rec lines recs ->
+                    case lines of
+                        [] ->
+                            (rec :: (List.reverse recs), [])
+                        [] :: line :: tail ->
+                            case startOfList line of
+                                Just subrec ->
+                                    handleSubrec subrec lines tail rec recs
+                                Nothing ->
+                                    handleLine True rec line lines tail recs
+                        line :: tail ->
+                            case startOfList line of
+                                Just subrec ->
+                                    handleSubrec subrec lines tail rec recs
+                                Nothing ->
+                                    handleLine False rec line lines tail recs
+               )
+        handleLine : Bool -> ListRecord -> (List Token) -> List (List Token) -> List (List Token) -> List ListRecord -> (List ListRecord, List (List Token))
+        handleLine = (\addBlank rec line lines tail recs ->
+                          let (indent, _) = countLeadingLineSpaces line
+                          in
+                              if line == [] then
+                                  loop rec ([] :: tail) recs
+                              else if indent >= rec.textIndent then
+                                  loop { rec
+                                           | lines =
+                                               List.append
+                                                   rec.lines
+                                                   <| if addBlank then
+                                                          [ [], line ]
+                                                      else
+                                                          [ line ]
+                                       }
+                                      tail
+                                      recs
+                                   else
+                                       ( rec :: (List.reverse recs)
+                                       , lines
+                                       )
+                     )                      
+        handleSubrec : ListRecord -> List (List Token) -> List (List Token) -> ListRecord -> List ListRecord -> (List ListRecord, List (List Token))
+        handleSubrec = (\subrec lines tail rec recs ->
+                            if subrec.indent < rec.indent then
+                                (rec :: (List.reverse recs), lines)
+                            else if subrec.indent < (rec.indent + 2) then
+                                if subrec.isNumeric == rec.isNumeric then
+                                    loop subrec tail (rec :: recs)
+                                else
+                                    (rec :: (List.reverse recs), lines)
+                            else
+                                let (lis, rest) = fillListRecord subrec tail
+                                in
+                                    loop { rec | lines = List.append
+                                               rec.lines
+                                               [[ ListToken lis ]]
+                                         }
+                                        rest
+                                        recs
+                       )
+    in
+        loop record lines []                        
+                        
 processLists : List (List Token) -> List (List Token)
 processLists lines =
-    lines
+    let loop = (\lines res ->
+                    case lines of
+                        [] ->
+                            List.reverse res
+                        line :: tail ->
+                            case startOfList line of
+                                Nothing ->
+                                    loop tail <| line :: res
+                                Just listRecord ->
+                                    let (records, rest) =
+                                            fillListRecord listRecord tail
+                                    in
+                                        loop rest <| [ ListToken records ] :: res
+               )
+    in
+        loop lines []
 
 backtickToken : Token
 backtickToken =
@@ -899,11 +987,11 @@ tokenToString token =
         NumberDot s ->
             s
         ListToken records ->
-            listRecordToString records
+            listRecordsToString records
 
-listRecordToString : List ListRecord -> String
-listRecordToString records =
-    toString records
+listRecordsToString : List ListRecord -> String
+listRecordsToString records =
+    toString <| ListToken records
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
@@ -933,6 +1021,7 @@ type alias ListRecord =
     { isNumeric : Bool
     , indent : Int
     , textIndent : Int
+    , parentIndent : Maybe Int
     , lines : List (List Token)
     }
 
