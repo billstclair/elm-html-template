@@ -24,6 +24,7 @@ entities =
              )
         [ ( "nbsp", 160 )        -- \u00A0
         , ( "copyright", 169 )   -- \u00A9
+        , ( "copy", 169 )        -- \u00A9
         , ( "checkmark", 10004 ) -- \u2714
     ]
 

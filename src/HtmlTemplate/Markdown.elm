@@ -13,16 +13,11 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       -- For debugging. Remove before ship.
                                       , run, markdownParser
                                       , Token(..)
-                                      , elideLeadingWhitespace
-                                      , convertTabsToSpaces
-                                      , preformatLine
-                                      , processCodeblocks
                                       , splitIntoLines
-                                      , separateFirstLine
-                                      , processPreformatted
-                                      , processParagraphs
-                                      , processTokens
                                       , parseTokens
+                                      , processPreformatted
+                                      , processLists
+                                      , processTokens
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.Utility as Utility
@@ -543,6 +538,10 @@ processPreformatted tokens =
                 _ ->
                   lines
 
+processLists : List (List Token) -> List (List Token)
+processLists lines =
+    lines
+
 backtickToken : Token
 backtickToken =
     SymbolToken "`"
@@ -643,7 +642,9 @@ elideLeadingWhitespace tokens =
 
 processTokens : List Token -> Atom msg
 processTokens tokens =
-    processParagraphs <| processPreformatted tokens
+    processPreformatted tokens
+        |> processLists
+        |> processParagraphs
 
 getParagraph : List (List Token) -> (Maybe (Atom msg), List (List Token))
 getParagraph lines =
@@ -766,6 +767,10 @@ pushAtomOnState : Atom msg -> State msg -> State msg
 pushAtomOnState atom (TheState state) =
     pushAtomOnResult atom state
 
+processList : List ListRecord -> State msg -> State msg
+processList records state =
+    pushStringOnState (tokenToString <| ListToken records) state
+
 processToken : Token -> State msg -> State msg
 processToken token state =
     case token of
@@ -777,6 +782,8 @@ processToken token state =
             pushAtomOnState
                 (wrapTag "code" [StringAtom string])
                 state
+        ListToken records ->
+            processList records state
         Newline ->
             pushAtomOnState (wrapTag "br" []) state
         Backticks _ ->
@@ -800,6 +807,12 @@ tokenToString token =
             String.repeat count "`"
         Preformatted s -> s
         Codeblock s -> s
+        ListToken records ->
+            listRecordToString records
+
+listRecordToString : List ListRecord -> String
+listRecordToString records =
+    toString records
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
@@ -817,6 +830,14 @@ type Token
     | Newline
     | Preformatted String
     | Codeblock String
+    | ListToken (List ListRecord)
+
+type alias ListRecord =
+    { isNumeric : Bool
+    , indent : Int
+    , textIndent : Int
+    , lines : List (List Token)
+    }
 
 stringParser : Parser Token
 stringParser =
