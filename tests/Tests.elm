@@ -229,6 +229,21 @@ functionTest ( json, expected ) =
                         err
         )
 
+fullTag : String -> List (String, Atom msg) -> List (Atom msg) -> Atom msg
+fullTag tag attributes body =
+    RecordAtom { tag = tag
+               , attributes = attributes
+               , body = body
+               }
+
+tagWrap : String -> List (Atom msg) -> Atom msg
+tagWrap tag body =
+    fullTag tag [] body
+
+pWrap : List (Atom msg) -> Atom msg
+pWrap body =
+    tagWrap "p" body
+
 functionData : List ( String, Result String (Atom msg) )
 functionData =
     [ ( """
@@ -490,149 +505,116 @@ functionData =
          ["#md","*em1*__strong1___em2_**strong2**`code`"]
         """
       , Ok <|
-          ListAtom [ RecordAtom
-                         { tag = "em",
-                               attributes = [],
-                               body = [StringAtom "em1"]
-                         }
-                   , RecordAtom
-                         { tag = "strong",
-                               attributes = [],
-                               body = [StringAtom "strong1"]
-                         }
-                   , RecordAtom
-                         { tag = "em"
-                         , attributes = []
-                         , body = [StringAtom "em2"]
-                         }
-                   , RecordAtom
-                         { tag = "strong"
-                         , attributes = []
-                         , body = [StringAtom "strong2"]
-                         }
-                   , RecordAtom
-                         { tag = "code"
-                         , attributes = []
-                         , body = [StringAtom "code"]
-                         }
-                   ]
+          pWrap [ tagWrap "em" [StringAtom "em1"]
+                , tagWrap "strong" [StringAtom "strong1"]
+                , tagWrap "em" [StringAtom "em2"]
+                , tagWrap "strong" [StringAtom "strong2"]
+                , tagWrap "code" [StringAtom "code"]
+                ]
       )
     , ( """
          ["#md","* foo*bar*"]
         """
       , Ok <|
-          ListAtom
+          pWrap
               [ StringAtom "* foo"
-              , RecordAtom
-                  { tag = "em"
-                  , attributes = []
-                  , body = [ StringAtom "bar"]
-                  }
+              , tagWrap "em" [ StringAtom "bar"]
               ]
       )
     , ( """
          ["#md","*foo *bar*"]
         """
       , Ok <|
-          RecordAtom
-          { tag = "em"
-          , attributes = []
-          , body = [ StringAtom "foo *bar"]
-          }
+          pWrap
+              [ tagWrap "em" [ StringAtom "foo *bar"]
+              ]
       )
     , ( """
          ["#md","_[example](http://example.com/)_"]
         """
       , Ok <|
-          RecordAtom
-          { tag = "em"
-          , attributes = []
-          , body
-                = [ RecordAtom
-                        { tag = "a"
-                        , attributes =
-                              [("href",StringAtom "http://example.com/")]
-                        , body = [StringAtom "example"]
-                        }
-                  ]
-          }
-    )
+          pWrap
+              [ tagWrap "em"
+                    [ fullTag "a"
+                          [("href",StringAtom "http://example.com/")]
+                          [StringAtom "example"]
+                    ]
+              ]
+      )
     , ( """
          ["#md","[_example_](http://example.com/)"]
         """
       , Ok <|
-          RecordAtom
-          { tag = "a"
-          , attributes =
-                [("href",StringAtom "http://example.com/")]
-          , body = [ RecordAtom
-                         { tag = "em"
-                         , attributes = []
-                         , body = [StringAtom "example"]
-                         }
-                   ]
-          }
-    )
+          pWrap
+              [ fullTag "a"
+                    [("href",StringAtom "http://example.com/")]
+                    [ tagWrap "em" [StringAtom "example"]
+                    ]
+              ]
+      )
     , ( """
          ["#md","[_example](http://example.com/)"]
         """
       , Ok <|
-          StringAtom "[_example](http://example.com/)"
-    )
+          pWrap [ StringAtom "[_example](http://example.com/)" ]
+      )
     , ( """
          ["#md","![foo](foo.jpg)"]
         """
       , Ok <|
-          RecordAtom
-          { tag = "img"
-          , attributes =
-                [ ("src",StringAtom "foo.jpg")
-                , ("alt",StringAtom "foo")
-                ]
-          , body = []
-          }
+          pWrap
+              [ fullTag "img"
+                    [ ("src",StringAtom "foo.jpg")
+                    , ("alt",StringAtom "foo")
+                    ]
+                    []
+              ]
       )
     , ( """
          ["#md","![](foo.jpg)"]
         """
       , Ok <|
-          RecordAtom
-          { tag = "img"
-          , attributes =
-                [ ("src",StringAtom "foo.jpg")
-                ]
-          , body = []
-          }
+          pWrap
+              [ fullTag "img"
+                    [ ("src",StringAtom "foo.jpg")
+                    ]
+                    []
+              ]
       )
     , ( """
          ["#md","[unclosed left square bracket"]
         """
       , Ok <|
-          StringAtom "[unclosed left square bracket"
+          pWrap
+              [ StringAtom "[unclosed left square bracket" ]
       )
     , ( """
          ["#md","[link text](but unclosed url"]
         """
       , Ok <|
-          StringAtom "[link text](but unclosed url"
+          pWrap
+              [ StringAtom "[link text](but unclosed url" ]
       )
     , ( """
          ["#md","Missing](left square bracket)"]
         """
       , Ok <|
-          StringAtom "Missing](left square bracket)"
+          pWrap
+              [ StringAtom "Missing](left square bracket)" ]
       )
     , ( """
          ["#md","[Missing middle)"]
         """
       , Ok <|
-          StringAtom "[Missing middle)"
+          pWrap
+              [ StringAtom "[Missing middle)" ]
       )
     , ( """
          ["#md","No start link at all)"]
         """
       , Ok <|
-          StringAtom "No start link at all)"
+          pWrap
+              [ StringAtom "No start link at all)" ]
       )
     ]
 

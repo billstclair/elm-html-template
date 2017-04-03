@@ -69,7 +69,7 @@ mergeListStrings list =
         [] ->
             ListAtom []
         [a] ->
-            a
+            mergeStrings a
         (StringAtom s1) :: (StringAtom s2) :: rest ->
             mergeListStrings <| (StringAtom <| s1 ++ s2) :: rest
         (ListAtom s1) :: (ListAtom s2) :: rest ->
@@ -77,14 +77,18 @@ mergeListStrings list =
         (ListAtom s) :: rest ->
             mergeListStrings <| List.append s rest
         a :: rest ->
-            let restAtom = mergeListStrings rest
+            let ma = mergeStrings a
+                restAtom = mergeListStrings rest
+                l = case restAtom of
+                        ListAtom l ->
+                            ma :: l
+                        _ ->
+                            [ ma, restAtom ]
             in
-                ListAtom
-                <| case restAtom of
-                       ListAtom l ->
-                           a :: l
-                       _ ->
-                           [ a, restAtom ]
+                if l == list then
+                    ListAtom l
+                else
+                    mergeListStrings l
 
 hasWhitespacePrefix : String -> Bool
 hasWhitespacePrefix s =

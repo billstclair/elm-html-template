@@ -92,7 +92,7 @@ import HtmlTemplate.Types exposing
     , LoadersRecord, AttributeFunction(..)
     )
 
-import HtmlTemplate.Markdown exposing ( mdFunction )
+import HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction )
 
 import HtmlTemplate.Entities as Entities
 
@@ -1540,6 +1540,7 @@ defaultFunctionsDict =
                   , ( "log", logFunction )
                   , ( "--", commentFunction )
                   , ( "md", mdFunction )
+                  , ( "mdnp", mdnpFunction )
                   ]
 
 defaultDelayedBindingsFunctions : Set String
