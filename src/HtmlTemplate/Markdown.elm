@@ -17,6 +17,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , parseTokens
                                       , processPreformatted
                                       , processLists
+                                      , startOfList
                                       , processTokens
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
@@ -539,6 +540,91 @@ processPreformatted tokens =
                 _ ->
                   lines
 
+isSpaces : Token -> Bool
+isSpaces token =
+    case token of
+        StringToken s ->
+            String.all (\c -> c == ' ') s
+        _ ->
+            False
+
+startsWith : String -> Token -> Bool
+startsWith prefix token =
+    case token of
+        StringToken s ->
+            String.startsWith prefix s
+        _ ->
+            False
+
+isListToken : Token -> Bool
+isListToken token =
+    case token of
+        SymbolToken s ->
+            List.member s [ "*", "+", "-" ]
+        NumberDot _ ->
+            True
+        _ ->
+            False        
+
+isNumberDot : Token -> Bool
+isNumberDot token =
+    case token of
+        NumberDot _ ->
+            True
+        _ ->
+            False
+
+tokenLength : Token -> Int
+tokenLength token =
+    String.length <| tokenToString token
+
+countLeadingSpaces : Token -> (Int, String)
+countLeadingSpaces token =
+    case token of
+        StringToken s ->
+            let loop = (\count tail ->
+                            if String.startsWith " " tail then
+                                loop (count+1) <| String.dropLeft 1 tail
+                            else
+                                (count, tail)
+                       )
+            in
+                loop 0 s
+        _ ->
+            (0, "")
+    
+
+startOfList : List Token -> Maybe ListRecord
+startOfList line =
+    let package = (\startLen token afterSpace tail ->
+                       if (isListToken token)
+                           && (startsWith " " afterSpace)
+                       then
+                           let (afterLen, afterString) =
+                                   countLeadingSpaces afterSpace
+                           in
+                               Just { isNumeric = isNumberDot token
+                                    , indent = startLen
+                                    , textIndent = startLen
+                                                   + (tokenLength token)
+                                          + afterLen
+                                    , lines = [ (StringToken afterString) :: tail ]
+                                    }
+                       else
+                           Nothing
+                  )
+    in
+        case line of
+            startSpace :: token :: afterSpace :: tail ->
+                if (isSpaces startSpace) then
+                    package (tokenLength startSpace) token afterSpace tail
+                else
+                    Nothing
+            token :: afterSpace :: tail ->
+                package 0 token afterSpace tail
+            _ ->
+                Nothing
+
 processLists : List (List Token) -> List (List Token)
 processLists lines =
     lines
@@ -824,6 +910,11 @@ isOneCharSymbolChar c =
     ( List.member c ['\n', '`', '+', '-'] )
     || (Set.member (String.fromChar c) oneCharSymbolSet)
 
+isStringChar : Char -> Bool
+isStringChar char =
+    not <| isOneCharSymbolChar char
+        || (Char.isDigit char)
+
 isTwoCharSymbol : String -> Bool
 isTwoCharSymbol s =
     Set.member s twoCharSymbolSet
@@ -848,7 +939,7 @@ type alias ListRecord =
 stringParser : Parser Token
 stringParser =
     succeed StringToken
-        |= keep oneOrMore (\x -> not <| isOneCharSymbolChar x)
+        |= keep oneOrMore isStringChar
 
 validateTwoCharSymbol : String -> Parser String
 validateTwoCharSymbol s =
@@ -896,14 +987,22 @@ numberDotParser =
                 (ignore (Exactly 1) (\c -> c == '.'))
            )
 
+numberParser : Parser Token
+numberParser =
+    succeed StringToken
+        |= source
+           (ignore oneOrMore Char.isDigit)
+
 tokenParser : Parser Token
 tokenParser =
     oneOf [ backtickParser
           , numberDotParser
+          , numberParser
           , symbolParser
-          , stringParser ]
+          , stringParser
+          ]
 
--- Tokenize a string into special characters and the strings between them.
+-- Turn a Markdown string into an Atom
 markdownParser : Parser (Atom msg)
 markdownParser =
     succeed processTokens
