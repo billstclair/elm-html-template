@@ -29,7 +29,7 @@ import HtmlTemplate exposing ( makeLoaders, insertFunctions, insertMessages
 
 import HtmlTemplate.Types exposing ( Loaders, Atom(..), Dicts )
 import HtmlTemplate.PlayDiv exposing ( PlayState, emptyPlayState
-                                     , playDivFunction, updatePlayState
+                                     , playDivFunction, Update(..), updatePlayState
                                      )
 
 import Html exposing ( Html, Attribute
@@ -174,7 +174,7 @@ initialLoaders =
 
 init : ( Model, Cmd Msg)
 init =
-    let (model, _) = updatePlayString "\"Hello HtmlTemplate!\""
+    let (model, _) = updatePlayString (UpdatePlayString "\"Hello HtmlTemplate!\"")
                      { loaders = initialLoaders
                      , page = Nothing
                      , pendingPage = Just indexPage
@@ -207,7 +207,7 @@ type Msg
     = TemplateFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | PageFetchDone String (Loaders Msg Extra) (Result Http.Error String)
     | GotoPage String
-    | UpdatePlayString String
+    | UpdatePlayState Update
     | SetError String
 
 fetchUrl : String -> ((Result Http.Error String) -> Msg) -> Cmd Msg
@@ -259,8 +259,8 @@ update msg model =
             pageFetchDone name loaders result model
         GotoPage page ->
             gotoPage page model
-        UpdatePlayString string ->
-            updatePlayString string model
+        UpdatePlayState update ->
+            updatePlayString update model
         SetError message ->
             ( { model | error = Just message }
             , Cmd.none
@@ -353,11 +353,11 @@ pageFetchDone name loaders result model =
                 Ok loaders2 ->
                     continueLoading loaders2 model
 
-updatePlayString : String -> Model -> ( Model, Cmd Msg )
-updatePlayString string model =
+updatePlayString : Update -> Model -> ( Model, Cmd Msg )
+updatePlayString update model =
     ( { model
           | playState
-              = updatePlayState string model.loaders model.playState
+              = updatePlayState update model.loaders model.playState
       }
     , Cmd.none
     )
@@ -382,7 +382,7 @@ view model =
                   let loaders = insertFunctions
                                 [ ( "playDiv"
                                   , playDivFunction
-                                      UpdatePlayString model.playState ) ]
+                                      UpdatePlayState model.playState ) ]
                                 model.loaders                                      
                       template = pageTemplate
                       content = (LookupTemplateAtom
