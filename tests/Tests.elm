@@ -513,11 +513,11 @@ functionData =
                 ]
       )
     , ( """
-         ["#md","* foo*bar*"]
+         ["#md","x * foo*bar*"]
         """
       , Ok <|
           pWrap
-              [ StringAtom "* foo"
+              [ StringAtom "x * foo"
               , tagWrap "em" [ StringAtom "bar"]
               ]
       )
