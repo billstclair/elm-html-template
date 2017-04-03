@@ -29,7 +29,8 @@ import HtmlTemplate exposing ( makeLoaders, insertFunctions, insertMessages
 
 import HtmlTemplate.Types exposing ( Loaders, Atom(..), Dicts )
 import HtmlTemplate.PlayDiv exposing ( PlayState, emptyPlayState
-                                     , playDivFunction, Update(..), updatePlayState
+                                     , playDivFunction
+                                     , Update, playStringUpdate, updatePlayState
                                      )
 
 import Html exposing ( Html, Attribute
@@ -174,7 +175,7 @@ initialLoaders =
 
 init : ( Model, Cmd Msg)
 init =
-    let (model, _) = updatePlayString (UpdatePlayString "\"Hello HtmlTemplate!\"")
+    let (model, _) = updatePlayString (playStringUpdate "\"Hello HtmlTemplate!\"")
                      { loaders = initialLoaders
                      , page = Nothing
                      , pendingPage = Just indexPage

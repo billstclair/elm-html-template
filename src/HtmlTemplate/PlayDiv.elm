@@ -11,14 +11,17 @@
 
 module HtmlTemplate.PlayDiv
     exposing ( PlayState, emptyPlayState
-             , playDiv, Update(..), updatePlayState, playDivFunction )
+             , playDiv, playDivFunction
+             , Update, playStringUpdate, updatePlayState
+             )
 
 {-| Implements the HtmlTemplate example's "Play" page, which allows the user to type Markdown or JSON strings and see how they parse, evaluate, and render.
 
 See `examples/template.elm` for an example of use.
 
 @docs PlayState, emptyPlayState
-@docs playDiv, Update, updatePlayState, playDivFunction
+@docs playDiv, playDivFunction
+@docs Update, playStringUpdate, updatePlayState
 -}
 
 import HtmlTemplate.Types exposing ( Atom(..), Loaders )
@@ -27,7 +30,7 @@ import HtmlTemplate exposing ( decodeAtom, encodeAtom, customEncodeAtom
                              , getDicts, eval )
 
 import Html exposing ( Html, text, pre, p, div, textarea, input )
-import Html.Attributes exposing ( rows, cols, class, type_, checked )
+import Html.Attributes exposing ( rows, cols, class, type_, checked, title )
 import Html.Events exposing ( onInput, onCheck )
 
 {-| State passed to `playDiv` and updated by `updatePlayState`.
@@ -79,7 +82,7 @@ decodePlayString string =
     else
         Ok
         <| FuncallAtom
-            { function = "md"
+            { function = "mdnp"
             , args = [ StringAtom string ]
             }
 
@@ -89,9 +92,19 @@ type Update
     = SetUseOneLine Bool
     | UpdatePlayString String
 
-{-| When the user types a new string to evaluate, call this to evaluate it.
-Assumes it's Markdown, or, if it begins with "[", JSON.
-You will usually store the `PlayState` and `Loaders` in your `Model`.
+{-| Return an `Update` that you can pass to `updatePlayState` to
+initialize the user-entered string.
+-}
+playStringUpdate : String -> Update
+playStringUpdate string =
+    UpdatePlayString string
+
+{-| Your `update` function will call this in response to receiving
+an Update you wrapped with the tagger you passed as the first arg to
+`playDiv` or `playDivFunction`.
+
+You might also call it in your `init` function, with the result of
+`playStringUpdate String`, to intialize the displayed string.
 -}
 updatePlayState : Update -> Loaders msg extra -> PlayState msg -> PlayState msg
 updatePlayState update loaders state =
@@ -165,6 +178,7 @@ playDiv msgWrapper (ThePlayState state) =
         , p [] [ text "Evaluated "
                , input [ type_ "checkbox"
                        , checked state.useOneLine
+                       , title "Check to always display the output below as a single line."
                        , onCheck <| (\b -> msgWrapper <| SetUseOneLine b)
                        ]
                    []
