@@ -813,10 +813,7 @@ snarfBacktickInternal count tokens =
                         (Backticks n) :: tail ->
                             if n == count then
                                 Just
-                                ( Codeblock
-                                      <| String.concat
-                                      <| List.map tokenToString
-                                      <| List.reverse res
+                                ( Codeblock <| List.reverse res
                                 , tail
                                 )
                             else
@@ -1041,6 +1038,24 @@ processList : Bool -> List ListRecord -> State msg -> State msg
 processList isNumeric records state =
     pushAtomOnState (renderList isNumeric records) state
 
+processCodeBlock : List Token -> List (Atom msg)
+processCodeBlock tokens =
+    let loop = (\tokens res ->
+                    case tokens of
+                        [] ->
+                            List.reverse res
+                        token :: rest ->
+                            let atom = case token of
+                                           StringToken s -> StringAtom s
+                                           Newline True -> wrapTag "br" []
+                                           Newline False -> StringAtom " "
+                                           _ -> StringAtom <| tokenToString token
+                            in
+                                loop rest <| atom :: res
+               )
+    in
+        loop tokens []
+
 processToken : Token -> State msg -> State msg
 processToken token state =
     case token of
@@ -1048,9 +1063,9 @@ processToken token state =
             pushAtomOnState
                 (wrapTag "pre" [wrapTag "code" [StringAtom string]])
                 state
-        Codeblock string ->
+        Codeblock tokens ->
             pushAtomOnState
-                (wrapTag "code" [StringAtom string])
+                (wrapTag "code" <| processCodeBlock tokens)
                 state
         NumberDot string ->
             pushStringOnState string state
@@ -1082,7 +1097,8 @@ tokenToString token =
         Backticks count ->
             String.repeat count "`"
         Preformatted s -> s
-        Codeblock s -> s
+        Codeblock _ ->
+            toString token --shouldn't happen
         NumberDot s ->
             s
         ListToken _ _ ->
@@ -1109,7 +1125,7 @@ type Token
     | Backticks Int
     | Newline Bool
     | Preformatted String
-    | Codeblock String
+    | Codeblock (List Token)
     | NumberDot String
     | ListToken Bool (List ListRecord)
 

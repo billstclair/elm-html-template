@@ -526,11 +526,25 @@ functionData =
               ]
       )
     , ( """
-         ["#md","*foo *bar*"]
+         ["#mdnp","*foo *bar*"]
         """
       , Ok <|
-          pWrap
-              [ tagWrap "em" [ StringAtom "foo *bar"]
+          tagWrap "em" [ StringAtom "foo *bar"]
+      )
+    , ( """
+         ["#mdnp","`foo\\nbar`"]
+        """
+      , Ok <|
+          tagWrap "code" [ StringAtom "foo bar"]
+      )
+    , ( """
+         ["#mdnp","`foo  \\nbar`"]
+        """
+      , Ok <|
+          tagWrap "code"
+              [ StringAtom "foo"
+              , br
+              , StringAtom "bar"
               ]
       )
     , ( """
@@ -544,11 +558,10 @@ functionData =
               ]
       )
     , ( """
-         ["#md","foo\\nbar"]
+         ["#mdnp","foo\\nbar"]
         """
       , Ok <|
-          pWrap
-              [ StringAtom "foo bar" ]
+          StringAtom "foo bar"
       )
     , ( """
          ["#md","foo  \\nbar"]
@@ -561,91 +574,78 @@ functionData =
               ]
       )
     , ( """
-         ["#md","_[example](http://example.com/)_"]
+         ["#mdnp","_[example](http://example.com/)_"]
         """
       , Ok <|
-          pWrap
-              [ tagWrap "em"
-                    [ fullTag "a"
-                          [("href",StringAtom "http://example.com/")]
-                          [StringAtom "example"]
-                    ]
-              ]
-      )
-    , ( """
-         ["#md","[_example_](http://example.com/)"]
-        """
-      , Ok <|
-          pWrap
+          tagWrap "em"
               [ fullTag "a"
                     [("href",StringAtom "http://example.com/")]
-                    [ tagWrap "em" [StringAtom "example"]
-                    ]
+                    [StringAtom "example"]
               ]
       )
     , ( """
-         ["#md","[_example](http://example.com/)"]
+         ["#mdnp","[_example_](http://example.com/)"]
         """
       , Ok <|
-          pWrap [ StringAtom "[_example](http://example.com/)" ]
-      )
-    , ( """
-         ["#md","![foo](foo.jpg)"]
-        """
-      , Ok <|
-          pWrap
-              [ fullTag "img"
-                    [ ("src",StringAtom "foo.jpg")
-                    , ("alt",StringAtom "foo")
-                    ]
-                    []
+          fullTag "a"
+              [("href",StringAtom "http://example.com/")]
+              [ tagWrap "em" [StringAtom "example"]
               ]
       )
     , ( """
-         ["#md","![](foo.jpg)"]
+         ["#mdnp","[_example](http://example.com/)"]
         """
       , Ok <|
-          pWrap
-              [ fullTag "img"
-                    [ ("src",StringAtom "foo.jpg")
-                    ]
-                    []
+          StringAtom "[_example](http://example.com/)"
+      )
+    , ( """
+         ["#mdnp","![foo](foo.jpg)"]
+        """
+      , Ok <|
+          fullTag "img"
+              [ ("src",StringAtom "foo.jpg")
+              , ("alt",StringAtom "foo")
               ]
+              []
       )
     , ( """
-         ["#md","[unclosed left square bracket"]
+         ["#mdnp","![](foo.jpg)"]
         """
       , Ok <|
-          pWrap
-              [ StringAtom "[unclosed left square bracket" ]
+          fullTag "img"
+                  [ ("src",StringAtom "foo.jpg")
+                  ]
+                  []
       )
     , ( """
-         ["#md","[link text](but unclosed url"]
+         ["#mdnp","[unclosed left square bracket"]
         """
       , Ok <|
-          pWrap
-              [ StringAtom "[link text](but unclosed url" ]
+          StringAtom "[unclosed left square bracket"
       )
     , ( """
-         ["#md","Missing](left square bracket)"]
+         ["#mdnp","[link text](but unclosed url"]
         """
       , Ok <|
-          pWrap
-              [ StringAtom "Missing](left square bracket)" ]
+          StringAtom "[link text](but unclosed url"
       )
     , ( """
-         ["#md","[Missing middle)"]
+         ["#mdnp","Missing](left square bracket)"]
         """
       , Ok <|
-          pWrap
-              [ StringAtom "[Missing middle)" ]
+          StringAtom "Missing](left square bracket)"
       )
     , ( """
-         ["#md","No start link at all)"]
+         ["#mdnp","[Missing middle)"]
         """
       , Ok <|
-          pWrap
-              [ StringAtom "No start link at all)" ]
+          StringAtom "[Missing middle)"
+      )
+    , ( """
+         ["#mdnp","No start link at all)"]
+        """
+      , Ok <|
+          StringAtom "No start link at all)"
       )
     , ( """
          ["#md","* foo\\n+ bar\\n- bletch"]
