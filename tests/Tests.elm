@@ -617,6 +617,26 @@ functionData =
                   []
       )
     , ( """
+         ["#mdnp","![](foo.jpg 'Foo ya \\\"big\\\" lunk!')"]
+        """
+      , Ok <|
+          fullTag "img"
+                  [ ("src",StringAtom "foo.jpg")
+                  , ("title",StringAtom "Foo ya \"big\" lunk!")
+                  ]
+                  []
+      )
+    , ( """
+         ["#mdnp","[example](http://example.com \\\"It's only an example.\\\")"]
+        """
+      , Ok <|
+          fullTag "a"
+                  [ ("href",StringAtom "http://example.com")
+                  , ("title",StringAtom "It's only an example.")
+                  ]
+                  [ StringAtom "example" ]
+      )
+    , ( """
          ["#mdnp","[unclosed left square bracket"]
         """
       , Ok <|

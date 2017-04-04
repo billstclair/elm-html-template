@@ -24,6 +24,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , processTokens
                                       , requireStringAtom
                                       , processUrlResult
+                                      , parseUrlWithTitle
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom )
@@ -288,7 +289,70 @@ requireStringAtom default atoms =
 -- Result is (String, Maybe <error title>)
 processUrlResult : List (Atom msg) -> (String, Maybe String)
 processUrlResult atoms =
-    requireStringAtom "#" atoms
+    let (u, maybeError) = requireStringAtom "#" atoms
+        (url, maybeTitle) = parseUrlWithTitle u
+        title = case maybeTitle of
+                    Just t ->
+                        case maybeError of
+                            Just e ->
+                                Just <| t ++ " [" ++ e ++ "]"
+                            Nothing ->
+                                maybeTitle
+                    Nothing ->
+                        case maybeError of
+                            Just e ->
+                                Just <| "[" ++ e ++ "]"
+                            Nothing ->
+                                Nothing
+    in
+        (url, title)
+
+parseUrlWithTitle : String -> (String, Maybe String)
+parseUrlWithTitle url =
+    case Parser.run urlAndTitleParser url of
+        Err _ ->
+            (url, Nothing)
+        Ok (url, title) ->
+            ( String.trim url, title )
+
+notQuoteChar : Char -> Bool
+notQuoteChar char =
+    not <| isQuoteChar char
+
+isQuoteChar : Char -> Bool
+isQuoteChar char =
+    char=='\'' || char=='\"'
+
+urlPrefixParser : Parser String
+urlPrefixParser =
+    keep oneOrMore notQuoteChar
+
+urlTitleParser : Parser (Maybe String)
+urlTitleParser =
+    oneOf
+        [ succeed Just
+        |= oneOf [ succeed identity
+                 |. ignore (Exactly 1) ((==) '"')
+                 |= keep oneOrMore ((/=) '"')
+                 |. ignore (Exactly 1) ((==) '"')
+                 , succeed identity
+                 |. ignore (Exactly 1) ((==) '\'')
+                 |= keep oneOrMore ((/=) '\'')
+                 |. ignore (Exactly 1) ((==) '\'')
+                 ]
+        , succeed Nothing
+        ]
+
+urlAndTitleParser : Parser (String, Maybe String)
+urlAndTitleParser =
+    oneOf [ succeed (,)
+          |= urlPrefixParser
+          |= urlTitleParser
+          |. ignore zeroOrMore ((==) ' ')
+          |. Parser.end
+          , succeed (\s -> (s, Nothing))
+          |= keep zeroOrMore (always True)
+          ]
 
 imageStartToken : Token
 imageStartToken =
