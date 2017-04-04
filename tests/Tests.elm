@@ -244,6 +244,10 @@ pWrap : List (Atom msg) -> Atom msg
 pWrap body =
     tagWrap "p" body
 
+br : Atom msg
+br =
+    tagWrap "br" []
+
 functionData : List ( String, Result String (Atom msg) )
 functionData =
     [ ( """
@@ -530,6 +534,33 @@ functionData =
               ]
       )
     , ( """
+         ["#md","foo\\nbar  \\nbletch"]
+        """
+      , Ok <|
+          pWrap
+              [ StringAtom "foo bar"
+              , br
+              , StringAtom "bletch"
+              ]
+      )
+    , ( """
+         ["#md","foo\\nbar"]
+        """
+      , Ok <|
+          pWrap
+              [ StringAtom "foo bar" ]
+      )
+    , ( """
+         ["#md","foo  \\nbar"]
+        """
+      , Ok <|
+          pWrap
+              [ StringAtom "foo"
+              , br
+              , StringAtom "bar"
+              ]
+      )
+    , ( """
          ["#md","_[example](http://example.com/)_"]
         """
       , Ok <|
@@ -644,10 +675,7 @@ functionData =
         """
       , Ok <|
           tagWrap "ul"
-                [ tagWrap "li" [ StringAtom "1"
-                               , tagWrap "br" []
-                               , StringAtom "bar"
-                               ]
+                [ tagWrap "li" [ StringAtom "1 bar" ]
                 ]
       )
     , ( """

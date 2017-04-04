@@ -30,6 +30,7 @@ import HtmlTemplate.Utility as Utility
 
 import Char
 import Maybe exposing (withDefault)
+import List.Extra as LE
 import Dict exposing ( Dict )
 import Set exposing ( Set )
 import Parser exposing ( Parser, Error, Count(..)
@@ -320,29 +321,26 @@ closeParenConverter token (TheState state) =
         let (url, title) = processUrlResult state.result
             body = withDefault [] state.linkBody
         in
-            let result =
+            let result : List (Atom msg)
+                result =
                     if body == [] then
-                        ListAtom
-                            <| List.concat
-                                [ [ case state.startingWith of
-                                        Nothing -> StringAtom ""
-                                        Just t -> StringAtom <| tokenToString t
-                                  ]
-                                , state.result
-                                , [ StringAtom <| tokenToString token ]
-                                ]
+                        List.concat
+                            [ [ StringAtom <| tokenToString token ]
+                            , state.result
+                            , [ case state.startingWith of
+                                    Nothing -> StringAtom ""
+                                    Just t -> StringAtom <| tokenToString t
+                              ]
+                            ]
                     else
                         case state.startingWith of
                             Nothing ->
-                                ListAtom
-                                <| List.append
-                                    (List.reverse body)
-                                        state.result
+                                List.append (List.reverse body) state.result
                             Just token ->
                                 if token == imageStartToken then
-                                    makeImageRecord body url title
+                                    [ makeImageRecord body url title ]
                                 else
-                                    makeLinkRecord body url title
+                                    [ makeLinkRecord body url title ]
             in
                 TheState
                     <| case state.stack of
@@ -351,11 +349,13 @@ closeParenConverter token (TheState state) =
                                    | lookingFor = Nothing
                                    , startingWith = Nothing
                                    , linkBody = Nothing
-                                   , result = [result]
+                                   , result = result
                                }
                            Just (TheState stack) ->
                                { stack
-                                   | result = result :: stack.result
+                                   | result = List.append
+                                              result
+                                              stack.result
                                }
 
 conversionDict : Dict String (Converter msg)
@@ -401,8 +401,14 @@ separateFirstLine tokens =
                     case tokens of
                         [] ->
                             Nothing
-                        Newline :: rest ->
-                            Just ( List.reverse front, rest )
+                        Newline x :: rest ->
+                            Just ( List.reverse
+                                   <| if x then
+                                           Newline True :: front
+                                       else
+                                           front
+                                 , rest
+                                 )
                         first :: rest ->
                             loop rest <| first :: front
                )
@@ -481,7 +487,7 @@ splitIntoLines tokens =
                             loop rest <| (clearBlankLine line) :: res
                )
     in
-        loop tokens []                                
+        loop tokens []
                         
 collectPreformattedLines : List (List Token) -> Maybe (List Token, List (List Token))
 collectPreformattedLines lines =
@@ -827,15 +833,15 @@ elideLeadingWhitespace tokens =
         loop = (\tokens res ->
                     case tokens of
                         [] -> List.reverse res
-                        Newline :: StringToken s :: rest ->
+                        Newline x :: StringToken s :: rest ->
                             loop rest
                                 <| (StringToken <| String.trimLeft s)
-                                    :: Newline :: res
+                                    :: Newline x :: res
                         first :: rest ->
                             loop rest <| first :: res
                )
     in
-        List.drop 1 <| loop (Newline :: tokens) []
+        List.drop 1 <| loop (Newline False :: tokens) []
 
 processTokens : List Token -> Atom msg
 processTokens tokens =
@@ -859,7 +865,14 @@ joinReversedLines lines =
                                            (ListToken _ _) :: _ ->
                                                List.append line res
                                            _ ->
-                                               List.concat [line, [Newline], res]
+                                               case LE.last line of
+                                                   Just (Newline True) ->
+                                                       List.append line res
+                                                   _ ->
+                                                       List.concat
+                                                           [ line
+                                                           , [Newline False]
+                                                           , res]
                )
     in
         loop lines []
@@ -1043,8 +1056,12 @@ processToken token state =
             pushStringOnState string state
         ListToken isNumeric records ->
             processList isNumeric records state
-        Newline ->
-            pushAtomOnState (wrapTag "br" []) state
+        Newline x ->
+            pushAtomOnState (if x then
+                                 (wrapTag "br" [])
+                             else
+                                 StringAtom " ")
+                state
         Backticks _ ->
             pushStringOnState (tokenToString token) state
         StringToken string ->
@@ -1061,7 +1078,7 @@ tokenToString token =
     case token of
         StringToken s -> s
         SymbolToken s -> s
-        Newline -> "\n"
+        Newline x -> if x then "  \n" else "\n"
         Backticks count ->
             String.repeat count "`"
         Preformatted s -> s
@@ -1080,6 +1097,7 @@ isStringChar : Char -> Bool
 isStringChar char =
     not <| isOneCharSymbolChar char
         || (Char.isDigit char)
+        || (char == ' ')
 
 isTwoCharSymbol : String -> Bool
 isTwoCharSymbol s =
@@ -1089,7 +1107,7 @@ type Token
     = SymbolToken String
     | StringToken String
     | Backticks Int
-    | Newline
+    | Newline Bool
     | Preformatted String
     | Codeblock String
     | NumberDot String
@@ -1120,10 +1138,25 @@ symbolParser =
           , oneCharSymbolParser
           ]
 
+isSpaceChar : Char -> Bool
+isSpaceChar c =
+    c == ' '
+
+isNewlineChar : Char -> Bool
+isNewlineChar c =
+    c == '\n'
+
 newlineParser : Parser Token
 newlineParser =
-    succeed (\_ -> Newline)
-        |= keep (Exactly 1) (\c -> c == '\n')
+    oneOf [ succeed (\_ -> Newline True)
+          |= source
+                (Parser.delayedCommit
+                     (ignore (AtLeast 2) isSpaceChar)
+                     (ignore (Exactly 1) isNewlineChar)
+                )
+          , succeed (\_ -> Newline False)
+          |= ignore (Exactly 1) isNewlineChar
+          ]
 
 twoCharSymbolParser : Parser Token
 twoCharSymbolParser =
@@ -1158,12 +1191,19 @@ numberParser =
         |= source
            (ignore oneOrMore Char.isDigit)
 
+spacesParser : Parser Token
+spacesParser =
+    succeed StringToken
+        |= source
+           (ignore oneOrMore isSpaceChar)
+
 tokenParser : Parser Token
 tokenParser =
     oneOf [ backtickParser
           , numberDotParser
           , numberParser
           , symbolParser
+          , spacesParser
           , stringParser
           ]
 
