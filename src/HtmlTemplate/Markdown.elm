@@ -19,6 +19,8 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , processLists
                                       , processParagraphs
                                       , startOfList
+                                      , countLeadingSpaces
+                                      , countLeadingLineSpaces
                                       , processTokens
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
@@ -516,8 +518,8 @@ collectPreformattedLines lines =
 -- Everything in the region gets turned into a plain string,
 -- the leading four spaces or tab are removed from each line,
 -- and any other leading tabs round up to a multiple of four spaces.
-processPreformatted : List Token -> List (List Token)
-processPreformatted tokens =
+processPreformatted : List (List Token) -> List (List Token)
+processPreformatted lines =
     let loop : List (List Token) -> List (List Token) -> List (List Token)
         loop = (\tokens res ->
                     case tokens of
@@ -533,13 +535,13 @@ processPreformatted tokens =
                             loop tail <| head :: res
                )
     in
-        let lines = loop ([] :: (splitIntoLines tokens)) []
+        let lines2 = loop ([] :: lines) []
         in
-            case lines of
+            case lines2 of
                 [] :: rest ->
                     rest
                 _ ->
-                  lines
+                  lines2
 
 isSpaces : String -> Bool
 isSpaces string =
@@ -626,7 +628,27 @@ countLeadingLineSpaces line =
             countLeadingSpaces string
         _ ->
             (0, "")
-            
+
+leftTrimStringBy : Int -> String -> String
+leftTrimStringBy indent string =
+    let loop = (\n s ->
+                    if n <= 0 then
+                        s
+                    else if String.startsWith " " s then
+                        loop (n-1) <| String.dropLeft 1 s
+                    else
+                        s
+               )
+    in
+        loop indent string
+
+leftTrimLineBy : Int -> List Token -> List Token
+leftTrimLineBy indent tokens =
+    case tokens of
+        (StringToken string) :: tail ->
+            (StringToken <| leftTrimStringBy indent string) :: tail
+        _ ->
+            tokens
 
 fillListRecord :  Bool -> ListRecord -> List (List Token) -> (List ListRecord, List (List Token))
 fillListRecord isNumeric record lines =
@@ -650,26 +672,28 @@ fillListRecord isNumeric record lines =
                )
         handleLine : Bool -> ListRecord -> (List Token) -> List (List Token) -> List (List Token) -> List ListRecord -> (List ListRecord, List (List Token))
         handleLine = (\addBlank rec line lines tail recs ->
-                          let (indent, _) = countLeadingLineSpaces line
+                          let (indent, lineEnd) = countLeadingLineSpaces line
                           in
                               if line == [] then
-                                  loop rec ([] :: tail) recs
-                              else if indent >= rec.textIndent then
-                                  loop { rec
-                                           | lines =
-                                               List.append
-                                                   rec.lines
-                                                   <| if addBlank then
-                                                          [ [], line ]
-                                                      else
-                                                          [ line ]
-                                       }
-                                      tail
-                                      recs
-                                   else
-                                       ( List.reverse <| rec :: recs
-                                       , lines
-                                       )
+                                  loop rec (tail) recs
+                              else if (not addBlank) || (indent >= rec.textIndent)
+                                   then
+                                       let ln = leftTrimLineBy
+                                                rec.textIndent line
+                                           lns = if addBlank then
+                                                     [ [], ln ]
+                                                 else
+                                                     [ ln ]
+                                       in
+                                           loop { rec | lines
+                                                      = List.append rec.lines lns
+                                                }
+                                               tail
+                                               recs
+                              else
+                                  ( List.reverse <| rec :: recs
+                                  , lines
+                                  )
                      )                      
         handleSubrec : Bool -> ListRecord -> List (List Token) -> List (List Token) -> ListRecord -> List ListRecord -> (List ListRecord, List (List Token))
         handleSubrec = (\numeric subrec lines tail rec recs ->
@@ -815,9 +839,30 @@ elideLeadingWhitespace tokens =
 
 processTokens : List Token -> Atom msg
 processTokens tokens =
-    processPreformatted tokens
-        |> processLists
+    processLists (splitIntoLines tokens)
+        |> processPreformatted
         |> processParagraphs
+
+joinReversedLines : List (List Token) -> List Token
+joinReversedLines lines =
+    let loop : List (List Token) -> List Token -> List Token
+        loop = (\lines res ->
+                    case lines of
+                        [] ->
+                            res
+                        line :: tail ->
+                            loop tail
+                                <| if res == [] then
+                                       line
+                                   else
+                                       case line of
+                                           (ListToken _ _) :: _ ->
+                                               List.append line res
+                                           _ ->
+                                               List.concat [line, [Newline], res]
+               )
+    in
+        loop lines []
 
 getParagraph : List (List Token) -> (Maybe (Atom msg), List (List Token))
 getParagraph lines =
@@ -828,9 +873,7 @@ getParagraph lines =
                               (Just
                                    <| wrapTag "p"
                                    <| case processParagraph
-                                       <| List.concat
-                                       <| List.intersperse [Newline]
-                                       <| List.reverse res
+                                       <| joinReversedLines res
                                       of
                                           ListAtom l -> l
                                           a -> [ a ]
@@ -843,6 +886,8 @@ getParagraph lines =
                         [] ->
                             packageRes [] res
                         [Preformatted _] :: tail ->
+                            packageRes lines res
+                        [ListToken _ _] :: tail ->
                             packageRes lines res
                         [] :: tail ->
                             loop tail res
@@ -866,6 +911,10 @@ processParagraphs lines =
                                       [wrapTag "code" [StringAtom string]]
                             in
                                 loop tail <| pre :: res
+                        [ListToken isNumeric records] :: tail ->
+                            let lis = renderList isNumeric records
+                            in
+                                loop tail <| lis :: res
                         _ ->
                             case getParagraph lines of
                                 (Nothing, tail) ->
@@ -940,9 +989,44 @@ pushAtomOnState : Atom msg -> State msg -> State msg
 pushAtomOnState atom (TheState state) =
     pushAtomOnResult atom state
 
+unwrapParagraphList : Atom msg -> List (Atom msg)
+unwrapParagraphList atom =
+    case atom of
+        RecordAtom { tag, attributes, body} ->
+            if tag == "p" && attributes == [] then
+                body
+            else
+                [ atom ]
+        ListAtom list ->
+            case list of
+                [ a ] ->
+                    unwrapParagraphList a
+                _ ->
+                    list
+        _ ->
+            [ atom ]
+
+renderList : Bool -> List ListRecord -> Atom msg
+renderList isNumeric records =
+    let loop : List ListRecord -> List (Atom msg) -> List (Atom msg)
+        loop = (\items res ->
+                    case items of
+                        [] ->
+                            List.reverse res
+                        { lines } :: tail ->
+                            let atom = processParagraphs lines
+                                body = unwrapParagraphList atom
+                                item = wrapTag "li" body
+                            in
+                                loop tail <| item :: res
+               )
+    in
+        wrapTag (if isNumeric then "ol" else "ul")
+            <| loop records []
+
 processList : Bool -> List ListRecord -> State msg -> State msg
 processList isNumeric records state =
-    pushStringOnState (tokenToString <| ListToken isNumeric records) state
+    pushAtomOnState (renderList isNumeric records) state
 
 processToken : Token -> State msg -> State msg
 processToken token state =

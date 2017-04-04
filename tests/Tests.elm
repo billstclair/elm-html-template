@@ -616,6 +616,80 @@ functionData =
           pWrap
               [ StringAtom "No start link at all)" ]
       )
+    , ( """
+         ["#md","* foo\\n+ bar\\n- bletch"]
+        """
+      , Ok <|
+          tagWrap "ul"
+              [ tagWrap "li" [ StringAtom "foo" ]
+              , tagWrap "li" [ StringAtom "bar" ]
+              , tagWrap "li" [ StringAtom "bletch" ]
+              ]
+      )
+    , ( """
+         ["#md","1. foo\\n+ bar\\n2. bletch"]
+        """
+      , Ok <|
+          ListAtom
+              [ tagWrap "ol"
+                    [ tagWrap "li" [ StringAtom "foo" ] ]
+              , tagWrap "ul"
+                  [ tagWrap "li" [ StringAtom "bar" ] ]
+              , tagWrap "ol"
+                  [ tagWrap "li" [ StringAtom "bletch" ] ]
+              ]
+      )
+    , ( """
+         ["#md","* 1\\nbar"]
+        """
+      , Ok <|
+          tagWrap "ul"
+                [ tagWrap "li" [ StringAtom "1"
+                               , tagWrap "br" []
+                               , StringAtom "bar"
+                               ]
+                ]
+      )
+    , ( """
+         ["#md","* 1\\n\\n  bar"]
+        """
+      , Ok <|
+          tagWrap "ul"
+                [ tagWrap "li"
+                      [ tagWrap "p" [ StringAtom "1" ] 
+                      , tagWrap "p" [ StringAtom "bar" ]
+                      ]
+                ]
+      )
+    , ( """
+         ["#md","* 1\\n\\n bar"]
+        """
+      , Ok <|
+          ListAtom
+              [ tagWrap "ul"
+                    [ tagWrap "li" [ StringAtom "1" ] ]
+              , tagWrap "p" [ StringAtom "bar" ]
+              ]
+      )
+    , ( """
+         ["#md","* 1\\n  * 11\\n  * 12\\n\\n    12 p2\\n* 2"]
+        """
+      , Ok <|
+          tagWrap "ul"
+              [ tagWrap "li"
+                    -- The paragraph around [ StringAtom "1"] is a bug
+                    [ tagWrap "p" [ StringAtom "1" ]
+                    , tagWrap "ul"
+                        [ tagWrap "li" [ StringAtom "11" ]
+                        , tagWrap "li"
+                            [ tagWrap "p" [ StringAtom "12" ]
+                            , tagWrap "p" [ StringAtom "12 p2" ]
+                            ]
+                        ]
+                    ]
+              , tagWrap "li" [ StringAtom "2" ]
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg
