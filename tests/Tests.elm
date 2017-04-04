@@ -6,9 +6,8 @@ import List
 import Dict
 
 import HtmlTemplate.Types exposing ( Atom(..), Dicts )
-import HtmlTemplate exposing ( decodeAtom, customEncodeAtom
-                             , makeLoaders, setAtom, getDicts
-                             )
+import HtmlTemplate.EncodeDecode exposing ( decodeAtom, customEncodeAtom )
+import HtmlTemplate exposing ( makeLoaders, setAtom, getDicts )
 
 log = Debug.log
 

@@ -25,9 +25,9 @@ See `examples/template.elm` for an example of use.
 -}
 
 import HtmlTemplate.Types exposing ( Atom(..), Loaders )
-import HtmlTemplate exposing ( decodeAtom, encodeAtom, customEncodeAtom
-                             , render
-                             , getDicts, eval )
+import HtmlTemplate exposing ( render, getDicts, eval )
+import HtmlTemplate.EncodeDecode exposing
+    ( decodeAtom, encodeAtom, customEncodeAtom )
 
 import Html exposing ( Html, text, pre, p, div, textarea, input )
 import Html.Attributes exposing ( rows, cols, class, type_, checked, title )

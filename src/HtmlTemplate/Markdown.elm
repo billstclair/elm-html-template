@@ -22,8 +22,11 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , countLeadingSpaces
                                       , countLeadingLineSpaces
                                       , processTokens
+                                      , requireStringAtom
+                                      , processUrlResult
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
+import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom )
 import HtmlTemplate.Utility as Utility
     exposing ( hasWhitespacePrefix, hasWhitespaceSuffix )
 
@@ -272,13 +275,20 @@ processLinkMiddle token (TheState state) =
                 , result = []
             }
 
+requireStringAtom : String -> List (Atom msg) -> (String, Maybe String)
+requireStringAtom default atoms =
+    let string = Utility.mergeStrings <| ListAtom atoms
+    in
+        case string of
+            StringAtom s ->
+                (s, Nothing)
+            _ ->
+                (default, Just <| toString <| customEncodeAtom 0 string)
+
+-- Result is (String, Maybe <error title>)
 processUrlResult : List (Atom msg) -> (String, Maybe String)
 processUrlResult atoms =
-    case atoms of
-        [ StringAtom string ] ->
-            (string, Nothing)
-        _ ->
-            ("#", Just <| toString atoms)
+    requireStringAtom "#" atoms
 
 imageStartToken : Token
 imageStartToken =
@@ -327,7 +337,7 @@ closeParenConverter token (TheState state) =
     if state.lookingFor /= Just closeParenToken then
         pushTokenOnResult token state
     else
-        let (url, title) = processUrlResult state.result
+        let (url, title) = processUrlResult <| List.reverse state.result
             body = withDefault [] state.linkBody
         in
             let result : List (Atom msg)

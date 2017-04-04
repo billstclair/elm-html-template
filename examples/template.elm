@@ -22,12 +22,15 @@ import HtmlTemplate exposing ( makeLoaders, insertFunctions, insertMessages
                              , getTemplate
                              , getAtom, setAtom, setAtoms, getDictsAtom
                              , clearPages
-                             , render
-                             , decodeAtom, eval, encodeAtom, customEncodeAtom
+                             , render, eval
                              , cantFuncall
                              )
 
+import HtmlTemplate.EncodeDecode exposing
+    ( decodeAtom, encodeAtom, customEncodeAtom )
+
 import HtmlTemplate.Types exposing ( Loaders, Atom(..), Dicts )
+
 import HtmlTemplate.PlayDiv exposing ( PlayState, emptyPlayState
                                      , playDivFunction
                                      , Update, playStringUpdate, updatePlayState

@@ -9,6 +9,7 @@
     "exposed-modules": [
         "HtmlTemplate",
         "HtmlTemplate.Types",
+        "HtmlTemplate.EncodeDecode",
         "HtmlTemplate.PlayDiv"      
     ],
     "dependencies": {
