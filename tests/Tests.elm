@@ -700,13 +700,38 @@ functionData =
               ]
       )
     , ( """
+         ["#md","foo\\n\\n* 1"]
+        """
+      , Ok <|
+          ListAtom
+              [ tagWrap "p" [ StringAtom "foo" ]
+              , tagWrap "ul"
+                  [ tagWrap "li" [ StringAtom "1" ]
+                  ]
+              ]
+      )
+    , ( """
+         ["#md","* 1\\n\\n  11\\n  * 2"]
+        """
+      , Ok <|
+          tagWrap "ul"
+              [ tagWrap "li"
+                    [ tagWrap "p" [ StringAtom "1" ]
+                    -- This is actually a bug, but I decided to not fix it.
+                    -- There should be a paragraph around (StringAtom "11")
+                    , StringAtom "11"
+                    , tagWrap "ul"
+                        [ tagWrap "li" [ StringAtom "2" ] ]
+                    ]
+              ]
+      )
+    , ( """
          ["#md","* 1\\n  * 11\\n  * 12\\n\\n    12 p2\\n* 2"]
         """
       , Ok <|
           tagWrap "ul"
               [ tagWrap "li"
-                    -- The paragraph around [ StringAtom "1"] is a bug
-                    [ tagWrap "p" [ StringAtom "1" ]
+                    [ StringAtom "1"
                     , tagWrap "ul"
                         [ tagWrap "li" [ StringAtom "11" ]
                         , tagWrap "li"

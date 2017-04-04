@@ -46,20 +46,29 @@ mdFunction args _ =
     Utility.mergeStrings
         <| Utility.walkAtom parseIfString <| ListAtom args
 
+maybeRemoveP : Bool -> Atom msg -> Atom msg
+maybeRemoveP listifyBody atom =
+    case atom of
+        RecordAtom { tag, attributes, body } ->
+            if tag == "p" && attributes == [] then
+                case body of
+                    [a] ->
+                        a
+                    _ ->
+                        if listifyBody then
+                            ListAtom body
+                        else
+                            atom
+            else
+                atom
+        _ ->
+            atom
+
 mdnpFunction : List (Atom msg) -> d -> Atom msg
 mdnpFunction args x =
     let res = mdFunction args x
     in
-        case res of
-            RecordAtom { tag, attributes, body } ->
-                if tag == "p" && attributes == [] then
-                    case body of
-                        [a] -> a
-                        _ -> ListAtom body
-                else
-                    res
-            _ ->
-                res
+        maybeRemoveP True res
 
 parseIfString : Atom msg -> Atom msg
 parseIfString atom =
@@ -844,7 +853,7 @@ processTokens : List Token -> Atom msg
 processTokens tokens =
     processLists (splitIntoLines tokens)
         |> processPreformatted
-        |> processParagraphs
+        |> processParagraphs False
 
 joinReversedLines : List (List Token) -> List Token
 joinReversedLines lines =
@@ -874,30 +883,40 @@ joinReversedLines lines =
     in
         loop lines []
 
-getParagraph : List (List Token) -> (Maybe (Atom msg), List (List Token))
-getParagraph lines =
-    let packageRes = (\lines res ->
+getParagraph : Bool -> List (List Token) -> (Maybe (Atom msg), List (List Token))
+getParagraph elidePBeforeList lines =
+    let packageRes : List (List Token) -> List (List Token) -> (Maybe (Atom msg), List (List Token))
+        packageRes = (\lines res ->
                           if res == [] then
                               (Nothing, lines)
                           else
-                              (Just
-                                   <| wrapTag "p"
-                                   <| case processParagraph
-                                       <| joinReversedLines res
-                                      of
-                                          ListAtom l -> l
-                                          a -> [ a ]
-                              , lines
-                              )
-                     )                                  
+                              let wrapit : Bool
+                                  wrapit = case lines of
+                                               (ListToken _ _ :: _) :: _ -> False
+                                               _ -> True
+                                  wrapper = if wrapit || (not elidePBeforeList) then
+                                                wrapTag "p"
+                                            else
+                                                ListAtom
+                              in
+                                  (Just
+                                       <| wrapper
+                                       <| case processParagraph
+                                           <| joinReversedLines res
+                                          of
+                                              ListAtom l -> l
+                                              a -> [ a ]
+                                  , lines
+                                  )
+                     )
         loop : List (List Token) -> List (List Token) -> (Maybe (Atom msg), List (List Token))
         loop = (\lines res ->
                     case lines of
                         [] ->
                             packageRes [] res
-                        [Preformatted _] :: tail ->
+                        [Preformatted _] :: _ ->
                             packageRes lines res
-                        [ListToken _ _] :: tail ->
+                        [ListToken _ _] :: _ ->
                             packageRes lines res
                         [] :: tail ->
                             loop tail res
@@ -909,8 +928,8 @@ getParagraph lines =
     in
         loop lines []
 
-processParagraphs : List (List Token) -> Atom msg
-processParagraphs lines =
+processParagraphs : Bool -> List (List Token) -> Atom msg
+processParagraphs elidePBeforeList lines =
     let loop : List (List Token) -> List (Atom msg) -> List (Atom msg)
         loop = (\lines res ->
                     case lines of
@@ -926,7 +945,7 @@ processParagraphs lines =
                             in
                                 loop tail <| lis :: res
                         _ ->
-                            case getParagraph lines of
+                            case getParagraph elidePBeforeList lines of
                                 (Nothing, tail) ->
                                     loop tail res
                                 (Just p, tail) ->
@@ -1024,7 +1043,7 @@ renderList isNumeric records =
                         [] ->
                             List.reverse res
                         { lines } :: tail ->
-                            let atom = processParagraphs lines
+                            let atom = processParagraphs True lines
                                 body = unwrapParagraphList atom
                                 item = wrapTag "li" body
                             in
