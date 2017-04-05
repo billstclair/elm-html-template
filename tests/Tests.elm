@@ -877,6 +877,33 @@ functionData =
               , tagWrap "p" [ StringAtom "bar" ]
               ]
       )
+    -- Really need more table test, but I'm lazy...
+    , ( """
+         ["#md","one|two|three\\n -|-- | --- \\n 1 | 2 | 3\\n4|5|6"]
+        """
+      , Ok <|
+          tagWrap "table"
+              [ tagWrap "thead"
+                    [ tagWrap "tr"
+                          [ tagWrap "th" [StringAtom "one"]
+                          , tagWrap "th" [StringAtom "two"]
+                          , tagWrap "th" [StringAtom "three"]
+                          ]
+                    ]
+              , tagWrap "tbody"
+                    [ tagWrap "tr"
+                          [ tagWrap "td" [StringAtom "1"]
+                          , tagWrap "td" [StringAtom "2"]
+                          , tagWrap "td" [StringAtom "3"]
+                          ]
+                    , tagWrap"tr"
+                          [ tagWrap "td" [StringAtom "4"]
+                          , tagWrap "td" [StringAtom "5"]
+                          , tagWrap "td" [StringAtom "6"]
+                          ]
+                    ]
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg

@@ -20,7 +20,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , stripBlockquotePrefix
                                       , stripOneBlockquotePrefix
                                       , processLists
-                                      , processParagraphs
+                                      , renderParagraphs
                                       , startOfList
                                       , countLeadingSpaces
                                       , countLeadingLineSpaces
@@ -28,6 +28,9 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , requireStringAtom
                                       , processUrlResult
                                       , parseUrlWithTitle
+                                      , splitOnVerticalBars
+                                      , isListDashes
+                                      , processTables
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
@@ -635,6 +638,117 @@ processPreformatted lines =
                 _ ->
                   lines2
 
+splitOnVerticalBars : List Token -> Maybe (List (List Token))
+splitOnVerticalBars tokens =
+    let loop : List Token -> List Token -> List (List Token) -> Maybe (List (List Token))
+        loop = (\toks accum res ->
+                    case toks of
+                        [] ->
+                            if res == [] then
+                                Nothing
+                            else
+                                Just <| List.reverse <| (List.reverse accum) :: res
+                        head :: tail ->
+                            if head == SymbolToken vBar then
+                                loop tail []
+                                    <| (List.reverse <| trimLine accum) :: res
+                            else
+                                loop tail (head :: accum) res
+               )
+    in
+        loop tokens [] []
+
+dashToken : Token
+dashToken =
+    SymbolToken "-"
+
+trimLine : List Token -> List Token
+trimLine line =
+    List.reverse <| trimLeftLine <| List.reverse <| trimLeftLine line
+
+trimLeftLine : List Token -> List Token
+trimLeftLine line =
+    case line of
+        [] -> []
+        head :: tail ->
+            if isSpacesToken head then
+                trimLeftLine tail
+            else
+                line
+
+isListDashes : List (List Token) -> Bool
+isListDashes heads =
+    List.all (\x -> List.all ((==) dashToken) <| trimLine x)
+        heads
+
+processTables : List (List Token) -> List (List Token)
+processTables lines =
+    let loop : List (List Token) -> List (List Token) -> List (List Token)
+        loop = (\lines res ->
+                    case lines of
+                        [] ->
+                            List.reverse res
+                        header :: separator :: tail ->
+                            let continue =
+                                    (\_ ->
+                                        loop (separator :: tail) <| header :: res
+                                    )
+                                get = (\cols heads ->
+                                           let (table, rest) =
+                                                   getTable cols heads tail
+                                           in
+                                               loop rest <| table :: res
+                                      )
+                            in
+                                case splitOnVerticalBars header of
+                                    Nothing ->
+                                        continue ()
+                                    Just heads ->
+                                        case splitOnVerticalBars separator of
+                                            Nothing ->
+                                                continue ()
+                                            Just dashes ->
+                                                if isListDashes dashes then
+                                                    let cols = List.length dashes
+                                                    in
+                                                        if cols == (List.length heads)
+                                                        then
+                                                            get cols heads
+                                                        else
+                                                            continue ()
+                                                else
+                                                    continue ()
+                        head :: tail ->
+                            loop tail <| head :: res                        
+               )
+    in
+        loop lines []
+
+getTable : Int -> List (List Token) -> List (List Token) -> (List Token, List (List Token))
+getTable colCount heads lines =
+    let loop : List (List Token) -> List (List (List Token)) -> (List Token, List (List Token))
+        loop = (\lines rows ->
+                    case lines of
+                        [] ->
+                            ([ Table heads <| List.reverse rows ]
+                            , []
+                            )
+                        row :: tail ->
+                            if row == [] then
+                                ( [ Table heads <| List.reverse rows ]
+                                , tail
+                                )
+                            else
+                                case splitOnVerticalBars row of
+                                    Nothing ->
+                                        loop tail <| [row] :: rows
+                                    Just cols ->
+                                        loop tail
+                                            <| (List.take colCount cols) :: rows
+               )
+    in
+        loop lines []
+
 isSpacesToken : Token -> Bool
 isSpacesToken token =
     case token of
@@ -1061,10 +1175,11 @@ elideLeadingWhitespace tokens =
 
 processTokens : List Token -> Atom msg
 processTokens tokens =
-    processLists (splitIntoLines tokens)
+    processTables (splitIntoLines tokens)
+        |> processLists
         |> processPreformatted
         |> processBlockquotes
-        |> processParagraphs False
+        |> renderParagraphs False
 
 joinReversedLines : List (List Token) -> List Token
 joinReversedLines lines =
@@ -1112,7 +1227,7 @@ getParagraph elidePBeforeList lines =
                               in
                                   (Just
                                        <| wrapper
-                                       <| case processParagraph
+                                       <| case renderParagraph
                                            <| joinReversedLines res
                                           of
                                               ListAtom l -> l
@@ -1126,6 +1241,8 @@ getParagraph elidePBeforeList lines =
                         [] ->
                             packageRes [] res
                         [Preformatted _] :: _ ->
+                            packageRes lines res
+                        [Table _ _] :: _ ->
                             packageRes lines res
                         [Blockquote _] :: _ ->
                             packageRes lines res
@@ -1143,8 +1260,8 @@ getParagraph elidePBeforeList lines =
     in
         loop lines []
 
-processParagraphs : Bool -> List (List Token) -> Atom msg
-processParagraphs elidePBeforeList lines =
+renderParagraphs : Bool -> List (List Token) -> Atom msg
+renderParagraphs elidePBeforeList lines =
     let loop : List (List Token) -> List (Atom msg) -> List (Atom msg)
         loop = (\lines res ->
                     case lines of
@@ -1152,6 +1269,8 @@ processParagraphs elidePBeforeList lines =
                             List.reverse res
                         [Preformatted string] :: tail ->
                             loop tail <| (renderPreformatted string) :: res
+                        [Table header rows] :: tail ->
+                            loop tail <| (renderTable header rows) :: res
                         [Blockquote lines] :: tail ->
                             loop tail <| (renderBlockquote lines) :: res
                         [ListToken isNumeric records] :: tail ->
@@ -1181,8 +1300,8 @@ processParagraphs elidePBeforeList lines =
             [a] -> a
             atoms -> ListAtom atoms
 
-processParagraph : List Token -> Atom msg
-processParagraph tokens =
+renderParagraph : List Token -> Atom msg
+renderParagraph tokens =
     processLoop (elideLeadingWhitespace (processCodeblocks tokens)) initialState
 
 processLoop : List Token -> State msg -> Atom msg
@@ -1299,7 +1418,7 @@ renderHeader sharpCount body =
                 _ ->
                     body
     in
-        processParagraph b
+        renderParagraph b
             |> unwrapParagraphList
             |> wrapTag ("h" ++ (toString sharpCount))
 
@@ -1311,7 +1430,7 @@ renderList isNumeric records =
                         [] ->
                             List.reverse res
                         { lines } :: tail ->
-                            let atom = processParagraphs True lines
+                            let atom = renderParagraphs True lines
                                 body = unwrapParagraphList atom
                                 item = wrapTag "li" body
                             in
@@ -1345,14 +1464,45 @@ processCodeBlock tokens =
 
 renderPreformatted : String -> Atom msg
 renderPreformatted string =
-    (wrapTag "pre" [wrapTag "code" [StringAtom string]])
+    wrapTag "pre" [wrapTag "code" [StringAtom string]]
+
+renderTable : List (List Token) -> List (List (List Token)) -> Atom msg
+renderTable header rows =
+    wrapTag "table"
+        <| (wrapTag "thead"
+             [ wrapTag "tr"
+                   <| List.map
+                       (\th -> wrapTag "th" [ renderParagraph th ])
+                       header
+             ]
+           )
+        :: [ wrapTag "tbody"
+                 <| List.map (\tr ->
+                                  wrapTag "tr"
+                                  <| List.map (\td ->
+                                                   wrapTag "td"
+                                                   [ renderParagraph td ]
+                                              )
+                                  tr
+                             )
+                     rows
+           ]
         
+atomToList : Atom msg -> List (Atom msg)
+atomToList atom =
+    case atom of
+        ListAtom list ->
+            list
+        _ ->
+            [atom]
+
 renderBlockquote : List (List Token) -> Atom msg
 renderBlockquote lines =
-    processLists lines
+    processTables lines
+        |> processLists
         |> processPreformatted
-        |> processParagraphs False
-        |> (\a -> [a])
+        |> renderParagraphs False
+        |> atomToList
         |> wrapTag "blockquote"
     
 processToken : Token -> State msg -> State msg
@@ -1361,6 +1511,10 @@ processToken token state =
         Preformatted string ->
             pushAtomOnState
                 (renderPreformatted string)
+                state
+        Table header rows ->
+            pushAtomOnState
+                (renderTable header rows)
                 state
         Blockquote lines ->
             pushAtomOnState
@@ -1395,7 +1549,6 @@ processToken token state =
                 Just converter ->
                     converter token state
 
--- TODO
 processJson : String -> State msg -> State msg
 processJson json state =
     case decodeAtom json of
@@ -1414,6 +1567,8 @@ tokenToString token =
         Backticks count ->
             String.repeat count "`"
         Preformatted s -> s
+        Table _ _ ->
+            toString token
         Blockquote _ ->
             toString token
         Codeblock _ ->
@@ -1475,9 +1630,17 @@ gt : String
 gt =
     String.fromChar gtChar
 
+vBarChar : Char
+vBarChar =
+    '|'
+
+vBar : String
+vBar =
+    String.fromChar vBarChar
+
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
-    ( List.member c ['\n', '`', '+', '-', gtChar ] )
+    ( List.member c ['\n', '`', '+', '-', gtChar, vBarChar ] )
     || (Set.member (String.fromChar c) oneCharSymbolSet)
 
 isStringChar : Char -> Bool
@@ -1497,6 +1660,7 @@ type Token
     | Backticks Int
     | Newline Bool
     | Preformatted String
+    | Table (List (List Token)) (List (List (List Token)))
     | Blockquote (List (List Token))
     | Codeblock (List Token)
     | NumberDot String
