@@ -16,6 +16,9 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , splitIntoLines
                                       , parseTokens
                                       , processPreformatted
+                                      , processBlockquotes
+                                      , stripBlockquotePrefix
+                                      , stripOneBlockquotePrefix
                                       , processLists
                                       , processParagraphs
                                       , startOfList
@@ -348,7 +351,7 @@ urlAndTitleParser =
     oneOf [ succeed (,)
           |= urlPrefixParser
           |= urlTitleParser
-          |. ignore zeroOrMore ((==) ' ')
+          |. ignore zeroOrMore isSpaceChar
           |. Parser.end
           , succeed (\s -> (s, Nothing))
           |= keep zeroOrMore (always True)
@@ -632,9 +635,17 @@ processPreformatted lines =
                 _ ->
                   lines2
 
+isSpacesToken : Token -> Bool
+isSpacesToken token =
+    case token of
+        StringToken s ->
+            isSpaces s
+        _ ->
+            False
+
 isSpaces : String -> Bool
 isSpaces string =
-    String.all (\c -> c == ' ') string
+    String.all isSpaceChar string
 
 startsWith : String -> Token -> Bool
 startsWith prefix token =
@@ -828,6 +839,131 @@ processLists lines =
     in
         loop lines []
 
+processBlockquotes : List (List Token) -> List (List Token)
+processBlockquotes lines =
+    let loop : List (List Token) -> List (List Token) -> List (List Token)
+        loop = (\lines res ->
+                    case lines of
+                        [] ->
+                            List.reverse res
+                        line :: tail ->
+                            case line of
+                                SymbolToken s :: _ ->
+                                    if s == gt then
+                                        let (blockquote, rest) =
+                                                getBlockquote line tail
+                                        in
+                                            loop rest <| blockquote :: res
+                                    else
+                                        loop tail <| line :: res
+                                _ ->
+                                    loop tail <| line :: res
+               )
+    in
+        loop lines []
+
+stripBlockquotePrefix : List Token -> (Int, List Token)
+stripBlockquotePrefix line =
+    let loop : Int -> List Token -> (Int, List Token)
+        loop = (\level tokens ->
+                    case stripOneBlockquotePrefix tokens of
+                        Just toks ->
+                            loop (level+1) toks
+                        Nothing ->
+                            let toks = if level <= 0 then
+                                           tokens
+                                       else
+                                           dropLeadingSpace tokens
+                            in
+                                (level, toks)
+               )
+    in
+        loop 0 line
+
+dropLeadingSpace : List Token -> List Token
+dropLeadingSpace tokens =
+    case tokens of
+        StringToken s :: rest ->
+            if String.startsWith " " s then
+                if String.length s == 1 then
+                    rest
+                else
+                    (StringToken <| String.dropLeft 1 s) :: rest
+            else
+                tokens
+        _ ->
+            tokens
+
+stripOneBlockquotePrefix : List Token -> Maybe (List Token)
+stripOneBlockquotePrefix line =
+    let loop : List Token -> Maybe (List Token)
+        loop = (\tokens ->
+                    case tokens of
+                        [] ->
+                            Nothing
+                        SymbolToken s :: rest ->
+                            if s == gt then
+                                Just rest
+                            else
+                                Nothing
+                        token :: rest ->
+                            if isSpacesToken token then
+                                loop rest
+                            else
+                                Nothing
+               )
+    in
+        loop line
+
+isBlankLine : List Token -> Bool
+isBlankLine line =
+    case line of
+        [] ->
+            True
+        StringToken s :: tail ->
+            if isSpaces s then
+                isBlankLine tail
+            else
+                False
+        _ ->
+            False
+
+getBlockquote : List Token -> List (List Token) -> (List Token, List (List Token))
+getBlockquote line lines =
+    let loop : Int -> List (List Token) -> List (List Token) -> (List Token, List (List Token))
+        loop = (\level lines res ->
+                    case lines of
+                        [] ->
+                            ( [ Blockquote <| List.reverse res ]
+                            , lines
+                            )
+                        line :: tail ->
+                            if line == [] then
+                                ( [ Blockquote <| List.reverse res ]
+                                , lines
+                                )
+                            else
+                                let (lvl, tokens) = stripBlockquotePrefix line
+                                in
+                                    if lvl > level then
+                                        let (blockquote, rest) =
+                                                loop lvl tail [tokens]
+                                        in
+                                            loop level rest <| blockquote :: res
+                                    else if (lvl < level) && (isBlankLine tokens) then
+                                        ( [ Blockquote <| List.reverse res ]
+                                        , lines
+                                        )
+                                    else
+                                        loop level tail <| tokens :: res
+               )
+        (level, tokens) = stripBlockquotePrefix line
+    in
+        if level <= 0 then
+            (line, lines)
+        else
+            loop level lines [tokens]
+
 backtickToken : Token
 backtickToken =
     SymbolToken "`"
@@ -927,6 +1063,7 @@ processTokens : List Token -> Atom msg
 processTokens tokens =
     processLists (splitIntoLines tokens)
         |> processPreformatted
+        |> processBlockquotes
         |> processParagraphs False
 
 joinReversedLines : List (List Token) -> List Token
@@ -990,6 +1127,8 @@ getParagraph elidePBeforeList lines =
                             packageRes [] res
                         [Preformatted _] :: _ ->
                             packageRes lines res
+                        [Blockquote _] :: _ ->
+                            packageRes lines res
                         [ListToken _ _] :: _ ->
                             packageRes lines res
                         (SharpToken _ :: _) :: _ ->
@@ -1012,10 +1151,9 @@ processParagraphs elidePBeforeList lines =
                         [] ->
                             List.reverse res
                         [Preformatted string] :: tail ->
-                            let pre = wrapTag "pre"
-                                      [wrapTag "code" [StringAtom string]]
-                            in
-                                loop tail <| pre :: res
+                            loop tail <| (renderPreformatted string) :: res
+                        [Blockquote lines] :: tail ->
+                            loop tail <| (renderBlockquote lines) :: res
                         [ListToken isNumeric records] :: tail ->
                             let lis = renderList isNumeric records
                             in
@@ -1205,12 +1343,27 @@ processCodeBlock tokens =
     in
         loop tokens []
 
+renderPreformatted : String -> Atom msg
+renderPreformatted string =
+    (wrapTag "pre" [wrapTag "code" [StringAtom string]])
+        
+renderBlockquote : List (List Token) -> Atom msg
+renderBlockquote lines =
+    processPreformatted lines
+        |> processParagraphs False
+        |> unwrapParagraphList
+        |> wrapTag "blockquote"
+    
 processToken : Token -> State msg -> State msg
 processToken token state =
     case token of
         Preformatted string ->
             pushAtomOnState
-                (wrapTag "pre" [wrapTag "code" [StringAtom string]])
+                (renderPreformatted string)
+                state
+        Blockquote lines ->
+            pushAtomOnState
+                (renderBlockquote lines)
                 state
         Codeblock tokens ->
             pushAtomOnState
@@ -1260,6 +1413,8 @@ tokenToString token =
         Backticks count ->
             String.repeat count "`"
         Preformatted s -> s
+        Blockquote _ ->
+            toString token
         Codeblock _ ->
             toString token
         NumberDot s ->
@@ -1311,16 +1466,24 @@ sharpString : Int -> String
 sharpString count =
     (String.repeat count sharpSign) ++ " "
 
+gtChar : Char
+gtChar =
+    '>'
+
+gt : String
+gt =
+    String.fromChar gtChar
+
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
-    ( List.member c ['\n', '`', '+', '-'] )
+    ( List.member c ['\n', '`', '+', '-', gtChar ] )
     || (Set.member (String.fromChar c) oneCharSymbolSet)
 
 isStringChar : Char -> Bool
 isStringChar char =
     not <| isOneCharSymbolChar char
         || (Char.isDigit char)
-        || (char == ' ')
+        || (isSpaceChar char)
         || (char == sharpSignChar)
 
 isTwoCharSymbol : String -> Bool
@@ -1333,6 +1496,7 @@ type Token
     | Backticks Int
     | Newline Bool
     | Preformatted String
+    | Blockquote (List (List Token))
     | Codeblock (List Token)
     | NumberDot String
     | ListToken Bool (List ListRecord)
@@ -1364,9 +1528,17 @@ symbolParser =
           , oneCharSymbolParser
           ]
 
+spaceChar : Char
+spaceChar =
+    ' '
+
+space : String
+space =
+    String.fromChar spaceChar
+
 isSpaceChar : Char -> Bool
 isSpaceChar c =
-    c == ' '
+    c == spaceChar
 
 isNewlineChar : Char -> Bool
 isNewlineChar c =
@@ -1430,7 +1602,7 @@ sharpParser =
         |= source
            (Parser.delayedCommit
                 (ignore oneOrMore ((==) sharpSignChar))
-                (ignore (Exactly 1) ((==) ' ')))
+                (ignore (Exactly 1) isSpaceChar))
         , succeed StringToken
             |= keep oneOrMore ((==) sharpSignChar)
         ]
