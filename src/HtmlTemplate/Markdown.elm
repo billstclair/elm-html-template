@@ -1349,9 +1349,10 @@ renderPreformatted string =
         
 renderBlockquote : List (List Token) -> Atom msg
 renderBlockquote lines =
-    processPreformatted lines
+    processLists lines
+        |> processPreformatted
         |> processParagraphs False
-        |> unwrapParagraphList
+        |> (\a -> [a])
         |> wrapTag "blockquote"
     
 processToken : Token -> State msg -> State msg

@@ -823,6 +823,60 @@ functionData =
       , Ok <|
           StringAtom "[[1 ]] x"
       )
+    , ( """
+         ["#md","> foo\\n> bar  \\n> bletch\\n>\\n> gronk"]
+        """
+      , Ok <|
+          tagWrap "blockquote"
+              [ tagWrap "p"
+                    [ StringAtom "foo bar"
+                    , br
+                    , StringAtom "bletch"
+                    ]
+              , tagWrap "p" [ StringAtom "gronk" ]
+              ]
+      )
+    , ( """
+         ["#md","> foo\\n>> bar\\n>\\n>bletch"]
+        """
+      , Ok <|
+          tagWrap "blockquote"
+              [ tagWrap "p" [ StringAtom "foo" ]
+              , tagWrap "blockquote"
+                  [ tagWrap "p" [ StringAtom "bar" ] ]
+              , tagWrap "p" [ StringAtom "bletch" ]
+              ]
+      )
+    , ( """
+         ["#md","> 1. 11\\n>    * 21\\n>    * 22\\n> 2. 12"]
+        """
+      , Ok <|
+          tagWrap "blockquote"
+              [ tagWrap "ol"
+                    [ tagWrap "li"
+                          [ StringAtom "11" 
+                          , tagWrap "ul"
+                              [ tagWrap "li" [ StringAtom "21" ]
+                              , tagWrap "li" [ StringAtom "22" ]
+                              ]
+                          ]
+                    , tagWrap "li" [ StringAtom "12" ]
+                    ]
+              ]
+      )
+    , ( """
+         ["#md","> foo\\n>\\n>     pre\\n> bar"]
+        """
+      , Ok <|
+          tagWrap "blockquote"
+              [ tagWrap "p" [ StringAtom "foo" ]
+              , tagWrap "pre"
+                  [ tagWrap "code"
+                        [ StringAtom "pre" ]
+                  ]
+              , tagWrap "p" [ StringAtom "bar" ]
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg
