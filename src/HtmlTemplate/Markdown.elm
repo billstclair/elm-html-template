@@ -992,6 +992,8 @@ getParagraph elidePBeforeList lines =
                             packageRes lines res
                         [ListToken _ _] :: _ ->
                             packageRes lines res
+                        (SharpToken _ :: _) :: _ ->
+                            packageRes lines res
                         [] :: tail ->
                             loop tail res
                         head :: [] :: tail ->
@@ -1018,6 +1020,16 @@ processParagraphs elidePBeforeList lines =
                             let lis = renderList isNumeric records
                             in
                                 loop tail <| lis :: res
+                        (SharpToken count :: body) :: tail ->
+                            if count <= 6 then
+                                let header = renderHeader count body
+                                in
+                                    loop tail <| header :: res
+                            else
+                                loop (((StringToken <| sharpString count) ::body)
+                                     :: tail
+                                     )
+                                    res
                         _ ->
                             case getParagraph elidePBeforeList lines of
                                 (Nothing, tail) ->
@@ -1109,6 +1121,50 @@ unwrapParagraphList atom =
         _ ->
             [ atom ]
 
+butLast : List a -> List a
+butLast list =
+    List.reverse list
+        |> List.drop 1
+        |> List.reverse
+
+replaceLast : a -> List a -> List a
+replaceLast a list =
+    List.reverse list
+        |> List.drop 1
+        |> (::) a
+        |> List.reverse
+
+dropRightString : String -> String -> String
+dropRightString tail string =
+    if tail == "" then
+        string
+    else
+        let len = String.length tail
+            loop = (\s ->
+                        if String.endsWith tail s then
+                            loop <| String.dropRight len s
+                        else
+                            s
+                   )
+        in
+            loop string
+
+renderHeader : Int -> List Token -> Atom msg
+renderHeader sharpCount body =
+    let b = case LE.last body of
+                Just (StringToken s) ->
+                    if String.endsWith sharpSign s then
+                       replaceLast (StringToken <| dropRightString sharpSign s)
+                           body
+                    else
+                        body
+                _ ->
+                    body
+    in
+        processParagraph b
+            |> unwrapParagraphList
+            |> wrapTag ("h" ++ (toString sharpCount))
+
 renderList : Bool -> List ListRecord -> Atom msg
 renderList isNumeric records =
     let loop : List ListRecord -> List (Atom msg) -> List (Atom msg)
@@ -1164,6 +1220,8 @@ processToken token state =
             pushStringOnState string state
         ListToken isNumeric records ->
             processList isNumeric records state
+        SharpToken _ ->
+            pushStringOnState (tokenToString token) state
         Newline x ->
             pushAtomOnState (if x then
                                  (wrapTag "br" [])
@@ -1196,6 +1254,19 @@ tokenToString token =
             s
         ListToken _ _ ->
             toString token
+        SharpToken count ->
+            sharpString count
+
+sharpSignChar : Char
+sharpSignChar = '#'
+
+sharpSign : String
+sharpSign =
+    String.fromChar sharpSignChar
+
+sharpString : Int -> String
+sharpString count =
+    (String.repeat count sharpSign) ++ " "
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
@@ -1207,6 +1278,7 @@ isStringChar char =
     not <| isOneCharSymbolChar char
         || (Char.isDigit char)
         || (char == ' ')
+        || (char == sharpSignChar)
 
 isTwoCharSymbol : String -> Bool
 isTwoCharSymbol s =
@@ -1221,6 +1293,7 @@ type Token
     | Codeblock (List Token)
     | NumberDot String
     | ListToken Bool (List ListRecord)
+    | SharpToken Int
 
 type alias ListRecord =
     { indent : Int
@@ -1306,9 +1379,22 @@ spacesParser =
         |= source
            (ignore oneOrMore isSpaceChar)
 
+sharpParser : Parser Token
+sharpParser =
+    oneOf
+        [ succeed (\s -> SharpToken <| (String.length s) - 1)
+        |= source
+           (Parser.delayedCommit
+                (ignore oneOrMore ((==) sharpSignChar))
+                (ignore (Exactly 1) ((==) ' ')))
+        , succeed StringToken
+            |= keep oneOrMore ((==) sharpSignChar)
+        ]
+
 tokenParser : Parser Token
 tokenParser =
     oneOf [ backtickParser
+          , sharpParser
           , numberDotParser
           , numberParser
           , symbolParser

@@ -762,6 +762,38 @@ functionData =
               , tagWrap "li" [ StringAtom "2" ]
               ]
       )
+    , ( """
+         ["#md","## one\\n\\np"]
+        """
+      , Ok <|
+          ListAtom
+              [ tagWrap "h1" [ StringAtom "one" ]
+              , tagWrap "p" [ StringAtom "p" ]
+              ]
+      )
+    , ( """
+         ["#md","### two"]
+        """
+      , Ok <|
+          tagWrap "h2" [ StringAtom "two" ]
+      )
+    , ( """
+         ["#md","######## seven"]
+        """
+      , Ok <|
+          tagWrap "p"
+              [ StringAtom "####### seven" ]
+      )
+    , ( """
+         ["#md","## [example](http://example.com/)"]
+        """
+      , Ok <|
+          tagWrap "h1"
+              [ fullTag "a"
+                    [ ( "href", StringAtom "http://example.com/" ) ]
+                    [ StringAtom "example" ]
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg
