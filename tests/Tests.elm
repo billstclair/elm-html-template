@@ -794,6 +794,17 @@ functionData =
                     [ StringAtom "example" ]
               ]
       )
+    , ( """
+         ["#mdnp","1 + 2 = [[\\\"#+\\\",1,2]]"]
+        """
+      , Ok <|
+          ListAtom [ StringAtom "1 + 2 = "
+                   , FuncallAtom
+                         { function = "+"
+                         , args = [IntAtom 1, IntAtom 2]
+                         }
+                   ]
+      )
     ]
 
 encodeDecode : String -> Atom msg

@@ -27,7 +27,7 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , parseUrlWithTitle
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
-import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom )
+import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
 import HtmlTemplate.Utility as Utility
     exposing ( hasWhitespacePrefix, hasWhitespaceSuffix )
 
@@ -1222,6 +1222,8 @@ processToken token state =
             processList isNumeric records state
         SharpToken _ ->
             pushStringOnState (tokenToString token) state
+        JsonToken json ->
+            processJson json state
         Newline x ->
             pushAtomOnState (if x then
                                  (wrapTag "br" [])
@@ -1239,6 +1241,16 @@ processToken token state =
                 Just converter ->
                     converter token state
 
+-- TODO
+processJson : String -> State msg -> State msg
+processJson json state =
+    case decodeAtom json of
+        Ok atom ->
+            pushAtomOnState atom state
+        Err err ->
+            pushStringOnState (json ++ ": " ++ (toString err))
+                state
+
 tokenToString : Token -> String
 tokenToString token =
     case token of
@@ -1249,16 +1261,47 @@ tokenToString token =
             String.repeat count "`"
         Preformatted s -> s
         Codeblock _ ->
-            toString token --shouldn't happen
+            toString token
         NumberDot s ->
             s
         ListToken _ _ ->
             toString token
         SharpToken count ->
             sharpString count
+        JsonToken json ->
+            jsonString json
+
+leftSquareBracketChar : Char
+leftSquareBracketChar =
+    '['
+
+leftSquareBracket : String
+leftSquareBracket =
+    String.fromChar leftSquareBracketChar
+
+doubleLeftSquareBracket : String
+doubleLeftSquareBracket =
+    leftSquareBracket ++ leftSquareBracket
+
+rightSquareBracketChar : Char
+rightSquareBracketChar =
+    ']'
+
+rightSquareBracket : String
+rightSquareBracket =
+    String.fromChar rightSquareBracketChar
+
+doubleRightSquareBracket : String
+doubleRightSquareBracket =
+    rightSquareBracket ++ rightSquareBracket
+
+jsonString : String -> String
+jsonString json =
+    leftSquareBracket ++ json ++ rightSquareBracket
 
 sharpSignChar : Char
-sharpSignChar = '#'
+sharpSignChar =
+    '#'
 
 sharpSign : String
 sharpSign =
@@ -1294,6 +1337,7 @@ type Token
     | NumberDot String
     | ListToken Bool (List ListRecord)
     | SharpToken Int
+    | JsonToken String
 
 type alias ListRecord =
     { indent : Int
@@ -1391,10 +1435,37 @@ sharpParser =
             |= keep oneOrMore ((==) sharpSignChar)
         ]
 
+jsonEscapeParser : Parser Token
+jsonEscapeParser =
+    succeed (\s -> JsonToken <| String.dropRight 1 <| String.dropLeft 1 s)
+        |= source
+           (Parser.delayedCommit
+                (ignore (Exactly 2) ((==) leftSquareBracketChar))
+                jsonStringParser
+           )
+
+notJsonStringChar : Char -> Bool
+notJsonStringChar char =
+    (char /= rightSquareBracketChar)
+    && (char /= '\n')
+
+jsonStringParser : Parser ()
+jsonStringParser =
+    Parser.delayedCommit
+        (ignore oneOrMore notJsonStringChar)
+        (oneOf [ succeed (\s -> ())
+                     |= Parser.symbol doubleRightSquareBracket
+               , Parser.delayedCommit
+                   (ignore (Exactly 1) ((==) rightSquareBracketChar))
+                   (Parser.lazy (\() -> jsonStringParser))
+               ]
+        )
+
 tokenParser : Parser Token
 tokenParser =
     oneOf [ backtickParser
           , sharpParser
+          , jsonEscapeParser
           , numberDotParser
           , numberParser
           , symbolParser
