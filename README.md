@@ -6,5 +6,7 @@ One of the problems I find with Elm is that the HTML is compiled into the JavaSc
 
 The included example application is live at [lisplog.org/elm-html-template](https://lisplog.org/elm-html-template/).
 
+I'm working on [Xossbow](https://Xossbow.com), a commercial-quality blogging package based on `elm-html-template`.
+
 Bill St. Clair &lt;<billstclair@gmail.com>&gt;  
 3 March 2017

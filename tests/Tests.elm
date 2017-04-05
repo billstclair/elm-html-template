@@ -805,6 +805,24 @@ functionData =
                          }
                    ]
       )
+    , ( """
+         ["#mdnp","[[\\\"]\\\"]]"]
+        """
+      , Ok <|
+          StringAtom "]"
+      )
+    , ( """
+         ["#mdnp","[[1]] x"]
+        """
+      , Ok <|
+          ListAtom [ IntAtom 1, StringAtom " x" ]
+      )
+    , ( """
+         ["#mdnp","[[1\\n]] x"]
+        """
+      , Ok <|
+          StringAtom "[[1 ]] x"
+      )
     ]
 
 encodeDecode : String -> Atom msg

@@ -11,6 +11,10 @@
        "The \"templates\", \"pages\", \"settings\", and \"stylesheets\" links in the sidebar can be used to inspect the JSON and CSS that define the site.",
        "The \"[Page JSON]\" link at the bottom of the page shows the JSON source for the current page.",
        "Clicking a page title on the index page will go to that page.",
+       ["If you're looking for a blogging tool, not a programmer's templating tool, consider ",
+        ["a",{"href":"https://Xossbow.com"},["Xossbow"]],
+        "."
+       ],
        ["Source code is at: ",
         ["a",{"href":"https://github.com/billstclair/elm-html-template"},
          ["github.com/billstclair/elm-html-template"]
