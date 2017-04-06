@@ -59,10 +59,12 @@ A non-indented line ends the code block.
 Supported. One or more hyphens, asterisks, or underscores in a line by themselves will produce a horizontal rule.
 
     * * *
+    ---
+    _
 
 ### Tables
 
-This is not in Gruber's Markdown spec, but is done [GitHub flavored](https://guides.github.com/features/mastering-markdown/#GitHub-flavored-markdown)
+This is not in Gruber's Markdown spec, but is done [GitHub flavored](https://guides.github.com/features/mastering-markdown/#GitHub-flavored-markdown).
 
     First Header | Second Header
     ------------ | -------------
@@ -85,13 +87,13 @@ Supported, but only with inline URLs. Does NOT support the reference-style URLs.
 
 Supported. One asterisk or underscore surrounding text makes it _italic_. Two makes it **bold**.
 
-    _italic_ **bold**
+    _italic_ **bold** *italic* __bold__
 
 ### Code
 
 Surround with backticks ("\`") to produce `<code>` blocks. Use multiple backticks to surround text containing a literal backtick. I prefer to use underscore for italics and asterisk for bold, but either works.
 
-    `code
+    `code`
     ``code containing ` surrounded by double-backticks to quote a backtick.``
 
 ### Images
@@ -107,7 +109,7 @@ Supported, but again does NOT support reference-style URLs for the images.
 
 As usual, a backslash before a special character will quote it. Supports the standard special characters:
 
-    \   backslash`
+    \   backslash
     \`   backtick
     *   asterisk
     _   underscore

@@ -25,6 +25,8 @@ To generate `site/index.html`:
 
 The following will be easier to understand if you read about the scripting language in the [JSON Documentation](../JSON.md).
 
+The supported subset of Markdown is documented [here](../Markdown.md).
+
 ### JSON Files
 
 The JSON for templates and pages is in [`site/template`](site/template/) and [`site/page`](site/page/), respectively. There are symbolic links to those directories at top-level, so that the code will see them when run with `elm-reactor`.
