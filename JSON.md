@@ -171,7 +171,7 @@ Function Call | Description
 `["#if",<condition>,<consequent>,<antecendent>]` | If `<condition>` evaluates to true (`BoolAtom True`), then returns the value of `<consequence>`. Otherwise, returns the value of `<antecedent>`. `<antecedent>` is optional, and defaults to the empty list (which renders as nothing).
 **Rendering** | Functions useful for creating Html output.
 `["#ps",<arg>,...]` | Wrap a paragraph tag around the arguments. Same as `["p",{},[<arg>,...]]`, but saves a few keystrokes.
-`["#md",<arg>,...]` | Does "Markdown" processing on the args. It handles a subset of [John Gruber's syntax](https://daringfireball.net/projects/markdown/syntax) (local copy [here](daring-fireball-markdown-syntax/index.html)). Documented in [Markdown.md](markdown.md).
+`["#md",<arg>,...]` | Does "Markdown" processing on the args. It handles a subset of [John Gruber's syntax](https://daringfireball.net/projects/markdown/syntax) (local copy [here](daring-fireball-markdown-syntax/index.html)). Documented in [Markdown.md](Markdown.md).
 `["#mdnp",<arg>,...]` | Same as `#md`, but does NOT wrap the result with a paragraph. "np" = No Paragraph.
 `["#makeRecord",<tag>,<attributes>,<body>]` | Same as [<tag>,<attributes>,<body>], but evaluates `<tag>` and `<attributes>`, which the parser doesn't do.
 **List Functions** | The names are mostly taken from Lisp.
