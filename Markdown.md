@@ -8,7 +8,7 @@ Not supported.
 
 ### Automatic Escaping for Special Characters
 
-This comes for free with Elm. All the required `&foo;` syntax and URL encoding are supported. It also recognizes a handful of entities, currenlty only three. Adding more is easy. Send me a pull request for [src/HtmlTemplate/Entities.elm](src/HtmlTemplate/Entities.elm).
+This comes for free with Elm. All the required `&foo;` syntax and URL encoding are generated. You can also type a handful of entities, currently only three. Adding more is easy. Send me a pull request for [src/HtmlTemplate/Entities.elm](src/HtmlTemplate/Entities.elm).
 
 * `&nbsp;` - non-breaking space
 * `&copy;` - Copyright symbol (&copy;)

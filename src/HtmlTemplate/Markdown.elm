@@ -31,6 +31,8 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , splitOnVerticalBars
                                       , isListDashes
                                       , processTables
+                                      , matchHRule
+                                      , trimLine
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
@@ -504,6 +506,54 @@ separateFirstLine tokens =
     in
         loop tokens []
 
+hRuleChars : List Char
+hRuleChars =
+    [ '*', '-', '_' ]
+
+-- Returns 'a' for an empty string.
+firstChar : String -> Char
+firstChar string =
+    Maybe.withDefault 'a' <| List.head <| String.toList string
+
+matchHRule : List Token -> List Token
+matchHRule line =
+    let loop = (\char count tokens ->
+                    case tokens of
+                        [] ->
+                            if count >= 3 then
+                                [ List.map tokenToString line
+                                      |> String.concat
+                                      |> HorizontalRule
+                                ]
+                            else
+                                line
+                        (StringToken s) :: rest ->
+                            if (isSpaces s) then
+                                loop char count rest
+                            else
+                                line
+                        (SymbolToken s) :: rest ->
+                            if String.all ((==) char) s then
+                                loop char (count + (String.length s)) rest
+                            else
+                                line
+                        _ ->
+                            line
+           )
+    in
+        case trimLine line of
+            (SymbolToken s) :: rest ->
+                let char = firstChar s
+                in
+                    if (List.member char hRuleChars)
+                        && (String.all ((==) char) s)
+                    then
+                        loop char (String.length s) rest
+                    else
+                        line
+            _ ->
+                line
+
 clearBlankLine : List Token -> List Token
 clearBlankLine tokens =
     case tokens of
@@ -511,9 +561,9 @@ clearBlankLine tokens =
             if "" == String.trimLeft s then
                 []
             else
-                tokens
+                matchHRule tokens
         _ ->
-            tokens
+            matchHRule tokens
 
 tabSpaces : Int -> Int
 tabSpaces col =
@@ -1245,6 +1295,8 @@ getParagraph elidePBeforeList lines =
                             packageRes lines res
                         (SharpToken _ :: _) :: _ ->
                             packageRes lines res
+                        [HorizontalRule _] :: _ ->
+                            packageRes lines res
                         [] :: tail ->
                             loop tail res
                         head :: [] :: tail ->
@@ -1282,6 +1334,8 @@ renderParagraphs elidePBeforeList lines =
                                      :: tail
                                      )
                                     res
+                        [HorizontalRule _] :: tail ->
+                            loop tail <| (wrapTag "hr" []) :: res
                         _ ->
                             case getParagraph elidePBeforeList lines of
                                 (Nothing, tail) ->
@@ -1527,6 +1581,8 @@ processToken token state =
             pushStringOnState (tokenToString token) state
         JsonToken json ->
             processJson json state
+        HorizontalRule _ ->
+            pushAtomOnState (wrapTag "hr" []) state
         Newline x ->
             pushAtomOnState (if x then
                                  (wrapTag "br" [])
@@ -1576,6 +1632,8 @@ tokenToString token =
             sharpString count
         JsonToken json ->
             jsonString json
+        HorizontalRule s ->
+            s
 
 leftSquareBracketChar : Char
 leftSquareBracketChar =
@@ -1662,6 +1720,7 @@ type Token
     | ListToken Bool (List ListRecord)
     | SharpToken Int
     | JsonToken String
+    | HorizontalRule String
 
 type alias ListRecord =
     { indent : Int

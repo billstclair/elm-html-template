@@ -904,6 +904,43 @@ functionData =
                     ]
               ]
       )
+    , ( """
+         ["#md","***"]
+        """
+      , Ok <|
+          tagWrap "hr" []
+      )
+    , ( """
+         ["#md","**"]
+        """
+      , Ok <|
+          tagWrap "p" [StringAtom "**"]
+      )
+    , ( """
+         ["#md"," - - - "]
+        """
+      , Ok <|
+          tagWrap "hr" []
+      )
+    , ( """
+         ["#md"," __ __ __ __  "]
+        """
+      , Ok <|
+          tagWrap "hr" []
+      )
+    , ( """
+         ["#md","foo\\n***\\nbar\\n - -  --- \\nbletch\\n _ _ _"]
+        """
+      , Ok <|
+          ListAtom
+              [ tagWrap "p" [StringAtom "foo"]
+              , tagWrap "hr" []
+              , tagWrap "p" [StringAtom "bar"]
+              , tagWrap "hr" []
+              , tagWrap "p" [StringAtom "bletch"]
+              , tagWrap "hr" []
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg
