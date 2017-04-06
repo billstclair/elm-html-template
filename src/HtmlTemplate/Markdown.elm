@@ -1010,24 +1010,19 @@ dropLeadingSpace tokens =
 
 stripOneBlockquotePrefix : List Token -> Maybe (List Token)
 stripOneBlockquotePrefix line =
-    let loop : List Token -> Maybe (List Token)
-        loop = (\tokens ->
-                    case tokens of
-                        [] ->
-                            Nothing
-                        SymbolToken s :: rest ->
-                            if s == gt then
-                                Just rest
-                            else
-                                Nothing
-                        token :: rest ->
-                            if isSpacesToken token then
-                                loop rest
-                            else
-                                Nothing
-               )
-    in
-        loop line
+    case line of
+        [] ->
+            Nothing
+        SymbolToken s :: rest ->
+            if s == gt then
+                Just rest
+            else
+                Nothing
+        token :: rest ->
+            if isSpacesToken token then
+                stripOneBlockquotePrefix rest
+            else
+                Nothing
 
 isBlankLine : List Token -> Bool
 isBlankLine line =
