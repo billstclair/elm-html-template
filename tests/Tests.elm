@@ -928,6 +928,26 @@ functionData =
               ]
       )
     , ( """
+         ["#md","one|two|three\\n-|--|---\\n1||"]
+        """
+      , Ok <|
+          tagWrap "table"
+              [ tagWrap "thead"
+                    [ tagWrap "tr"
+                          [ tagWrap "th" [StringAtom "one"]
+                          , tagWrap "th" [StringAtom "two"]
+                          , tagWrap "th" [StringAtom "three"]
+                          ]
+                    ]
+              ,tagWrap "tbody"
+                  [ tagWrap "tr"
+                        [ fullTag "td" [("colspan", IntAtom 3)]
+                              [StringAtom "1"]
+                        ]
+                  ]
+              ]
+      )
+    , ( """
          ["#md","one|two|three\\n-|--|---\\n1| |3"]
         """
       , Ok <|
