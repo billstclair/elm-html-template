@@ -1079,6 +1079,19 @@ functionData =
       , Ok <|
           StringAtom "1"
       )
+    , ( """
+         ["#mdnp","{ p : pclass, li: liclass }foo\\n1. James Brown is Number One!"]
+        """
+      , Ok <|
+          ListAtom
+              [ fullTag "p" [("class", StringAtom "pclass")]
+                    [ StringAtom "foo" ]
+              , tagWrap "ol"
+                  [ fullTag "li" [ ("class", StringAtom "liclass") ]
+                        [ StringAtom "James Brown is Number One!" ]
+                  ]
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg

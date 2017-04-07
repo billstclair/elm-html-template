@@ -109,7 +109,7 @@ Supported, but again does NOT support reference-style URLs for the images.
 
 ## Miscellaneous
 
-### Backslash escapes
+### Backslash Escapes
 
 As usual, a backslash before a special character will quote it. Supports the standard special characters:
 
@@ -126,7 +126,7 @@ As usual, a backslash before a special character will quote it. Supports the sta
     .   dot
     !   exclamation mark
 
-### Automatic links
+### Automatic Links
 
 Surround a string beginning with `http://`, `https://`, or `ftp://` or of the form `x@y.z` with angle-brackets to get a link.
 
@@ -140,7 +140,7 @@ Surround a string beginning with `http://`, `https://`, or `ftp://` or of the fo
 
 This section describes additions I made to standard Markdown processing.
 
-### JSON escape
+### JSON Escape
 
 You can include `HtmlTemplate` JSON in your output by surrounding it with double-square brackets. E.g.:
 
@@ -155,3 +155,57 @@ Evaluate the above on the "Play" page of the example, and it will display as an 
 The parser is stupid about termination of the JSON. If it sees two right square brackets in a row, that's the end, so if your code needs to include that, add spaces so that the only place where "]]" appears is at the end:
 
      [["node:marquee",{},["Annoy your friends!"] ]]
+
+### Tag Classes
+
+If you add a JSON-style set-bracket-delimited object, without double-quotes around the key or value, between two block elements (or before the first one), you can specify the classes of tags that follow.
+
+For example:
+
+    foo
+    1. James Brown is Number One!
+    
+Encodes as:
+
+    [["p",{},
+      ["foo"]
+     ],
+     ["ol",{},
+      [["li",{},
+        [["p",{},
+          ["James Brown is Number One!"]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+
+But:
+
+    { p : pclass
+    , li : liclass
+    }
+    foo
+    1. James Brown is Number One!
+    
+Encodes as:
+
+    [["p",{"class": "pclass"},
+      ["foo"]
+     ],
+     ["ol",{},
+      [["li",{"class": "liclass"},
+        ["James Brown is Number One!"]
+        ]
+       ]
+      ]
+     ]
+    ]
+
+You can't currently change the class bindings in the middle of a block element, but that wouldn't be a hard change to make, should it become desirable.
+
+This means that the left set bracket ("{") needs to be in the first column. Otherwise, it's in the middle of a paragraph starting with spaces. One benefit here is that you can indent a tag class object by four spaces to display it as a code block.
+
+It might also be nice to be able to have different classes for different table columns.
+

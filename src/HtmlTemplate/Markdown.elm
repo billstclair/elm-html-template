@@ -123,7 +123,7 @@ specialProcessorDict =
     Dict.fromList specialProcessors
 
 type alias Converter msg =
-    Token -> State msg -> State msg
+    RenderState -> Token -> State msg -> State msg
 
 pairedConverters : List (String, Converter msg)
 pairedConverters =
@@ -185,12 +185,12 @@ popStack state =
             { state | result = [] }
 
 backslashQuotedConverter : Converter msg
-backslashQuotedConverter token state =
+backslashQuotedConverter renderState token state =
     pushStringOnState
     (String.dropLeft 1 <| tokenToString token) state
 
 stringConverter : Converter msg
-stringConverter token state =
+stringConverter renderState token state =
     pushStringOnState (tokenToString token) state
 
 pairedConverter : ( List (Atom msg) -> Atom msg) -> Token -> State msg -> State msg
@@ -239,20 +239,30 @@ pairedConverter wrapper token (TheState state) =
                              , stack = Just <| TheState state
                          }
 
-wrapTag : String -> List (Atom msg) -> Atom msg
-wrapTag tag body =
-    RecordAtom { tag = tag
-               , attributes = []
-               , body = body
-               }
+fullTag : RenderState -> String -> List (String, Atom msg) -> List (Atom msg) -> Atom msg
+fullTag state tag attributes body =
+    let attrs = case Dict.get tag state of
+                    Nothing ->
+                        attributes
+                    Just class ->
+                        ("class", StringAtom class) :: attributes
+    in
+        RecordAtom { tag = tag
+                   , attributes = attrs
+                   , body = body
+                   }
+
+wrapTag : RenderState -> String -> List (Atom msg) -> Atom msg
+wrapTag state tag body =
+    fullTag state tag [] body
 
 emConverter : Converter msg
-emConverter token state =
-    pairedConverter (wrapTag "em") token state
+emConverter renderState token state =
+    pairedConverter (wrapTag renderState "em") token state
 
 strongConverter : Converter msg
-strongConverter token state =
-    pairedConverter (wrapTag "strong") token state
+strongConverter renderState token state =
+    pairedConverter (wrapTag renderState "strong") token state
 
 pushStringOnResult : String -> StateRecord msg -> State msg
 pushStringOnResult string state =
@@ -283,7 +293,7 @@ pushTokenOnResult token state =
     pushAtomOnResult (StringAtom <| tokenToString token) state
 
 linkStartConverter : Converter msg
-linkStartConverter token (TheState state) =
+linkStartConverter renderState token (TheState state) =
     if amLookingForCloseParen state then
         pushTokenOnResult token state
     else
@@ -295,8 +305,8 @@ linkStartConverter token (TheState state) =
         , result = []
         }
 
-processLinkMiddle : Token -> State msg -> State msg
-processLinkMiddle token (TheState state) =
+processLinkMiddle : Converter msg
+processLinkMiddle renderState token (TheState state) =
     if state.lookingFor /= Just closeParenToken then
         pushTokenOnResult token state
     else
@@ -431,7 +441,7 @@ makeLinkRecord body url title =
     }
 
 closeParenConverter : Converter msg
-closeParenConverter token (TheState state) =
+closeParenConverter renderState token (TheState state) =
     if state.lookingFor /= Just closeParenToken then
         pushTokenOnResult token state
     else
@@ -645,6 +655,15 @@ separateFirstLine tokens =
                                            front
                                  , rest
                                  )
+                        PlistToken x :: rest ->
+                            Just <| if front == [] then
+                                        ( [PlistToken x]
+                                        , case rest of
+                                              Newline _ :: tail -> tail
+                                              _ -> rest
+                                        )
+                                    else
+                                        ( List.reverse front, tokens )
                         first :: rest ->
                             loop rest <| first :: front
                )
@@ -1375,13 +1394,20 @@ elideLeadingWhitespace tokens =
     in
         List.drop 1 <| loop (Newline False :: tokens) []
 
+type alias RenderState =
+    Dict String String
+
+emptyRenderState : RenderState
+emptyRenderState =
+    Dict.empty
+
 processTokens : List Token -> Atom msg
 processTokens tokens =
     processTables (splitIntoLines tokens)
         |> processLists
         |> processPreformatted
         |> processBlockquotes
-        |> renderParagraphs False
+        |> renderParagraphs emptyRenderState False
 
 joinReversedLines : List (List Token) -> List Token
 joinReversedLines lines =
@@ -1411,8 +1437,8 @@ joinReversedLines lines =
     in
         loop lines []
 
-getParagraph : Bool -> List (List Token) -> (Maybe (Atom msg), List (List Token))
-getParagraph elidePBeforeList lines =
+getParagraph : RenderState -> Bool -> List (List Token) -> (Maybe (Atom msg), List (List Token))
+getParagraph state elidePBeforeList lines =
     let packageRes : List (List Token) -> List (List Token) -> (Maybe (Atom msg), List (List Token))
         packageRes = (\lines res ->
                           if res == [] then
@@ -1423,13 +1449,13 @@ getParagraph elidePBeforeList lines =
                                                (ListToken _ _ :: _) :: _ -> False
                                                _ -> True
                                   wrapper = if wrapit || (not elidePBeforeList) then
-                                                wrapTag "p"
+                                                wrapTag state "p"
                                             else
                                                 ListAtom
                               in
                                   (Just
                                        <| wrapper
-                                       <| case renderParagraph
+                                       <| case renderParagraph state
                                            <| joinReversedLines res
                                           of
                                               ListAtom l -> l
@@ -1464,54 +1490,62 @@ getParagraph elidePBeforeList lines =
     in
         loop lines []
 
-renderParagraphs : Bool -> List (List Token) -> Atom msg
-renderParagraphs elidePBeforeList lines =
-    let loop : List (List Token) -> List (Atom msg) -> List (Atom msg)
-        loop = (\lines res ->
+renderParagraphs : RenderState -> Bool -> List (List Token) -> Atom msg
+renderParagraphs state elidePBeforeList lines =
+    let loop : RenderState -> List (List Token) -> List (Atom msg) -> List (Atom msg)
+        loop = (\state lines res ->
                     case lines of
                         [] ->
                             List.reverse res
-                        [Preformatted string] :: tail ->
-                            loop tail <| (renderPreformatted string) :: res
-                        [Table header rows] :: tail ->
-                            loop tail <| (renderTable header rows) :: res
-                        [Blockquote lines] :: tail ->
-                            loop tail <| (renderBlockquote lines) :: res
-                        [ListToken isNumeric records] :: tail ->
-                            let lis = renderList isNumeric records
+                        [PlistToken plist] :: tail ->
+                            let st = Dict.union (Dict.fromList plist) state
                             in
-                                loop tail <| lis :: res
+                                loop st tail res
+                        [Preformatted string] :: tail ->
+                            loop state tail
+                                <| (renderPreformatted state string) :: res
+                        [Table header rows] :: tail ->
+                            loop state tail
+                                <| (renderTable state header rows) :: res
+                        [Blockquote lines] :: tail ->
+                            loop state tail
+                                <| (renderBlockquote state lines) :: res
+                        [ListToken isNumeric records] :: tail ->
+                            let lis = renderList state isNumeric records
+                            in
+                                loop state tail <| lis :: res
                         (SharpToken count :: body) :: tail ->
                             if count <= 6 then
-                                let header = renderHeader count body
+                                let header = renderHeader state count body
                                 in
-                                    loop tail <| header :: res
+                                    loop state tail <| header :: res
                             else
-                                loop (((StringToken <| sharpString count) ::body)
+                                loop state
+                                    (((StringToken <| sharpString count) ::body)
                                      :: tail
                                      )
                                     res
                         [HorizontalRule _] :: tail ->
-                            loop tail <| (wrapTag "hr" []) :: res
+                            loop state tail <| (wrapTag state "hr" []) :: res
                         _ ->
-                            case getParagraph elidePBeforeList lines of
+                            case getParagraph state elidePBeforeList lines of
                                 (Nothing, tail) ->
-                                    loop tail res
+                                    loop state tail res
                                 (Just p, tail) ->
-                                    loop tail <| p :: res
+                                    loop state tail <| p :: res
                )
     in
-        case loop lines [] of
+        case loop state lines [] of
             [] -> ListAtom []
             [a] -> a
             atoms -> ListAtom atoms
 
-renderParagraph : List Token -> Atom msg
-renderParagraph tokens =
-    processLoop (elideLeadingWhitespace (processCodeblocks tokens)) initialState
+renderParagraph : RenderState -> List Token -> Atom msg
+renderParagraph state tokens =
+    processLoop state (elideLeadingWhitespace (processCodeblocks tokens)) initialState
 
-processLoop : List Token -> State msg -> Atom msg
-processLoop tokens state =
+processLoop : RenderState -> List Token -> State msg -> Atom msg
+processLoop renderState tokens state =
     case tokens of
         [] ->
             finishProcessing state
@@ -1520,13 +1554,17 @@ processLoop tokens state =
                 Just processor ->
                     case processor s tail of
                         Nothing ->
-                            processLoop tail <| pushStringOnState s state
+                            processLoop renderState tail
+                                <| pushStringOnState s state
                         Just (atom, rest) ->
-                            processLoop rest <| pushAtomOnState atom state
+                            processLoop renderState rest
+                                <| pushAtomOnState atom state
                 Nothing ->
-                    processLoop tail <| processToken (SymbolToken s) state
+                    processLoop renderState tail
+                        <| processToken renderState (SymbolToken s) state
         token :: tail ->
-            processLoop tail <| processToken token state
+            processLoop renderState tail
+                <| processToken renderState token state
 
 finishProcessing : State msg -> Atom msg
 finishProcessing (TheState st) =
@@ -1580,8 +1618,10 @@ pushAtomOnState atom (TheState state) =
 unwrapParagraphList : Atom msg -> List (Atom msg)
 unwrapParagraphList atom =
     case atom of
-        RecordAtom { tag, attributes, body} ->
-            if tag == "p" && attributes == [] then
+        RecordAtom { tag, body} ->
+            -- Intentionally ignoring attributes here.
+            -- Want to remove paragraphs with classes.
+            if tag == "p" then
                 body
             else
                 [ atom ]
@@ -1622,8 +1662,8 @@ dropRightString tail string =
         in
             loop string
 
-renderHeader : Int -> List Token -> Atom msg
-renderHeader sharpCount body =
+renderHeader : RenderState -> Int -> List Token -> Atom msg
+renderHeader state sharpCount body =
     let b = case LE.last body of
                 Just (StringToken s) ->
                     if String.endsWith sharpSign s then
@@ -1634,34 +1674,34 @@ renderHeader sharpCount body =
                 _ ->
                     body
     in
-        renderParagraph b
+        renderParagraph state b
             |> unwrapParagraphList
-            |> wrapTag ("h" ++ (toString sharpCount))
+            |> wrapTag state ("h" ++ (toString sharpCount))
 
-renderList : Bool -> List ListRecord -> Atom msg
-renderList isNumeric records =
+renderList : RenderState -> Bool -> List ListRecord -> Atom msg
+renderList state isNumeric records =
     let loop : List ListRecord -> List (Atom msg) -> List (Atom msg)
         loop = (\items res ->
                     case items of
                         [] ->
                             List.reverse res
                         { lines } :: tail ->
-                            let atom = renderParagraphs True lines
+                            let atom = renderParagraphs state True lines
                                 body = unwrapParagraphList atom
-                                item = wrapTag "li" body
+                                item = wrapTag state "li" body
                             in
                                 loop tail <| item :: res
                )
     in
-        wrapTag (if isNumeric then "ol" else "ul")
+        wrapTag state (if isNumeric then "ol" else "ul")
             <| loop records []
 
-processList : Bool -> List ListRecord -> State msg -> State msg
-processList isNumeric records state =
-    pushAtomOnState (renderList isNumeric records) state
+processList : RenderState -> Bool -> List ListRecord -> State msg -> State msg
+processList renderState isNumeric records state =
+    pushAtomOnState (renderList renderState isNumeric records) state
 
-processCodeBlock : List Token -> List (Atom msg)
-processCodeBlock tokens =
+processCodeBlock : RenderState -> List Token -> List (Atom msg)
+processCodeBlock state tokens =
     let loop = (\tokens res ->
                     case tokens of
                         [] ->
@@ -1669,7 +1709,7 @@ processCodeBlock tokens =
                         token :: rest ->
                             let atom = case token of
                                            StringToken s -> StringAtom s
-                                           Newline True -> wrapTag "br" []
+                                           Newline True -> wrapTag state "br" []
                                            Newline False -> StringAtom " "
                                            _ -> StringAtom <| tokenToString token
                             in
@@ -1678,37 +1718,30 @@ processCodeBlock tokens =
     in
         loop tokens []
 
-renderPreformatted : String -> Atom msg
-renderPreformatted string =
-    wrapTag "pre" [wrapTag "code" [StringAtom string]]
+renderPreformatted : RenderState -> String -> Atom msg
+renderPreformatted state string =
+    wrapTag state "pre" [wrapTag state "code" [StringAtom string]]
 
-renderTable : List (List Token) -> List (List (List Token)) -> Atom msg
-renderTable header rows =
-    wrapTag "table"
-        <| (wrapTag "thead"
-             [ wrapTag "tr"
+renderTable : RenderState -> List (List Token) -> List (List (List Token)) -> Atom msg
+renderTable state header rows =
+    wrapTag state "table"
+        <| (wrapTag state "thead"
+             [ wrapTag state "tr"
                    <| List.map
-                       (\th -> wrapTag "th" [ renderParagraph th ])
+                       (\th -> wrapTag state "th" [ renderParagraph state th ])
                        header
              ]
            )
-        :: [ wrapTag "tbody"
+        :: [ wrapTag state "tbody"
                  <| List.map (\tr ->
-                                  wrapTag "tr"
-                                      <| renderTableRow tr
+                                  wrapTag state "tr"
+                                      <| renderTableRow state tr
                              )
                      rows
            ]
         
-fullTag : String -> List (String, Atom msg) -> List (Atom msg) -> Atom msg
-fullTag tag attributes body =
-    RecordAtom { tag = tag
-               , attributes = attributes
-               , body = body
-               }
-
-renderTableRow : List (List Token) -> List (Atom msg)
-renderTableRow tr =
+renderTableRow : RenderState -> List (List Token) -> List (Atom msg)
+renderTableRow state tr =
     let loop : List (List Token) -> List (Int, List Token) -> List (Int, List Token)
         loop = (\cols accum ->
                     case cols of
@@ -1727,10 +1760,10 @@ renderTableRow tr =
     in
         List.map (\(colspan, td) ->
                    if colspan == 1 then
-                       wrapTag "td" [ renderParagraph td ]
+                       wrapTag state "td" [ renderParagraph state td ]
                    else
-                       fullTag "td" [("colspan", IntAtom colspan)]
-                           [ renderParagraph td ]
+                       fullTag state "td" [("colspan", IntAtom colspan)]
+                           [ renderParagraph state td ]
                   )
                   (loop tr [])
             
@@ -1742,47 +1775,48 @@ atomToList atom =
         _ ->
             [atom]
 
-renderBlockquote : List (List Token) -> Atom msg
-renderBlockquote lines =
+renderBlockquote : RenderState -> List (List Token) -> Atom msg
+renderBlockquote state lines =
     processTables lines
         |> processLists
         |> processPreformatted
-        |> renderParagraphs False
+        |> renderParagraphs state False
         |> atomToList
-        |> wrapTag "blockquote"
+        |> wrapTag state "blockquote"
     
-processToken : Token -> State msg -> State msg
-processToken token state =
+processToken : RenderState -> Token -> State msg -> State msg
+processToken renderState token state =
     case token of
         Preformatted string ->
             pushAtomOnState
-                (renderPreformatted string)
+                (renderPreformatted renderState string)
                 state
         Table header rows ->
             pushAtomOnState
-                (renderTable header rows)
+                (renderTable renderState header rows)
                 state
         Blockquote lines ->
             pushAtomOnState
-                (renderBlockquote lines)
+                (renderBlockquote renderState lines)
                 state
         Codeblock tokens ->
             pushAtomOnState
-                (wrapTag "code" <| processCodeBlock tokens)
+                (wrapTag renderState "code"
+                     <| processCodeBlock renderState tokens)
                 state
         NumberDot string ->
             pushStringOnState string state
         ListToken isNumeric records ->
-            processList isNumeric records state
+            processList renderState isNumeric records state
         SharpToken _ ->
             pushStringOnState (tokenToString token) state
         JsonToken json ->
             processJson json state
         HorizontalRule _ ->
-            pushAtomOnState (wrapTag "hr" []) state
+            pushAtomOnState (wrapTag renderState "hr" []) state
         Newline x ->
             pushAtomOnState (if x then
-                                 (wrapTag "br" [])
+                                 (wrapTag renderState "br" [])
                              else
                                  StringAtom " ")
                 state
@@ -1795,7 +1829,7 @@ processToken token state =
                 Nothing ->
                     pushStringOnState symbol state
                 Just converter ->
-                    converter token state
+                    converter renderState token state
         PlistToken plist ->
             pushStringOnState (toString plist) state
 
@@ -2086,6 +2120,7 @@ plistParser =
     Parser.delayedCommitMap
         (\x y -> x)
         (succeed PlistToken
+        |. ignore (Exactly 1) ((==) '\n')
         |. ignore (Exactly 1) ((==) '{')
         |= oneOf
              [ Parser.delayedCommitMap
@@ -2152,10 +2187,19 @@ tokenListParser =
         |= repeat zeroOrMore tokenParser
         |. Parser.end
 
+-- The plistParser requires a leading newline, so if it's the
+-- first thing in the string, give it one.
+maybePrefixNewline : String -> String
+maybePrefixNewline string =
+    if (String.left 1 string) == "{" then
+        "\n" ++ string
+    else
+        string
+
 -- Test function
 parseTokens : String -> List Token
 parseTokens string =
-    case Parser.run tokenListParser string of
+    case Parser.run tokenListParser <| maybePrefixNewline string of
         Err err ->
             [ StringToken <| toString err ]
         Ok res ->
@@ -2163,7 +2207,7 @@ parseTokens string =
 
 run : String -> Atom msg
 run string =
-    case Parser.run markdownParser string of
+    case Parser.run markdownParser <| maybePrefixNewline string of
         Err err ->
             StringAtom <| toString err
         Ok atom ->
