@@ -4,10 +4,12 @@ import Test exposing (..)
 import Expect exposing ( Expectation )
 import List
 import Dict
+import Maybe exposing ( withDefault )
 
 import HtmlTemplate.Types exposing ( Atom(..), Dicts )
 import HtmlTemplate.EncodeDecode exposing ( decodeAtom, customEncodeAtom )
 import HtmlTemplate exposing ( makeLoaders, setAtom, getDicts )
+import HtmlTemplate.Entities as Entities exposing ( stringFromCode )
 
 log = Debug.log
 
@@ -996,6 +998,24 @@ functionData =
         """
       , Ok <|
           StringAtom "<http:/example.com>"
+      )
+    , ( """
+         ["#mdnp","&copy;"]
+        """
+      , Ok <|
+          StringAtom <| withDefault "" <| Entities.get "copy"
+      )
+    , ( """
+         ["#mdnp","&#48;"]
+        """
+      , Ok <|
+          StringAtom "0"
+      )
+    , ( """
+         ["#mdnp","&#x31;"]
+        """
+      , Ok <|
+          StringAtom "1"
       )
     ]
 

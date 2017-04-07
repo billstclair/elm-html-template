@@ -8,11 +8,13 @@ Not supported.
 
 ### Automatic Escaping for Special Characters
 
-This comes for free with Elm. All the required `&foo;` syntax and URL encoding are generated. You can also type a handful of entities, currently only three. Adding more is easy. Send me a pull request for [src/HtmlTemplate/Entities.elm](src/HtmlTemplate/Entities.elm).
+This comes for free with Elm. All the required `&foo;` syntax and URL encoding are generated. You can also type a handful of named entities, currently only three. Adding more is easy. Send me a pull request for [src/HtmlTemplate/Entities.elm](src/HtmlTemplate/Entities.elm).
 
 * `&nbsp;` - non-breaking space
 * `&copy;` - Copyright symbol (&copy;)
 * `&check;` - A nice checkmark (&check;)
+
+Also supported are the numeric entities, e.g. `&#48` and `&#x30` both represent "0".
 
 
 ## Block Elements

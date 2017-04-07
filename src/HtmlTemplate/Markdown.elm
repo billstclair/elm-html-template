@@ -36,12 +36,13 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , urlLink
                                       , isMailtoUrl
                                       , automaticLinkProcessor
+                                      , lookupEntity
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
 import HtmlTemplate.Utility as Utility
     exposing ( hasWhitespacePrefix, hasWhitespaceSuffix )
-
+import HtmlTemplate.Entities as Entities exposing ( stringFromCode )
 
 import Char
 import Maybe exposing (withDefault)
@@ -53,7 +54,8 @@ import Parser exposing ( Parser, Error, Count(..)
                        , oneOf, andThen, succeed, fail, source
                        , zeroOrMore, oneOrMore, keep, ignore, repeat, keyword
                        )
-import Regex exposing (Regex, regex)
+import Regex exposing ( Regex, regex )
+import ParseInt exposing ( parseInt, parseIntHex )
 
 log = Debug.log
 
@@ -111,6 +113,7 @@ type alias SpecialProcessor msg =
 specialProcessors : List (String, SpecialProcessor msg)
 specialProcessors =
     [ ( lt, automaticLinkProcessor )
+    , ( amp, entityProcessor )
     ]
 
 specialProcessorDict : Dict String (SpecialProcessor msg)
@@ -470,9 +473,9 @@ closeParenConverter token (TheState state) =
                                               stack.result
                                }
 
-automaticLinkProcessor : SpecialProcessor msg
-automaticLinkProcessor _ tokens =
-    let loop : List Token -> List String -> Maybe (Atom msg, List Token)
+accumulateUntil : String -> List Token -> Maybe (String, List Token)
+accumulateUntil terminator tokens =
+    let loop : List Token -> List String -> Maybe (String, List Token)
         loop = (\tokens accum ->
                     case tokens of
                         [] ->
@@ -482,10 +485,10 @@ automaticLinkProcessor _ tokens =
                                 StringToken s ->
                                     loop tail <| s :: accum
                                 SymbolToken s ->
-                                    if s == gt then
-                                        makeAutomaticLink
-                                            (String.concat <| List.reverse accum)
-                                            tail
+                                    if s == terminator then
+                                        Just ( String.concat <| List.reverse accum
+                                             , tail
+                                             )
                                     else
                                         loop tail <| s :: accum
                                 _ ->
@@ -493,16 +496,58 @@ automaticLinkProcessor _ tokens =
                )
     in
         loop tokens []
+    
+entityProcessor : SpecialProcessor msg
+entityProcessor _ tokens =
+    case accumulateUntil semi tokens of
+        Nothing ->
+            Nothing
+        Just (entity, tail) ->
+            case lookupEntity entity of
+                Nothing ->
+                    Nothing
+                Just atom ->
+                    Just (atom, tail)
 
-makeAutomaticLink : String -> List Token -> Maybe (Atom msg, List Token)
-makeAutomaticLink url tokens =
+lookupEntity : String -> Maybe (Atom msg)
+lookupEntity entity =
+    if String.startsWith "#" entity then
+        case (if String.startsWith "#x" entity then
+                  parseIntHex <| String.dropLeft 2 entity
+                else
+                    parseInt <| String.dropLeft 1 entity
+             )
+        of
+            Err _ ->
+                Nothing
+            Ok int ->
+                Just <| StringAtom <| stringFromCode int
+    else
+        case Entities.get entity of
+            Nothing ->
+                Nothing
+            Just res ->
+                Just <| StringAtom res
+
+automaticLinkProcessor : SpecialProcessor msg
+automaticLinkProcessor _ tokens =
+    case accumulateUntil gt tokens of
+        Nothing ->
+            Nothing
+        Just (url, tail) ->
+            case makeAutomaticLink url of
+                Nothing ->
+                    Nothing
+                Just link ->
+                    Just (link, tail)
+
+makeAutomaticLink : String -> Maybe (Atom msg)
+makeAutomaticLink url =
     case urlLink url of
         Nothing ->
             Nothing
         Just link ->
-            Just ( makeLinkRecord [StringAtom url] link Nothing
-                 , tokens
-                 )
+            Just <| makeLinkRecord [StringAtom url] link Nothing
                         
 type UrlType
     = StandardUrl
@@ -1807,9 +1852,28 @@ vBar : String
 vBar =
     String.fromChar vBarChar
 
+ampChar : Char
+ampChar =
+    '&'
+
+amp : String
+amp =
+    String.fromChar ampChar
+
+semiChar : Char
+semiChar =
+    ';'
+
+semi : String
+semi =
+    String.fromChar semiChar
+
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
-    ( List.member c ['\n', '`', '+', '-', ltChar, gtChar, vBarChar ] )
+    ( List.member c [ '\n', '`', '+', '-', ltChar, gtChar
+                    , vBarChar, ampChar, semiChar
+                    ]
+    )
     || (Set.member (String.fromChar c) oneCharSymbolSet)
 
 isStringChar : Char -> Bool

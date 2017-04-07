@@ -9,7 +9,9 @@
 --
 ----------------------------------------------------------------------
 
-module HtmlTemplate.Entities exposing ( entities, entitiesDict )
+module HtmlTemplate.Entities exposing ( get, stringFromCode
+                                      , entities, entitiesDict
+                                      )
 
 import String
 import Char
@@ -33,7 +35,10 @@ entitiesDict : Dict String String
 entitiesDict =
     Dict.fromList entities
 
-
 stringFromCode : Int -> String
 stringFromCode code =
-    String.fromList [ (Char.fromCode code) ]
+    String.fromChar <| Char.fromCode code
+
+get : String -> Maybe String
+get name =
+    Dict.get name entitiesDict
