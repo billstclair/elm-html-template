@@ -518,6 +518,12 @@ functionData =
                 ]
       )
     , ( """
+         ["#md","***foo***"]
+        """
+      , Ok <|
+          pWrap [ tagWrap "em" [ tagWrap "strong" [ StringAtom "foo" ] ] ]
+      )
+    , ( """
          ["#md","x * foo*bar*"]
         """
       , Ok <|

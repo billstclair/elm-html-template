@@ -129,8 +129,6 @@ pairedConverters : List (String, Converter msg)
 pairedConverters =
     [ ( "_", emConverter )
     , ( "*", emConverter )
-    , ( "__", strongConverter )
-    , ( "**", strongConverter )
     ]
 
 closeParen : String
@@ -193,8 +191,8 @@ stringConverter : Converter msg
 stringConverter renderState token state =
     pushStringOnState (tokenToString token) state
 
-pairedConverter : ( List (Atom msg) -> Atom msg) -> Token -> State msg -> State msg
-pairedConverter wrapper token (TheState state) =
+emConverter : Converter msg
+emConverter renderState token (TheState state) =
     case state.lookingFor of
         Nothing ->
             TheState { state
@@ -208,6 +206,7 @@ pairedConverter wrapper token (TheState state) =
             if (lookingFor == token) &&
                 -- This detects whitespace after the starting token
                 (case List.reverse state.result of
+                     [] -> False
                      (StringAtom s) :: _ ->
                          not <| hasWhitespacePrefix s
                      _ -> True
@@ -227,8 +226,16 @@ pairedConverter wrapper token (TheState state) =
                         }
                 else
                     -- It's the end of the pair. Wrap the body.
-                    let atom = wrapper <| List.reverse state.result
+                    let bod = List.reverse state.result
                         res = popStack state
+                        atom = case bod of
+                                   [RecordAtom { tag, body }] ->
+                                       if tag == "em" then
+                                           wrapTag renderState "strong" body
+                                       else
+                                           wrapTag renderState "em" bod
+                                   _ ->
+                                       wrapTag renderState "em" bod
                     in
                         TheState { res | result = atom :: res.result }
             else
@@ -255,14 +262,6 @@ fullTag state tag attributes body =
 wrapTag : RenderState -> String -> List (Atom msg) -> Atom msg
 wrapTag state tag body =
     fullTag state tag [] body
-
-emConverter : Converter msg
-emConverter renderState token state =
-    pairedConverter (wrapTag renderState "em") token state
-
-strongConverter : Converter msg
-strongConverter renderState token state =
-    pairedConverter (wrapTag renderState "strong") token state
 
 pushStringOnResult : String -> StateRecord msg -> State msg
 pushStringOnResult string state =
