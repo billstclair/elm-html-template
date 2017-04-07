@@ -37,6 +37,8 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , isMailtoUrl
                                       , automaticLinkProcessor
                                       , lookupEntity
+                                      , plistParser
+                                      , keyColonValue
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
@@ -1794,6 +1796,8 @@ processToken token state =
                     pushStringOnState symbol state
                 Just converter ->
                     converter token state
+        PlistToken plist ->
+            pushStringOnState (toString plist) state
 
 processJson : String -> State msg -> State msg
 processJson json state =
@@ -1829,6 +1833,8 @@ tokenToString token =
             jsonString json
         HorizontalRule s ->
             s
+        PlistToken s ->
+            toString s
 
 leftSquareBracketChar : Char
 leftSquareBracketChar =
@@ -1943,6 +1949,7 @@ type Token
     | SharpToken Int
     | JsonToken String
     | HorizontalRule String
+    | PlistToken (List (String, String))
 
 type alias ListRecord =
     { indent : Int
@@ -2074,9 +2081,56 @@ jsonStringParser =
                ]
         )
 
+plistParser : Parser Token
+plistParser =
+    Parser.delayedCommitMap
+        (\x y -> x)
+        (succeed PlistToken
+        |. ignore (Exactly 1) ((==) '{')
+        |= oneOf
+             [ Parser.delayedCommitMap
+                   (\x y -> x)
+                   (succeed (::)
+                   |. ignore zeroOrMore isWhitespaceChar
+                   |= keyColonValue
+                   |= Parser.repeat zeroOrMore
+                        (succeed identity
+                        |. ignore (Exactly 1) ((==) ',')
+                        |. ignore zeroOrMore isWhitespaceChar
+                        |= keyColonValue
+                        )
+                   )
+                   <| succeed ()
+             , succeed identity
+             |. ignore zeroOrMore isWhitespaceChar
+             |= succeed []
+             ]
+        |. ignore (Exactly 1) ((==) '}')
+        )
+        <| succeed ()
+
+keyColonValue : Parser (String, String)
+keyColonValue =
+    succeed (,)
+        |= (keep oneOrMore <| nonWhitespaceOrChars [':', ',', '}'])
+        |. ignore zeroOrMore isWhitespaceChar
+        |. ignore (Exactly 1) ((==) ':')
+        |. ignore zeroOrMore isWhitespaceChar
+        |= (keep oneOrMore <| nonWhitespaceOrChars [':', ',', '}'])
+        |. ignore zeroOrMore isWhitespaceChar
+
+isWhitespaceChar : Char -> Bool
+isWhitespaceChar char =
+    List.member char [ ' ', '\n' ]
+
+nonWhitespaceOrChars : List Char -> Char -> Bool
+nonWhitespaceOrChars chars char =
+    not <| (isWhitespaceChar char) || (List.member char chars)
+
 tokenParser : Parser Token
 tokenParser =
-    oneOf [ backtickParser
+    oneOf [ plistParser
+          , backtickParser
           , sharpParser
           , jsonEscapeParser
           , numberDotParser
