@@ -132,3 +132,20 @@ Surround a string beginning with `http://`, `https://`, or `ftp://` or of the fo
     <https://example.com>
     <ftp://example.com/public_ftp/linux.tar.gz>
     <bob@example.com>
+
+
+## Extensions
+
+This section describes additions I made to standard Markdown processing.
+
+### JSON escape
+
+You can include `HtmlTemplate` JSON in your output by surrounding it with double-square brackets. E.g.:
+
+    [["#+",1,2]]
+
+Evaluates to "3".
+
+The parser is stupid about termination of the JSON. If it sees two right square brackets in a row, that's the end, so if your code needs to include that, add spaces so that the only place where "]]" appears is at the end:
+
+     [["node:marquee",{},["Annoy your friends!"] ]]
