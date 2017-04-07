@@ -640,36 +640,6 @@ initialState =
         , result = []
         }
 
-separateFirstLine : List Token -> Maybe (List Token, List Token)
-separateFirstLine tokens =
-    let loop : List Token -> List Token -> Maybe (List Token, List Token)
-        loop = (\tokens front ->
-                    case tokens of
-                        [] ->
-                            Nothing
-                        Newline x :: rest ->
-                            Just ( List.reverse
-                                   <| if x then
-                                           Newline True :: front
-                                       else
-                                           front
-                                 , rest
-                                 )
-                        PlistToken x :: rest ->
-                            Just <| if front == [] then
-                                        ( [PlistToken x]
-                                        , case rest of
-                                              Newline _ :: tail -> tail
-                                              _ -> rest
-                                        )
-                                    else
-                                        ( List.reverse front, tokens )
-                        first :: rest ->
-                            loop rest <| first :: front
-               )
-    in
-        loop tokens []
-
 hRuleChars : List Char
 hRuleChars =
     [ '*', '-', '_' ]
@@ -778,16 +748,46 @@ preformatLine tokens =
         _ ->
             Nothing
 
+separateFirstLine : List Token -> Maybe (List Token, List Token)
+separateFirstLine tokens =
+    let loop : List Token -> List Token -> Maybe (List Token, List Token)
+        loop = (\tokens front ->
+                    case tokens of
+                        [] ->
+                            Nothing
+                        Newline x :: rest ->
+                            Just ( List.reverse
+                                   <| if x then
+                                           Newline True :: front
+                                       else
+                                           front
+                                 , rest
+                                 )
+                        PlistToken _ :: rest ->
+                            Just ( List.reverse front
+                                 , tokens
+                                 )
+                        first :: rest ->
+                            loop rest <| first :: front
+               )
+    in
+        loop tokens []
+
 splitIntoLines : List Token -> List (List Token)
 splitIntoLines tokens =
     let loop : List Token -> List (List Token) -> List (List Token)
         loop = (\tokens res ->
-                    case separateFirstLine tokens of
-                        Nothing ->
-                            List.reverse
-                                <| (clearBlankLine tokens) :: res
-                        Just (line, rest) ->
-                            loop rest <| (clearBlankLine line) :: res
+                    case tokens of
+                        PlistToken x :: rest ->
+                            loop rest
+                                <| [PlistToken x] :: res
+                        _ ->
+                            case separateFirstLine tokens of
+                                Nothing ->
+                                    List.reverse
+                                        <| (clearBlankLine tokens) :: res
+                                Just (line, rest) ->
+                                    loop rest <| (clearBlankLine line) :: res
                )
     in
         loop tokens []
@@ -950,6 +950,13 @@ processTables lines =
     in
         loop lines []
 
+blankOrPlistHead : List Token -> Bool
+blankOrPlistHead tokens =
+    case tokens of
+        [] -> True
+        PlistToken _ :: _ -> True
+        _ -> False
+
 getTable : Int -> List (List Token) -> List (List Token) -> (List Token, List (List Token))
 getTable colCount heads lines =
     let loop : List (List Token) -> List (List (List Token)) -> (List Token, List (List Token))
@@ -960,9 +967,9 @@ getTable colCount heads lines =
                             , []
                             )
                         row :: tail ->
-                            if row == [] then
+                            if blankOrPlistHead row then
                                 ( [ Table heads <| List.reverse rows ]
-                                , tail
+                                , if row == [] then tail else lines
                                 )
                             else
                                 case splitOnVerticalBars row of
@@ -1098,17 +1105,27 @@ fillListRecord isNumeric record lines =
                         [] ->
                             (List.reverse <| rec :: recs, [])
                         [] :: line :: tail ->
-                            case startOfList line of
-                                Just (numeric, subrec) ->
-                                    handleSubrec numeric subrec lines tail rec recs
-                                Nothing ->
-                                    handleLine True rec line lines tail recs
+                            case line of
+                                [PlistToken _] ->
+                                    (List.reverse <| rec :: recs, line :: tail)
+                                _ ->
+                                    case startOfList line of
+                                        Just (numeric, subrec) ->
+                                            handleSubrec
+                                                numeric subrec lines tail rec recs
+                                        Nothing ->
+                                            handleLine True rec line lines tail recs
                         line :: tail ->
-                            case startOfList line of
-                                Just (numeric, subrec) ->
-                                    handleSubrec numeric subrec lines tail rec recs
-                                Nothing ->
-                                    handleLine False rec line lines tail recs
+                            case line of
+                                [PlistToken _] ->
+                                    (List.reverse <| rec :: recs, line :: tail)
+                                _ ->
+                                    case startOfList line of
+                                        Just (numeric, subrec) ->
+                                            handleSubrec
+                                                numeric subrec lines tail rec recs
+                                        Nothing ->
+                                            handleLine False rec line lines tail recs
                )
         handleLine : Bool -> ListRecord -> (List Token) -> List (List Token) -> List (List Token) -> List ListRecord -> (List ListRecord, List (List Token))
         handleLine = (\addBlank rec line lines tail recs ->
@@ -1273,7 +1290,7 @@ getBlockquote line lines =
                             , lines
                             )
                         line :: tail ->
-                            if line == [] then
+                            if blankOrPlistHead line then
                                 ( [ Blockquote <| List.reverse res ]
                                 , lines
                                 )
@@ -1468,6 +1485,8 @@ getParagraph state elidePBeforeList lines =
                     case lines of
                         [] ->
                             packageRes [] res
+                        [PlistToken _] :: _ ->
+                            packageRes lines res
                         [Preformatted _] :: _ ->
                             packageRes lines res
                         [Table _ _] :: _ ->

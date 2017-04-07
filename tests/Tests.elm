@@ -1079,6 +1079,7 @@ functionData =
       , Ok <|
           StringAtom "1"
       )
+    -- This is the example in the documentation
     , ( """
          ["#mdnp","{ p : pclass, li: liclass }foo\\n1. James Brown is Number One!"]
         """
@@ -1090,6 +1091,102 @@ functionData =
                   [ fullTag "li" [ ("class", StringAtom "liclass") ]
                         [ StringAtom "James Brown is Number One!" ]
                   ]
+              ]
+      )
+    -- There are separate loops for tables, lists, blockquotes, and paragraphs,
+    -- so so we have to test each one of them, to ensure that a new
+    -- tag class object breaks out of the loop.
+    -- Preformatted breaks naturally, but I test that, too, just to be safe.
+    -- Here's the table test.
+    , ( """
+         ["#mdnp","{ tr: trc, td: td1 }1|2\\n-|-\\na|b\\n{ td: td2 }1|2\\n-|-\\na|b"]
+        """
+      , Ok <|
+          ListAtom
+              [ tagWrap "table"
+                    [ tagWrap "thead"
+                          [ fullTag "tr" [ ("class", StringAtom "trc") ]
+                                [ tagWrap "th" [ StringAtom "1" ]
+                                , tagWrap "th" [ StringAtom "2" ]
+                                ]
+                          ]
+                    , tagWrap "tbody"
+                        [ fullTag "tr" [ ("class", StringAtom "trc") ]
+                              [ fullTag "td" [ ("class", StringAtom "td1") ]
+                                    [ StringAtom "a" ]
+                              , fullTag "td" [ ("class", StringAtom "td1") ]
+                                    [ StringAtom "b" ]
+                              ]
+                        ]
+                    ]
+              , tagWrap "table"
+                    [ tagWrap "thead"
+                          [ fullTag "tr" [ ("class", StringAtom "trc") ]
+                                [ tagWrap "th" [ StringAtom "1" ]
+                                , tagWrap "th" [ StringAtom "2" ]
+                                ]
+                          ]
+                    , tagWrap "tbody"
+                        [ fullTag "tr" [ ("class", StringAtom "trc") ]
+                              [ fullTag "td" [ ("class", StringAtom "td2") ]
+                                    [ StringAtom "a" ]
+                              , fullTag "td" [ ("class", StringAtom "td2") ]
+                                    [ StringAtom "b" ]
+                              ]
+                        ]
+                    ]
+              ]
+      )
+    -- Here's the list test
+    , ( """
+         ["#mdnp","{ ol : olclass, li: liclass }\\n1. James Brown is Number One!\\n\\n{ li : lic2}\\n1. Note the change."]
+        """
+      , Ok <|
+          ListAtom
+              [ fullTag "ol" [ ("class", StringAtom "olclass") ]
+                  [ fullTag "li" [ ("class", StringAtom "liclass") ]
+                        [ StringAtom "James Brown is Number One!" ]
+                  ]
+              , fullTag "ol" [ ("class", StringAtom "olclass") ]
+                  [ fullTag "li" [ ("class", StringAtom "lic2") ]
+                        [ StringAtom "Note the change." ]
+                  ]
+              ]
+      )
+    -- Here's the blockquote test
+    , ( """
+         ["#mdnp","{ blockquote: bq1 }\\n> foo\\n{ blockquote : bq2 }\\n> bar"]
+        """
+      , Ok <|
+          ListAtom
+              [ fullTag "blockquote" [ ("class", StringAtom "bq1") ]
+                    [ tagWrap "p" [ StringAtom "foo" ] ]
+              , fullTag "blockquote" [ ("class", StringAtom "bq2") ]
+                    [ tagWrap "p" [ StringAtom "bar" ] ]
+              ]
+      )
+    -- Here's the paragraph test
+    , ( """
+         ["#mdnp","{p:p1}\\nfoo\\n{p:p2}\\nbar"]
+        """
+      , Ok <|
+          ListAtom
+              [ fullTag "p" [ ("class", StringAtom "p1") ]
+                    [ StringAtom "foo" ]
+              , fullTag "p" [ ("class", StringAtom "p2") ]
+                    [ StringAtom "bar" ]
+              ]
+      )
+    -- Here's the preformatted test
+    , ( """
+         ["#mdnp","{pre:pre1}\\n    foo\\n{pre:pre2}\\n    bar"]
+        """
+      , Ok <|
+          ListAtom
+              [ fullTag "pre" [ ("class", StringAtom "pre1") ]
+                    [ tagWrap "code" [ StringAtom "foo" ] ]
+              , fullTag "pre" [ ("class", StringAtom "pre2") ]
+                    [ tagWrap "code" [ StringAtom "bar" ] ]
               ]
       )
     ]
