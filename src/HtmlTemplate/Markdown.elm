@@ -844,7 +844,7 @@ splitOnVerticalBars tokens =
                         head :: tail ->
                             if head == SymbolToken vBar then
                                 loop tail []
-                                    <| (List.reverse <| trimLine accum) :: res
+                                    <| (List.reverse <| cropLine accum) :: res
                             else
                                 loop tail (head :: accum) res
                )
@@ -854,6 +854,18 @@ splitOnVerticalBars tokens =
 dashToken : Token
 dashToken =
     SymbolToken "-"
+
+cropLine : List Token -> List Token
+cropLine line =
+    if line == [] then
+        line
+    else
+        let res = trimLine line
+        in
+            if res == [] then
+                [ StringToken " " ]
+            else
+                res
 
 trimLine : List Token -> List Token
 trimLine line =
@@ -1681,15 +1693,45 @@ renderTable header rows =
         :: [ wrapTag "tbody"
                  <| List.map (\tr ->
                                   wrapTag "tr"
-                                  <| List.map (\td ->
-                                                   wrapTag "td"
-                                                   [ renderParagraph td ]
-                                              )
-                                  tr
+                                      <| renderTableRow tr
                              )
                      rows
            ]
         
+fullTag : String -> List (String, Atom msg) -> List (Atom msg) -> Atom msg
+fullTag tag attributes body =
+    RecordAtom { tag = tag
+               , attributes = attributes
+               , body = body
+               }
+
+renderTableRow : List (List Token) -> List (Atom msg)
+renderTableRow tr =
+    let loop : List (List Token) -> List (Int, List Token) -> List (Int, List Token)
+        loop = (\cols accum ->
+                    case cols of
+                        [] ->
+                            List.reverse accum
+                        col :: tail ->
+                            if col == [] then
+                                case accum of
+                                    [] ->
+                                        loop tail <| (1, col) :: accum
+                                    (n, c) :: rest ->
+                                        loop tail <| (n+1, c) :: rest
+                            else
+                                loop tail <| (1, col) :: accum
+               )
+    in
+        List.map (\(colspan, td) ->
+                   if colspan == 1 then
+                       wrapTag "td" [ renderParagraph td ]
+                   else
+                       fullTag "td" [("colspan", IntAtom colspan)]
+                           [ renderParagraph td ]
+                  )
+                  (loop tr [])
+            
 atomToList : Atom msg -> List (Atom msg)
 atomToList atom =
     case atom of

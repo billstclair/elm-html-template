@@ -76,6 +76,8 @@ This is not in Gruber's Markdown spec, but is done [GitHub flavored](https://gui
 
 The first line of a table contains the column headers. The second line is any number of dashes for each column, but must match the number of columns in the header. Each additional row can contain any number of vertical-bar-separated columns, but any columns beyond the number in the header will NOT display. All of the span elements are supported inside table cells.
 
+Unlike GitHub, `HtmlTemplate`'s Markdown will add a `colspan` to a cell if succeeding cells are totally empty, i.e. there are two vertical bars in a row ("||"). To include a blank cell insted, put at least one space between the vertical bars ("| |").
+
 
 ## Span Elements
 
