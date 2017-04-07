@@ -146,6 +146,10 @@ You can include `HtmlTemplate` JSON in your output by surrounding it with double
 
 Evaluates to "3".
 
+    [["#let",{"content":"Hello from Markdown"},"?page"]]
+    
+Evaluate the above on the "Play" page of the example, and it will display as an embedded page with conent of "Hello from Markdown".
+
 The parser is stupid about termination of the JSON. If it sees two right square brackets in a row, that's the end, so if your code needs to include that, add spaces so that the only place where "]]" appears is at the end:
 
      [["node:marquee",{},["Annoy your friends!"] ]]
