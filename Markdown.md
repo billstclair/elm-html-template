@@ -14,7 +14,7 @@ This comes for free with Elm. All the required `&foo;` syntax and URL encoding a
 * `&copy;` - Copyright symbol (&copy;)
 * `&check;` - A nice checkmark (&check;)
 
-Also supported are the numeric entities, e.g. `&#48` and `&#x30` both represent "0".
+Also supported are the numeric entities, e.g. `&#48;` and `&#x30;` both represent "0".
 
 
 ## Block Elements
