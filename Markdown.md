@@ -126,8 +126,9 @@ As usual, a backslash before a special character will quote it. Supports the sta
 
 ### Automatic links
 
-Surround a string beginning with `http:` or `https:` or of the form `foo@bar` with angle-brackets to get a link.
+Surround a string beginning with `http://`, `https://`, or `ftp://` or of the form `x@y.z` with angle-brackets to get a link.
 
     <http://example.com>
     <https://example.com>
+    <ftp://example.com/public_ftp/linux.tar.gz>
     <bob@example.com>
