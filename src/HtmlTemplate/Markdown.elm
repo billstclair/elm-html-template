@@ -33,6 +33,9 @@ module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
                                       , processTables
                                       , matchHRule
                                       , trimLine
+                                      , urlLink
+                                      , isMailtoUrl
+                                      , automaticLinkProcessor
                                       )
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
@@ -50,6 +53,7 @@ import Parser exposing ( Parser, Error, Count(..)
                        , oneOf, andThen, succeed, fail, source
                        , zeroOrMore, oneOrMore, keep, ignore, repeat, keyword
                        )
+import Regex exposing (Regex, regex)
 
 log = Debug.log
 
@@ -100,6 +104,18 @@ type alias StateRecord msg =
     , stack : Maybe (State msg)
     , result : List (Atom msg)
     }
+
+type alias SpecialProcessor msg =
+    String -> List Token -> Maybe (Atom msg, List Token)
+
+specialProcessors : List (String, SpecialProcessor msg)
+specialProcessors =
+    [ ( lt, automaticLinkProcessor )
+    ]
+
+specialProcessorDict : Dict String (SpecialProcessor msg)
+specialProcessorDict =
+    Dict.fromList specialProcessors
 
 type alias Converter msg =
     Token -> State msg -> State msg
@@ -181,6 +197,7 @@ pairedConverter wrapper token (TheState state) =
                          , result = []
                          , lookingFor = Just token
                          , startingWith = Nothing
+                         , linkBody = Nothing
                      }
         Just lookingFor ->
             if (lookingFor == token) &&
@@ -231,6 +248,10 @@ emConverter token state =
 strongConverter : Converter msg
 strongConverter token state =
     pairedConverter (wrapTag "strong") token state
+
+pushStringOnResult : String -> StateRecord msg -> State msg
+pushStringOnResult string state =
+    pushAtomOnResult (StringAtom string) state
 
 pushAtomOnResult : Atom msg -> StateRecord msg -> State msg
 pushAtomOnResult atom state =
@@ -448,6 +469,83 @@ closeParenConverter token (TheState state) =
                                               result
                                               stack.result
                                }
+
+automaticLinkProcessor : SpecialProcessor msg
+automaticLinkProcessor _ tokens =
+    let loop : List Token -> List String -> Maybe (Atom msg, List Token)
+        loop = (\tokens accum ->
+                    case tokens of
+                        [] ->
+                            Nothing
+                        head :: tail ->
+                            case head of
+                                StringToken s ->
+                                    loop tail <| s :: accum
+                                SymbolToken s ->
+                                    if s == gt then
+                                        makeAutomaticLink
+                                            (String.concat <| List.reverse accum)
+                                            tail
+                                    else
+                                        loop tail <| s :: accum
+                                _ ->
+                                    Nothing
+               )
+    in
+        loop tokens []
+
+makeAutomaticLink : String -> List Token -> Maybe (Atom msg, List Token)
+makeAutomaticLink url tokens =
+    case urlLink url of
+        Nothing ->
+            Nothing
+        Just link ->
+            Just ( makeLinkRecord [StringAtom url] link Nothing
+                 , tokens
+                 )
+                        
+type UrlType
+    = StandardUrl
+    | MailtoUrl
+    | NotAUrl
+    
+urlType : String -> UrlType
+urlType url =
+    if String.contains " " url then
+        NotAUrl
+    else if isStandardUrl url then
+        StandardUrl
+    else if isMailtoUrl url then
+        MailtoUrl
+    else
+        NotAUrl
+
+isStandardUrl : String -> Bool
+isStandardUrl url =
+    String.startsWith "http://" url
+    || String.startsWith "https://" url
+    || String.startsWith "ftp://" url
+
+-- I always feel dirty when I use regular expressions, but they make
+-- some tasks easy.
+mailRegex : Regex
+mailRegex =
+    regex "^\\S+@\\S+\\.\\S+$"
+
+-- TODO
+isMailtoUrl : String -> Bool
+isMailtoUrl url =
+    Regex.contains mailRegex url
+
+urlLink : String -> Maybe String
+urlLink url =
+    case urlType url of
+        StandardUrl ->
+            Just url
+        MailtoUrl ->
+            Just <| "mailto:" ++ url
+        _ ->
+            Nothing    
 
 conversionDict : Dict String (Converter msg)
 conversionDict =
@@ -1358,6 +1456,16 @@ processLoop tokens state =
     case tokens of
         [] ->
             finishProcessing state
+        (SymbolToken s) :: tail ->
+            case Dict.get s specialProcessorDict of
+                Just processor ->
+                    case processor s tail of
+                        Nothing ->
+                            processLoop tail <| pushStringOnState s state
+                        Just (atom, rest) ->
+                            processLoop rest <| pushAtomOnState atom state
+                Nothing ->
+                    processLoop tail <| processToken (SymbolToken s) state
         token :: tail ->
             processLoop tail <| processToken token state
 
@@ -1683,6 +1791,14 @@ gt : String
 gt =
     String.fromChar gtChar
 
+ltChar : Char
+ltChar =
+    '<'
+
+lt : String
+lt =
+    String.fromChar ltChar
+
 vBarChar : Char
 vBarChar =
     '|'
@@ -1693,7 +1809,7 @@ vBar =
 
 isOneCharSymbolChar : Char -> Bool
 isOneCharSymbolChar c =
-    ( List.member c ['\n', '`', '+', '-', gtChar, vBarChar ] )
+    ( List.member c ['\n', '`', '+', '-', ltChar, gtChar, vBarChar ] )
     || (Set.member (String.fromChar c) oneCharSymbolSet)
 
 isStringChar : Char -> Bool

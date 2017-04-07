@@ -917,6 +917,12 @@ functionData =
           tagWrap "p" [StringAtom "**"]
       )
     , ( """
+         ["#md","**-"]
+        """
+      , Ok <|
+          tagWrap "p" [StringAtom "**-"]
+      )
+    , ( """
          ["#md"," - - - "]
         """
       , Ok <|
@@ -940,6 +946,56 @@ functionData =
               , tagWrap "p" [StringAtom "bletch"]
               , tagWrap "hr" []
               ]
+      )
+    , ( """
+         ["#mdnp","<http://example.com>"]
+        """
+      , Ok <|
+          fullTag "a" [("href", StringAtom "http://example.com")]
+              [ StringAtom "http://example.com" ]
+      )
+    , ( """
+         ["#mdnp","<https://example.com>"]
+        """
+      , Ok <|
+          fullTag "a" [("href", StringAtom "https://example.com")]
+              [ StringAtom "https://example.com" ]
+      )
+    , ( """
+         ["#mdnp","<ftp://example.com>"]
+        """
+      , Ok <|
+          fullTag "a" [("href", StringAtom "ftp://example.com")]
+              [ StringAtom "ftp://example.com" ]
+      )
+    , ( """
+         ["#mdnp","Send money to <joe@example.com>. Please!"]
+        """
+      , Ok <|
+          ListAtom
+              [ StringAtom "Send money to "
+              , fullTag "a" [("href", StringAtom "mailto:joe@example.com")]
+                  [ StringAtom "joe@example.com" ]
+              , StringAtom ". Please!"
+              ]
+      )
+    , ( """
+         ["#mdnp","<joe@example>"]
+        """
+      , Ok <|
+          StringAtom "<joe@example>"
+      )
+    , ( """
+         ["#mdnp","<joe.com>"]
+        """
+      , Ok <|
+          StringAtom "<joe.com>"
+      )
+    , ( """
+         ["#mdnp","<http:/example.com>"]
+        """
+      , Ok <|
+          StringAtom "<http:/example.com>"
       )
     ]
 
