@@ -172,9 +172,7 @@ Encodes as:
      ],
      ["ol",{},
       [["li",{},
-        [["p",{},
-          ["James Brown is Number One!"]
-         ]
+        ["James Brown is Number One!"]
         ]
        ]
       ]
