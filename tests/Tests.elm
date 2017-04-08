@@ -1195,6 +1195,18 @@ functionData =
                     [ tagWrap "code" [ StringAtom "bar" ] ]
               ]
       )
+    -- Dash as a tag class erases that setting.
+    , ( """
+         ["#md","{p:pclass}foo\\n{p:-}\\nbar"]
+        """
+      , Ok <|
+          ListAtom
+              [ fullTag "p" [ ("class", StringAtom "pclass") ]
+                    [ StringAtom "foo" ]
+              , tagWrap "p"
+                    [ StringAtom "bar" ]
+              ]
+      )
     ]
 
 encodeDecode : String -> Atom msg
