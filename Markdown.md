@@ -168,7 +168,7 @@ For example:
     foo
     1. James Brown is Number One!
     
-Encodes as:
+encodes as:
 
     [["p",{},
       ["foo"]
@@ -189,7 +189,7 @@ But:
     foo
     1. James Brown is Number One!
     
-Encodes as:
+encodes as:
 
     [["p",{"class": "pclass"},
       ["foo"]
@@ -211,7 +211,7 @@ A tag class object at the beginning of a line is a hard paragraph break. It will
     {li:li2}
     2. I like Michael, too!
     
-Encodes as:
+encodes as:
 
     [["ol",{"class":"olc"},
       [["li",{"class":"lic"},
@@ -228,4 +228,28 @@ Encodes as:
      ]
     ]
 
-It might be nice to be able to have different classes for different table columns. Maybe I'll do add syntax for that. And support for JSON double-left-square-bracket escapes in the values.
+A setting of just a dash ("-") for a tag removes the class setting:
+
+    {ol:olc,li:lic}
+    1. James Brown is Number One!
+    {li:-}
+    2. I like Michael, too!
+    
+encodes as:
+
+    [["ol",{"class":"olc"},
+      [["li",{"class":"lic"},
+        ["James Brown is Number One!"]
+       ]
+      ]
+     ],
+     ["ol",{"class":"olc"},
+      [["li",{}
+        ["I like Michael, too!"]
+        ]
+       ]
+      ]
+     ]
+    ]
+
+It might be nice to be able to have different classes for different table columns. Maybe I'll add syntax for that. And support for JSON double-left-square-bracket escapes in the values. Some way to tag individual elements with `id`s might also be good, but that will be used primarily in templates, which will usually be in JSON, not Markdown.

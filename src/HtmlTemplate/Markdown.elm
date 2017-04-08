@@ -251,7 +251,10 @@ fullTag state tag attributes body =
                     Nothing ->
                         attributes
                     Just class ->
-                        ("class", StringAtom class) :: attributes
+                        if class == "-" then
+                            attributes
+                        else
+                            ("class", StringAtom class) :: attributes
     in
         RecordAtom { tag = tag
                    , attributes = attrs
