@@ -89,13 +89,16 @@ Supported, but only with inline URLs. Does NOT support the reference-style URLs.
 
 ### Emphasis
 
-Supported. One asterisk or underscore surrounding text makes it _italic_. Two makes it **bold**.
+Supported. One asterisk or underscore surrounding text makes it _italic_. Two makes it **bold**, three makes it ***both*** (and is also confusing; much better to use two asterisks and one underscore for that).
 
     _italic_ **bold** *italic* __bold__
+    ***bold AND italic*** **_bold AND italic_**
+
+I prefer to use underscore for italics and asterisk for bold, but either works.
 
 ### Code
 
-Surround with backticks ("\`") to produce `<code>` blocks. Use multiple backticks to surround text containing a literal backtick. I prefer to use underscore for italics and asterisk for bold, but either works.
+Surround with backticks ("\`") to produce `<code>` blocks. Use multiple backticks to surround text containing a literal backtick.
 
     `code`
     ``code containing ` surrounded by double-backticks to quote a backtick.``
@@ -114,7 +117,7 @@ Supported, but again does NOT support reference-style URLs for the images.
 As usual, a backslash before a special character will quote it. Supports the standard special characters:
 
     \   backslash
-    \`   backtick
+    `   backtick
     *   asterisk
     _   underscore
     {}  curly braces
@@ -138,7 +141,7 @@ Surround a string beginning with `http://`, `https://`, or `ftp://` or of the fo
 
 ## Extensions
 
-This section describes additions I made to standard Markdown processing.
+This section describes additions I made to standard Markdown processing (besides `colspan` in tables).
 
 ### JSON Escape
 
@@ -150,7 +153,7 @@ Evaluates to "3".
 
     [["#let",{"content":"Hello from Markdown"},"?page"]]
     
-Evaluate the above on the "Play" page of the example, and it will display as an embedded page with conent of "Hello from Markdown".
+Evaluate the above on the "Play" page of the example, and it will display as an embedded page with content of "Hello from Markdown".
 
 The parser is stupid about termination of the JSON. If it sees two right square brackets in a row, that's the end, so if your code needs to include that, add spaces so that the only place where "]]" appears is at the end:
 
@@ -173,7 +176,6 @@ Encodes as:
      ["ol",{},
       [["li",{},
         ["James Brown is Number One!"]
-        ]
        ]
       ]
      ]
@@ -195,15 +197,35 @@ Encodes as:
      ["ol",{},
       [["li",{"class": "liclass"},
         ["James Brown is Number One!"]
+       ]
+      ]
+     ]
+    ]
+
+The left set bracket ("{") needs to be in the first column to be parsed as tag class object. Otherwise, it will be interpreted as just a regular string.
+
+A tag class object at the beginning of a line is a hard paragraph break. It will end any block element before it. Second and subsequent tag class objects _modify_ the preceding settings, changing the values for any duplicated tags.
+
+    {ol:olc,li:lic}
+    1. James Brown is Number One!
+    {li:li2}
+    2. I like Michael, too!
+    
+Encodes as:
+
+    [["ol",{"class":"olc"},
+      [["li",{"class":"lic"},
+        ["James Brown is Number One!"]
+       ]
+      ]
+     ],
+     ["ol",{"class":"olc"},
+      [["li",{"class":"li2"},
+        ["I like Michael, too!"]
         ]
        ]
       ]
      ]
     ]
 
-You can't currently change the class bindings in the middle of a block element, but that wouldn't be a hard change to make, should it become desirable.
-
-This means that the left set bracket ("{") needs to be in the first column. Otherwise, it's in the middle of a paragraph starting with spaces. One benefit here is that you can indent a tag class object by four spaces to display it as a code block.
-
-It might also be nice to be able to have different classes for different table columns.
-
+It might be nice to be able to have different classes for different table columns. Maybe I'll do add syntax for that. And support for JSON double-left-square-bracket escapes in the values.
