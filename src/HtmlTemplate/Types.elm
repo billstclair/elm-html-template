@@ -101,7 +101,7 @@ type alias HtmlTemplateRecord msg =
     }
 
 {-| Storage for JSON:
-    [ "/&lt;function name>"
+    [ "#&lt;function name>"
      , arg
      , ...
     ]

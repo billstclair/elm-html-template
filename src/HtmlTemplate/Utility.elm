@@ -70,7 +70,7 @@ mergeStrings atom =
         _ ->
             atom
 
-{-| Like `mergeStrings`, but sometimes you have a List in your hand.
+{-| Like `mergeStrings`, but sometimes you have a `List` in your hand.
 -}
 mergeListStrings : List (Atom msg) -> Atom msg
 mergeListStrings list =
