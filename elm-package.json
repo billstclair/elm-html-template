@@ -10,7 +10,9 @@
         "HtmlTemplate",
         "HtmlTemplate.Types",
         "HtmlTemplate.EncodeDecode",
-        "HtmlTemplate.PlayDiv"
+        "HtmlTemplate.PlayDiv",
+        "HtmlTemplate.Markdown",
+        "HtmlTemplate.Utility"      
     ],
     "dependencies": {
         "elm-community/list-extra": "6.0.0 <= v < 7.0.0",

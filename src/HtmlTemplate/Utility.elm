@@ -14,6 +14,12 @@ module HtmlTemplate.Utility exposing ( walkAtom
                                      , hasWhitespacePrefix, hasWhitespaceSuffix
                                      )
 
+{-| Some utility functions.
+
+@docs walkAtom, mergeStrings, mergeListStrings
+@docs hasWhitespacePrefix, hasWhitespaceSuffix
+-}
+
 import HtmlTemplate.Types exposing ( Atom(..) )
 
 {-| Call a function on every leaf of the `Atom` arg,
@@ -38,6 +44,8 @@ walkAtom function atom =
             function atom
 
 
+{-| Merge adjacent strings together and remove extraneous lists.
+-}
 mergeStrings : Atom msg -> Atom msg
 mergeStrings atom =
     case atom of
@@ -62,6 +70,8 @@ mergeStrings atom =
         _ ->
             atom
 
+{-| Like `mergeStrings`, but sometimes you have a List in your hand.
+-}
 mergeListStrings : List (Atom msg) -> Atom msg
 mergeListStrings list =
     --log "  =" <|
@@ -90,10 +100,14 @@ mergeListStrings list =
                 else
                     mergeListStrings l
 
+{-| True if the string begins with whitespace.
+-}
 hasWhitespacePrefix : String -> Bool
 hasWhitespacePrefix s =
     (String.trimLeft s) /= s
 
+{-| True if the string ends with whitespace.
+-}
 hasWhitespaceSuffix : String -> Bool
 hasWhitespaceSuffix s =
     (String.trimRight s) /= s

@@ -37,8 +37,6 @@ module HtmlTemplate exposing
     
 {-| The `HtmlTemplate` module allows you to code the `view` part of an Elm web page in JSON. You can parse that JSON into `Atom` instances as you desire, and then call `render` to render an `Atom` instance into an `Html` instance.
 
-The `Atom` type includes a scripting language. It's pretty small now, but I expect to make it grow over time. I also plan to make a more Lisp-like syntax, better for script writing, and a Markdown syntax, better for human-written static web pages. The JSON syntax will eventually be written automatically by a blogging package, which will be an expansion of the example included with this package.
-
 See the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md) and its scripting language. The documentation here tells you only how to use the Elm API for the Elm part of your application.
 
 I plan to eventually expand scripting to be usable for the `update` and `Msg` parts of an Elm application, so that you can do almost the whole thing dynamically. For some applications that will make sense. For now, you need to write `update` in Elm, define your `Msg` type in Elm, and create entries for the `TemplateDicts.messages` table to enable creation of those `Msg` types from the scripting language.

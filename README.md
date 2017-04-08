@@ -6,7 +6,9 @@ One of the problems I find with Elm is that the HTML is compiled into the JavaSc
 
 The included example application is live at [lisplog.org/elm-html-template](https://lisplog.org/elm-html-template/).
 
-I'm working on [Xossbow](https://Xossbow.com), a commercial-quality blogging package based on `elm-html-template`.
+The package contains a Markdown to JSON converter, with some extensions (`colspan` for tables and an elegant way to specify the CSS classes for tags). Full documentation of the JSON format and the Markdown extensions is available in the GitHub repository.
+
+I'm working on [Xossbow](https://Xossbow.com) (pronounced "Crossbow"), a commercial-quality blogging package based on `elm-html-template`. The example code in this package uses JSON to represent its page content. Xossbow will use primarily Markdown.
 
 Bill St. Clair &lt;<billstclair@gmail.com>&gt;  
 3 March 2017

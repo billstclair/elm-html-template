@@ -10,36 +10,27 @@
 ----------------------------------------------------------------------
 
 module HtmlTemplate.Markdown exposing ( mdFunction, mdnpFunction
-                                      -- For debugging. Remove before ship.
+                                      -- Primarily for debugging
                                       , run, markdownParser
-                                      , Token(..)
-                                      , splitIntoLines
-                                      , parseTokens
-                                      , processPreformatted
-                                      , processBlockquotes
-                                      , stripBlockquotePrefix
-                                      , stripOneBlockquotePrefix
-                                      , processLists
-                                      , renderParagraphs
-                                      , startOfList
-                                      , countLeadingSpaces
-                                      , countLeadingLineSpaces
-                                      , processTokens
-                                      , requireStringAtom
-                                      , processUrlResult
-                                      , parseUrlWithTitle
-                                      , splitOnVerticalBars
-                                      , isListDashes
-                                      , processTables
-                                      , matchHRule
-                                      , trimLine
-                                      , urlLink
-                                      , isMailtoUrl
-                                      , automaticLinkProcessor
-                                      , lookupEntity
-                                      , plistParser
-                                      , keyColonValue
+                                      , Token(..), parseTokens, tokenListParser
+                                      , splitIntoLines, processTokens
                                       )
+
+{-| A Markdown to JSON converter.
+
+# The "Normal" Entry Points
+@docs mdFunction, mdnpFunction
+
+# High-level internals
+@docs Token, run
+
+# Lower-level internals
+@docs parseTokens, processTokens, splitIntoLines
+
+# Parsers
+@docs markdownParser, tokenListParser
+-}
+
 import HtmlTemplate.Types exposing ( Atom(..) )
 import HtmlTemplate.EncodeDecode exposing ( customEncodeAtom, decodeAtom )
 import HtmlTemplate.Utility as Utility
@@ -61,6 +52,10 @@ import ParseInt exposing ( parseInt, parseIntHex )
 
 log = Debug.log
 
+{-| The code for the "#md" JSON function.
+
+Recursively descends the `Atom`s, converting all strings from Markdown to Atoms.
+-}
 mdFunction : List (Atom msg) -> d -> Atom msg
 mdFunction args _ =
     Utility.mergeStrings
@@ -84,6 +79,10 @@ maybeRemoveP listifyBody atom =
         _ ->
             atom
 
+{-| The code for the "#mdnp" JSON function.
+
+Calls `mdFunction`, and strips off the outer paragraph, if there is one.
+-}
 mdnpFunction : List (Atom msg) -> d -> Atom msg
 mdnpFunction args x =
     let res = mdFunction args x
@@ -772,6 +771,8 @@ separateFirstLine tokens =
     in
         loop tokens []
 
+{-| Splits a token list into lines, breaking on `Newline` and `PlistToken` tokens.
+-}
 splitIntoLines : List Token -> List (List Token)
 splitIntoLines tokens =
     let loop : List Token -> List (List Token) -> List (List Token)
@@ -1417,6 +1418,8 @@ emptyRenderState : RenderState
 emptyRenderState =
     Dict.empty
 
+{-| Turns the list of `Token`s created by `tokenListParser` into an `Atom`.
+-}
 processTokens : List Token -> Atom msg
 processTokens tokens =
     processTables (splitIntoLines tokens)
@@ -1987,6 +1990,8 @@ isTwoCharSymbol : String -> Bool
 isTwoCharSymbol s =
     Set.member s twoCharSymbolSet
 
+{-| The parsers create tokens or lists of tokens.
+-}
 type Token
     = SymbolToken String
     | StringToken String
@@ -2193,12 +2198,15 @@ tokenParser =
           , stringParser
           ]
 
--- Turn a Markdown string into an Atom
+{-| The `Parser` that `run` invokes.
+-}
 markdownParser : Parser (Atom msg)
 markdownParser =
     succeed processTokens
         |= tokenListParser
 
+{-| The `Parser` that `parseTokens` invokes.
+-}
 tokenListParser : Parser (List Token)
 tokenListParser =
     succeed identity
@@ -2214,7 +2222,8 @@ maybePrefixNewline string =
     else
         string
 
--- Test function
+{-| Debugging function. Parses a Markdown string into a list of `Token`s.
+-}
 parseTokens : String -> List Token
 parseTokens string =
     case Parser.run tokenListParser <| maybePrefixNewline string of
@@ -2223,6 +2232,11 @@ parseTokens string =
         Ok res ->
             res
 
+{-| Run the Markdown parser on a string.
+
+The result will have often contain adjacent strings and extraneous lists.
+You may want to call `Utility.mergeStrings` on it.
+-}
 run : String -> Atom msg
 run string =
     case Parser.run markdownParser <| maybePrefixNewline string of
