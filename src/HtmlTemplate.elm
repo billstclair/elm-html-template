@@ -16,7 +16,7 @@ module HtmlTemplate exposing
     , addOutstandingPagesAndTemplates
     , loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
     , loadTemplate, receiveTemplate
-    , loadPage, receivePage
+    , loadPage, receivePage, receiveCustomPage
     , getExtra, setExtra, addPageProcessors
     , clearPages, clearTemplates, clearAtoms
 
@@ -53,7 +53,7 @@ Besides the function descriptions, you'll need to grok the [JSON documentation](
 @docs addOutstandingPagesAndTemplates
 @docs loadOutstandingPageOrTemplate, maybeLoadOutstandingPageOrTemplate
 @docs loadTemplate, receiveTemplate
-@docs loadPage, receivePage
+@docs loadPage, receivePage, receiveCustomPage
 @docs getExtra, setExtra, addPageProcessors
 @docs clearPages, clearTemplates, clearAtoms
 
@@ -1662,8 +1662,20 @@ The returned `Result` will be `Ok` with the modified `Loaders` if decoding was s
 Usually, you will then call `maybeLoadOutstandingPageOrTemplate` to continue loading referenced pages and templates.
 -}
 receivePage : String -> String -> Loaders msg x -> Result String (Loaders msg x)
-receivePage name json (TheLoaders loaders) =
-    case decodeAtom json of
+receivePage name json loaders =
+    receiveCustomPage decodeAtom name json loaders
+
+{-| `ReceivePage` parses the page text as JSON. If you have alternative formats for your pages, call this to parse the text yourself.
+
+    receivePage name json loaders
+
+is the same as:
+
+    receiveCustomPage decodeAtom name json loaders
+-}
+receiveCustomPage :  (String -> Result String (Atom msg)) -> String -> String -> Loaders msg x -> Result String (Loaders msg x)
+receiveCustomPage parser name json (TheLoaders loaders) =
+    case parser json of
         Err msg ->
             Err msg
         Ok page ->
@@ -1680,6 +1692,7 @@ receivePage name json (TheLoaders loaders) =
                 loaders3 = runPageProcessors name page loaders2
             in
                 Ok loaders3
+
 
 runPageProcessors : String -> Atom msg -> Loaders msg x -> Loaders msg x
 runPageProcessors name page (TheLoaders loaders) =
