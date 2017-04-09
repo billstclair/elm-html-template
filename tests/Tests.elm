@@ -1087,7 +1087,7 @@ functionData =
       )
     -- This is the example in the documentation
     , ( """
-         ["#mdnp","{ p : pclass, li: liclass }foo\\n1. James Brown is Number One!"]
+         ["#mdnp","{ p : \\"pclass\\", li: \\"liclass\\" }foo\\n1. James Brown is Number One!"]
         """
       , Ok <|
           ListAtom
@@ -1105,7 +1105,7 @@ functionData =
     -- Preformatted breaks naturally, but I test that, too, just to be safe.
     -- Here's the table test.
     , ( """
-         ["#mdnp","{ tr: trc, td: td1 }1|2\\n-|-\\na|b\\n{ td: td2 }1|2\\n-|-\\na|b"]
+         ["#mdnp","{ tr: \\"trc\\", td: \\"td1\\" }1|2\\n-|-\\na|b\\n{ td: \\"td2\\" }1|2\\n-|-\\na|b"]
         """
       , Ok <|
           ListAtom
@@ -1145,7 +1145,7 @@ functionData =
       )
     -- Here's the list test
     , ( """
-         ["#mdnp","{ ol : olclass, li: liclass }\\n1. James Brown is Number One!\\n\\n{ li : lic2}\\n1. Note the change."]
+         ["#mdnp","{ ol : \\"olclass\\", li: \\"liclass\\" }\\n1. James Brown is Number One!\\n\\n{ li : \\"lic2\\"}\\n1. Note the change."]
         """
       , Ok <|
           ListAtom
@@ -1161,7 +1161,7 @@ functionData =
       )
     -- Here's the blockquote test
     , ( """
-         ["#mdnp","{ blockquote: bq1 }\\n> foo\\n{ blockquote : bq2 }\\n> bar"]
+         ["#mdnp","{ blockquote: \\"bq1\\" }\\n> foo\\n{ blockquote : \\"bq2\\" }\\n> bar"]
         """
       , Ok <|
           ListAtom
@@ -1173,7 +1173,7 @@ functionData =
       )
     -- Here's the paragraph test
     , ( """
-         ["#mdnp","{p:p1}\\nfoo\\n{p:p2}\\nbar"]
+         ["#mdnp","{p:\\"p1\\"}\\nfoo\\n{p:\\"p2\\"}\\nbar"]
         """
       , Ok <|
           ListAtom
@@ -1185,7 +1185,7 @@ functionData =
       )
     -- Here's the preformatted test
     , ( """
-         ["#mdnp","{pre:pre1}\\n    foo\\n{pre:pre2}\\n    bar"]
+         ["#mdnp","{pre:\\"pre1\\"}\\n    foo\\n{pre:\\"pre2\\"}\\n    bar"]
         """
       , Ok <|
           ListAtom
@@ -1197,7 +1197,7 @@ functionData =
       )
     -- Dash as a tag class erases that setting.
     , ( """
-         ["#md","{p:pclass}foo\\n{p:-}\\nbar"]
+         ["#md","{p:\\"pclass\\"}foo\\n{p:\\"-\\"}\\nbar"]
         """
       , Ok <|
           ListAtom

@@ -161,7 +161,7 @@ The parser is stupid about termination of the JSON. If it sees two right square 
 
 ### Tag Classes
 
-If you add a JSON-style set-bracket-delimited object, without double-quotes around the key or value, between two block elements (or before the first one), you can specify the classes of tags that follow.
+If you add a JSON-style set-bracket-delimited object, with double-quotes around the value, but not the key, between two block elements (or before the first one), you can specify the classes of tags that follow.
 
 For example:
 
@@ -183,8 +183,8 @@ encodes as:
 
 But:
 
-    { p : pclass
-    , li : liclass
+    { p : "pclass"
+    , li : "liclass"
     }
     foo
     1. James Brown is Number One!
@@ -206,9 +206,9 @@ The left set bracket ("{") needs to be in the first column to be parsed as tag c
 
 A tag class object at the beginning of a line is a hard paragraph break. It will end any block element before it. Second and subsequent tag class objects _modify_ the preceding settings, changing the values for any duplicated tags.
 
-    {ol:olc,li:lic}
+    {ol:"olc",li:"lic"}
     1. James Brown is Number One!
-    {li:li2}
+    {li:"li2"}
     2. I like Michael, too!
     
 encodes as:
@@ -230,9 +230,9 @@ encodes as:
 
 A setting of just a dash ("-") for a tag removes the class setting:
 
-    {ol:olc,li:lic}
+    {ol:"olc",li:"lic"}
     1. James Brown is Number One!
-    {li:-}
+    {li:"-"}
     2. I like Michael, too!
     
 encodes as:

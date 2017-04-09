@@ -1,5 +1,5 @@
 {
-    "version": "2.0.2",
+    "version": "2.0.3",
     "summary": "Templates for Elm HTML generation.",
     "repository": "https://github.com/billstclair/elm-html-template.git",
     "license": "MIT",

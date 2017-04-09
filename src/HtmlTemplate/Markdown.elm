@@ -2170,14 +2170,32 @@ plistParser =
         )
         <| succeed ()
 
+escapedCharParser : Parser String -> Parser String
+escapedCharParser parser =
+    oneOf [ Parser.delayedCommit
+                (ignore (Exactly 1) ((==) '\\'))
+                <| keep (Exactly 1) (\_ -> True)
+          , parser
+          ]
+
+valueParser : Parser String
+valueParser =
+    succeed String.concat
+        |= repeat zeroOrMore
+           (escapedCharParser
+                <| keep (Exactly 1) <| ((/=) '"')
+           )
+
 keyColonValue : Parser (String, String)
 keyColonValue =
     succeed (,)
-        |= (keep oneOrMore <| nonWhitespaceOrChars [':', ',', '}'])
+        |= (keep oneOrMore <| nonWhitespaceOrChars [':', ',', '}', '"'])
         |. ignore zeroOrMore isWhitespaceChar
         |. ignore (Exactly 1) ((==) ':')
         |. ignore zeroOrMore isWhitespaceChar
-        |= (keep oneOrMore <| nonWhitespaceOrChars [':', ',', '}'])
+        |. ignore (Exactly 1) ((==) '"')
+        |= valueParser
+        |. ignore (Exactly 1) ((==) '"')
         |. ignore zeroOrMore isWhitespaceChar
 
 isWhitespaceChar : Char -> Bool
