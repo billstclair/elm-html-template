@@ -61,7 +61,7 @@ There are four [templates](site/template/default/):
   * Expects a binding for:
     * `"$referer"`
 
-All of the templates except `index.json` use the `"_pageLink"` function, which is defined in `template.elm`.
+All of the templates except `index.json` use the `"#pageLink"` function, which is defined in `template.elm`.
 
 There are lots of [`pages`](site/page/). The [`index` page](site/page/index.json) contains a list of references to the four pages that are aggregated there. The others each contain a plist, mapping `"title"` to the page title and `"ps"` to a list of paragraphs. The paragraphs are wrapped with `"p"` tags by the `node` template.
 
