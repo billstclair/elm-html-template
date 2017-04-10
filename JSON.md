@@ -197,7 +197,7 @@ Function Call | Description
 `["#>=",<x>,<y>]` | Greater than or equal
 **Logical functions** | Operations on booleans. All (except `"#not"`) take zero or more arguments, and operate just as the Elm operators with the same names. `"#&&"` and `"#||"` "shortcut" their arguments, not evaluating any that aren't necessary once the result is known. Since this is functional, that doesn't change the result, but it can make it faster.
 `["#&&",...]` | Logical AND
-`["#||",...]` | Logical OR
+`["#\|\|",...]` | Logical OR
 `["#xor",...]` | Logical XOR, true if an odd number of the arguments are true.
 `["#not",<x>]` | Logical NOT
 **Debugging Functions** | Helpful for figuring out what a script is doing
