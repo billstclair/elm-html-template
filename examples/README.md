@@ -73,10 +73,7 @@ The `Model` contains the `Loaders` required by `HtmlTemplate`, the currently dis
         { loaders: Loaders Msg Extra
         , page: Maybe String
         , pendingPage : Maybe String
-        , playString : String
-        , parsedPlayString : String
-        , evaluatedPlayString : String
-        , renderedPlayString : Html Msg
+        , playState : PlayState Msg
         , error : Maybe String
         }
 
@@ -87,16 +84,13 @@ The `Model` contains the `Loaders` required by `HtmlTemplate`, the currently dis
 
 ### The `play` Page
 
-* `playString` is the string you type into the `textarea` at the top of the page
-* `parsedPlayString` is the result of calling `HtmlTemplate.decodeAtom`, then either taking the error string or calling `HtmlTemplate.encodeAtom` on the resulting `Atom`. It actually does the encoding twice, once with a `0` indentation to `HtmlTemplate.customDecodeAtom`, and then, if the result is too long to fit on one line, again with the default indentation of `1`.
-* `evaluatedPlayString` is the encoded result of evaluating `playString`, or blank if there was a decode error.
-* `renderedPlayString` is the result of calling `HtmlTemplate.render` on the decoded `playString`, or blank if there is an encoding error.
+* `playState` is the state of the `HtmlTemplate.PlayDiv` component used via the `#playDiv` function for most of this page.
 
 ## No Permalinks
 
 The one big thing missing from this example is navigation, so that pages can have their own external URLs. Elm supports this with the `Navigation` module in `elm-lang/navigation`, but it really only gives you sharp-sign page names (http://example.com/site/#foo) or query strings (http://example.com/site/?page=foo), not normal URLs. You can get them the same way that WordPress does, with Apache's `mod_rewrite`, and I did that for [LispLog](https://lisplog.org/), but it's a bit of a pain.
 
-Anyway, permalinks aren't necessary to illustrate the use of `HtmlTemplate`, so I didn't do them. I _will_ include permalinks in the blogging package I build real soon now.
+Anyway, permalinks aren't necessary to illustrate the use of `HtmlTemplate`, so I didn't do them. I _will_ include permalinks in [Xossbow](https://Xossbow.com/), the `HtmlTemplate`-based blogging package I'm working on.
 
 Bill St. Clair<br/>
 21 March 2017
