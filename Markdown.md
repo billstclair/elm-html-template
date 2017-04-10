@@ -161,7 +161,7 @@ The parser is stupid about termination of the JSON. If it sees two right square 
 
 ### Tag Classes
 
-If you add a JSON-style set-bracket-delimited object, with double-quotes around the value, but not the key, between two block elements (or before the first one), you can specify the classes of tags that follow.
+If you add a JavaScript-style set-bracket-delimited object, with double-quotes around the value, but not the key, between two block elements (or before the first one), you can specify the classes of tags that follow.
 
 For example:
 
