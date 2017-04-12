@@ -28,6 +28,7 @@ module HtmlTemplate exposing
     , getTemplate, setTemplate, setTemplates, removeTemplate
     , getPage, setPage, setPages, removePage
     , insertFunctions, insertDelayedBindingsFunctions
+    , insertStringMessages, insertBoolMessages
     , cantFuncall, tagWrap
     , getDicts, getDictsAtom, setDictsAtom, removeDictsAtom
 
@@ -68,6 +69,7 @@ This is the point of the `HtmlTemplate` module. It creates an `Html Msg` that yo
 @docs getTemplate, setTemplate, setTemplates, removeTemplate
 @docs getPage, setPage, setPages, removePage
 @docs insertFunctions, insertDelayedBindingsFunctions
+@docs insertStringMessages, insertBoolMessages
 @docs cantFuncall, tagWrap
 @docs getDicts, getDictsAtom, setDictsAtom, removeDictsAtom
 
