@@ -253,6 +253,12 @@ renderAttributeAtom (name, atomOrLookup) dicts =
                         MsgAttributeFunction _ ->
                             renderAttributeAtomInternal
                                 name atomOrLookup attributeFunction dicts
+                        MsgAttributeStringLookupFunction _ ->
+                            renderAttributeAtomInternal
+                                name atomOrLookup attributeFunction dicts
+                        MsgAttributeBoolLookupFunction _ ->
+                            renderAttributeAtomInternal
+                                name atomOrLookup attributeFunction dicts
                         _ ->
                             case doFuncall function args dicts of
                                 StringAtom s ->
@@ -2075,9 +2081,6 @@ attributeTable =
         , ("onMouseOver", MsgAttributeFunction Events.onMouseOver)
         , ("onMouseOut", MsgAttributeFunction Events.onMouseOut)
         -- Form Helpers
-        -- onInput & onCheck always error.
-        -- I may never bother to implement them, since they
-        -- are either tightly coupled to Elm code, or require a scripting langage.
         , ("onInput", MsgAttributeStringLookupFunction Events.onInput)
         , ("onCheck", MsgAttributeBoolLookupFunction Events.onCheck)
         , ("onSubmit", MsgAttributeFunction Events.onSubmit)
