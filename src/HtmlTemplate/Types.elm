@@ -86,6 +86,8 @@ type alias TemplateDicts msg =
     , functions : Dict String (List (Atom msg) -> Dicts msg -> (Atom msg) )
     , delayedBindingsFunctions : Set String
     , messages : Dict String (List (Atom msg) -> Dicts msg -> msg)
+    , stringMessages : Dict String (List (Atom msg) -> Dicts msg -> (String -> msg))
+    , boolMessages : Dict String (List (Atom msg) -> Dicts msg -> (Bool -> msg))
     }
 
 {-| Storage for JSON:

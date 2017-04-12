@@ -132,6 +132,8 @@ emptyTemplateDicts =
     , functions = Dict.empty
     , delayedBindingsFunctions = Set.empty
     , messages = Dict.empty
+    , stringMessages = Dict.empty
+    , boolMessages = Dict.empty
     }
 
 defaultDicts : Dicts msg
@@ -146,6 +148,8 @@ defaultTemplateDicts =
     , functions = defaultFunctionsDict
     , delayedBindingsFunctions = defaultDelayedBindingsFunctions
     , messages = Dict.empty
+    , stringMessages = Dict.empty
+    , boolMessages = Dict.empty
     }
 
 templateReferences : Atom msg -> List String
@@ -308,21 +312,35 @@ handleMsgAttribute attributeName attributeWrapper atom dicts =
         _ ->
             badTypeTitle attributeName atom
 
--- TODO
--- Requires another table in dicts
--- Would take an entire scripting language to be able to
--- specify handlers dynamically.
 handleStringLookupMsgAttribute : String -> ((String -> msg) -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleStringLookupMsgAttribute attributeName attributeWrapper atom dicts =
-    badTypeTitle attributeName atom
+    case atom of
+        FuncallAtom { function, args } ->
+            case Dict.get function dicts.stringMessages of
+                Nothing ->
+                    Attributes.title
+                        <| encodeAtom atom
+                Just f ->
+                    attributeWrapper
+                    <| f args
+                    <| TheDicts dicts
+        _ ->
+            badTypeTitle attributeName atom
 
--- TODO
--- Requires another table in dicts
--- Would take an entire scripting language to be able to
--- specify handlers dynamically.
 handleBoolLookupMsgAttribute : String -> ((Bool -> msg) -> Attribute msg) -> Atom msg -> TemplateDicts msg -> Attribute msg
 handleBoolLookupMsgAttribute attributeName attributeWrapper atom dicts =
-    badTypeTitle attributeName atom
+    case atom of
+        FuncallAtom { function, args } ->
+            case Dict.get function dicts.boolMessages of
+                Nothing ->
+                    Attributes.title
+                        <| encodeAtom atom
+                Just f ->
+                    attributeWrapper
+                    <| f args
+                    <| TheDicts dicts
+        _ ->
+            badTypeTitle attributeName atom
 
 handleStringPairListAttribute : String -> (List (String, String) -> Attribute msg) -> Atom msg -> Attribute msg
 handleStringPairListAttribute attributeName attributeWrapper atom =
@@ -1584,6 +1602,30 @@ insertMessages pairs (TheLoaders loaders) =
     in
         TheLoaders
             { loaders | dicts = { dicts | messages = messages } }
+
+{-| If you need to script `onInput` or other event attributes receiving a String arg that are processed by your `update` function, you'll need to define message functions to create them for your scripting code. Call `insertStringMessages` in your `init` function, with a list of those functions, before stashing the `Loaders` in your `Model`.
+
+There are more details about message functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md).
+-}
+insertStringMessages : List (String, (List (Atom msg) -> Dicts msg -> (String -> msg))) -> Loaders msg x -> Loaders msg x
+insertStringMessages pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        messages = List.foldl insertPair dicts.stringMessages pairs
+    in
+        TheLoaders
+            { loaders | dicts = { dicts | stringMessages = messages } }
+
+{-| If you need to script `onCheck` or other event attributes receiving a Bool arg that are processed by your `update` function, you'll need to define message functions to create them for your scripting code. Call `insertStringMessages` in your `init` function, with a list of those functions, before stashing the `Loaders` in your `Model`.
+
+There are more details about message functions in the [JSON documentation](https://github.com/billstclair/elm-html-template/blob/master/JSON.md).
+-}
+insertBoolMessages : List (String, (List (Atom msg) -> Dicts msg -> (Bool -> msg))) -> Loaders msg x -> Loaders msg x
+insertBoolMessages pairs (TheLoaders loaders) =
+    let dicts = loaders.dicts
+        messages = List.foldl insertPair dicts.boolMessages pairs
+    in
+        TheLoaders
+            { loaders | dicts = { dicts | boolMessages = messages } }
 
 {-| Some functions, e.g. variable binding functions like `"#let"` and `"#loop"`, and short-circuiting functions like `_if`, `"#&&"` and `"#||"`, need to delay evaluation of their arguments. If one of the functions you add with `insertFunctions` (or `insertMessages`) needs to be called with unevaluated arguments, declare that with `insertDelayedBindingsFunctions`.
 -}
