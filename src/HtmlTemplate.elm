@@ -29,7 +29,7 @@ module HtmlTemplate exposing
     , getPage, setPage, setPages, removePage
     , insertFunctions, insertDelayedBindingsFunctions
     , cantFuncall, tagWrap
-    , getDicts, getDictsAtom
+    , getDicts, getDictsAtom, setDictsAtom, removeDictsAtom
 
     -- Did Somebody Say Eval?
     , eval
@@ -69,7 +69,7 @@ This is the point of the `HtmlTemplate` module. It creates an `Html Msg` that yo
 @docs getPage, setPage, setPages, removePage
 @docs insertFunctions, insertDelayedBindingsFunctions
 @docs cantFuncall, tagWrap
-@docs getDicts, getDictsAtom
+@docs getDicts, getDictsAtom, setDictsAtom, removeDictsAtom
 
 # Did Somebody Say Eval?
 @docs eval
@@ -1506,14 +1506,6 @@ getAtom : String -> Loaders msg x -> Maybe (Atom msg)
 getAtom name (TheLoaders loaders) =
     Dict.get name loaders.dicts.atoms
 
-{-| Lookup an atom. Sometimes useful inside of funtions added with `insertFunctions` or `insertMessages`.
-
-Same as `getAtom <| getDicts loaders`.
--}
-getDictsAtom : String -> Dicts msg -> Maybe (Atom msg)
-getDictsAtom name (TheDicts dicts) =
-    Dict.get name dicts.atoms
-
 {-| Store an atom with the given name. Done with `"#let"` in a JSON file.
 -}
 setAtom : String -> Atom msg -> Loaders msg x -> Loaders msg x
@@ -1540,6 +1532,30 @@ removeAtom name (TheLoaders loaders) =
         atoms = Dict.remove name dicts.atoms
     in
         TheLoaders { loaders | dicts = { dicts | atoms = atoms } }
+
+{-| Lookup an atom. Sometimes useful inside of functions added with `insertFunctions` or `insertMessages`.
+
+Same as `getAtom name <| getDicts loaders`.
+-}
+getDictsAtom : String -> Dicts msg -> Maybe (Atom msg)
+getDictsAtom name (TheDicts dicts) =
+    Dict.get name dicts.atoms
+
+{-| Store an atom with the given name. Sometimes useful inside of functions added with `insertFunctions` or `insertMessages`.
+
+Same as `setAtom name atom <| getDicts loaders`.
+-}
+setDictsAtom : String -> Atom msg -> Dicts msg -> Dicts msg
+setDictsAtom name atom (TheDicts dicts) =
+    TheDicts <| { dicts | atoms = Dict.insert name atom dicts.atoms }
+
+{-| Remove an atom. Sometimes useful inside of functions added with `insertFunctions` or `insertMessages`.
+
+Same as `removeAtom name <| getDicts loaders`.
+-}
+removeDictsAtom : String -> Dicts msg -> Dicts msg
+removeDictsAtom name (TheDicts dicts) =
+    TheDicts <| { dicts | atoms = Dict.remove name dicts.atoms }
 
 insertPair : (comparable, v) -> Dict comparable v -> Dict comparable v
 insertPair (k, v) dict =
